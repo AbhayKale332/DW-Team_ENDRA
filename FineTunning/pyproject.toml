@@ -1,0 +1,17 @@
+[project]
+name = "finetunning"
+version = "0.1.0"
+description = "Fine-tuning experiments (coded locally, run on Kaggle). Versioned under v1/, v2/, ..."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    { name = "Akash Chaudhari", email = "akashchaudhari1012@gmail.com" }
+]
+# Kept empty on purpose: the real deps live in vN/requirements-kaggle.txt and are
+# installed into the Kaggle runtime by vN/main.py. Add here only for local dev.
+dependencies = [
+    "ruff>=0.16.6",
+]
+
+[tool.uv]
+package = false
