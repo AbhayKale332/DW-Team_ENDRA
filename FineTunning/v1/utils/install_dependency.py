@@ -25,11 +25,9 @@ def running_on_kaggle() -> bool:
 
 def install_dependencies(requirements_file: Path = REQUIREMENTS_FILE) -> None:
     if not requirements_file.exists():
-        raise FileNotFoundError(f"Requirements file not found: {requirements_file}")
-
-    print(f"[setup] interpreter : {sys.executable}")
-    print(f"[setup] on kaggle   : {running_on_kaggle()}")
-    print(f"[setup] installing  : {requirements_file}")
+        raise FileNotFoundError(
+            f"Requirements file not found: {requirements_file}"
+        )
 
     cmd = [
         sys.executable,
@@ -38,12 +36,19 @@ def install_dependencies(requirements_file: Path = REQUIREMENTS_FILE) -> None:
         "install",
         "--no-input",
         "--disable-pip-version-check",
+        "-q",
         "-r",
         str(requirements_file),
     ]
-    subprocess.run(cmd, check=True)
-    print("[setup] dependencies installed")
 
+    subprocess.run(
+        cmd,
+        check=True,
+        stdout=subprocess.DEVNULL,
+    )
+
+    print("[setup] dependencies installed")
+    
 
 def setup_project() -> None:
     """Local dev convenience: keep using uv when it's available, else pip."""
