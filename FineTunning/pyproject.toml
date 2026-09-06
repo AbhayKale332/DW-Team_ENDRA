@@ -9,7 +9,9 @@ authors = [
 ]
 # Kept empty on purpose: the real deps live in vN/requirements-kaggle.txt and are
 # installed into the Kaggle runtime by vN/main.py. Add here only for local dev.
-dependencies = []
+dependencies = [
+    "ruff>=0.16.6",
+]
 
 [tool.uv]
 package = false
