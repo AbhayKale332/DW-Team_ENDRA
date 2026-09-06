@@ -1,0 +1,6 @@
+# training artifacts / checkpoints
+**/outputs/
+**/wandb/
+*.safetensors
+*.bin
+*.gguf

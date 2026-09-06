@@ -1,0 +1,12 @@
+# Dependencies installed into the Kaggle runtime by main.py (Step 1).
+# Kaggle already ships torch + CUDA, so torch is intentionally NOT pinned here.
+# Add / bump versions per experiment version.
+
+transformers==4.44.2
+datasets==2.21.0
+accelerate==0.34.2
+peft==0.13.0
+bitsandbytes==0.43.3
+trl==0.9.6
+sentencepiece==0.2.0
+evaluate==0.4.3
