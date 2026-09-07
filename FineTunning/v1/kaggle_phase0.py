@@ -91,6 +91,7 @@ class Config:
     gamus_gsd_m: float = 0.33
     max_valid_height_m: float = 400.0
     num_workers: int = 2
+    dl_workers: int = 16             # parallel HF Hub download threads
 
     # -- model ---------------------------------------------------------
     encoder_model_id: str = "facebook/dinov3-vitl16-pretrain-sat493m"
@@ -205,18 +206,28 @@ def ensure_hf_subset(cfg: Config, split: str, n: int) -> list[str]:
     stems = sorted(stems_all if not n else stems_all[:n])
     print(f"[data] {split}: fetching {len(stems)}/{len(stems_all)} tiles -> {root}")
 
+    rels = [
+        f"{sub}/{split}/{stem}_{suffix}.h5"
+        for stem in stems
+        for sub, suffix in _SUB.values()
+        if not (root / f"{sub}/{split}/{stem}_{suffix}.h5").exists()
+    ]
+
+    def _fetch(rel: str) -> None:
+        hf_hub_download(
+            cfg.hf_dataset_repo, rel, repo_type="dataset",
+            local_dir=str(root), token=cfg.hf_token or None,
+        )
+
     t0 = time.time()
-    for i, stem in enumerate(stems, 1):
-        for sub, suffix in _SUB.values():
-            rel = f"{sub}/{split}/{stem}_{suffix}.h5"
-            if (root / rel).exists():
-                continue
-            hf_hub_download(
-                cfg.hf_dataset_repo, rel, repo_type="dataset",
-                local_dir=str(root), token=cfg.hf_token or None,
-            )
-        if i % 100 == 0 or i == len(stems):
-            print(f"[data]   {split} {i}/{len(stems)}  ({time.time() - t0:.0f}s)")
+    from concurrent.futures import ThreadPoolExecutor
+
+    done = 0
+    with ThreadPoolExecutor(max_workers=max(1, cfg.dl_workers)) as ex:
+        for _ in ex.map(_fetch, rels):
+            done += 1
+            if done % 300 == 0 or done == len(rels):
+                print(f"[data]   {split} {done}/{len(rels)} files  ({time.time() - t0:.0f}s)")
     return stems
 
 
