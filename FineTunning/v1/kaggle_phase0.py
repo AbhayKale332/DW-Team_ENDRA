@@ -6,8 +6,8 @@ Goal (from `.agents/Depth_Wizard_Plan.md`, Phase 0):
 
 What this script does, end to end, with no other project files:
     1. pip-installs the few deps Kaggle is missing (transformers, huggingface_hub, h5py)
-    2. reads a deterministic subset of GAMUS tiles that are ALREADY on disk
-       (the Hub download is commented out in build_loaders — pass --data_root)
+    2. gets a deterministic subset of GAMUS tiles: downloads from the Hub
+       (--data_source hf) or reads them from --data_root (--data_source local)
     3. builds  DINOv3-SAT (frozen) -> DPT decoder -> single metric-nDSM head
     4. trains with AMP across both T4s (nn.DataParallel), wall-clock capped
     5. evaluates on the GAMUS val subset -> RMSE / MAE / Pearson r / delta1,
@@ -128,7 +128,7 @@ _quiet_libraries()
 class Config:
     # -- data ------------------------------------------------------------
     hf_dataset_repo: str = "earthflow/GAMUS"
-    data_source: str = "local"         # download step disabled below; tiles must already be on disk
+    data_source: str = "local"         # "hf" -> download subset from Hub; "local" -> read --data_root
     data_root: str = "/kaggle/working/data/gamus"
     train_subset: int = 1200          # 0 -> use every tile in the split
     val_subset: int = 300
@@ -341,36 +341,36 @@ class GamusDataset(Dataset):
 
 def build_loaders(cfg: Config):
     # ------------------------------------------------------------------
-    # DATASET DOWNLOAD DISABLED — the GAMUS tiles are already on disk.
-    # Point --data_root at the folder that contains  images/ heights/ classes/.
-    # To re-enable the Hub download, uncomment the block below and pass
-    # --data_source hf .
+    # data_source == "hf"    -> download the deterministic subset from the Hub
+    # data_source == "local" -> read tiles already on disk under --data_root
+    #                           (--data_root must contain images/ heights/ classes/)
     # ------------------------------------------------------------------
-    if cfg.data_source == "hf":
-        tr = ensure_hf_subset(cfg, "train", cfg.train_subset)
-        va = ensure_hf_subset(cfg, "val", cfg.val_subset)
-    else:
-        tr, va = list_local_stems(cfg, "train"), list_local_stems(cfg, "val")
-        if cfg.train_subset or cfg.val_subset:
-            rng = random.Random(cfg.seed)  # deterministic subset, matches old hf path
-            rng.shuffle(tr)
-            rng.shuffle(va)
-            tr = sorted(tr[: cfg.train_subset]) if cfg.train_subset else tr
-            va = sorted(va[: cfg.val_subset]) if cfg.val_subset else va
-        if not tr or not va:
-            raise RuntimeError("no GAMUS tiles found — check data_source / data_root / internet")
-        if len(tr) < cfg.batch_size:
-            raise RuntimeError(f"train subset ({len(tr)}) < batch_size ({cfg.batch_size})")
+    # if cfg.data_source == "hf":
+    #     tr = ensure_hf_subset(cfg, "train", cfg.train_subset)
+    #     va = ensure_hf_subset(cfg, "val", cfg.val_subset)
+    # else:
+    tr, va = list_local_stems(cfg, "train"), list_local_stems(cfg, "val")
+    if cfg.train_subset or cfg.val_subset:
+        rng = random.Random(cfg.seed)  # deterministic subset, matches old hf path
+        rng.shuffle(tr)
+        rng.shuffle(va)
+        tr = sorted(tr[: cfg.train_subset]) if cfg.train_subset else tr
+        va = sorted(va[: cfg.val_subset]) if cfg.val_subset else va
 
-        dl_tr = DataLoader(
-            GamusDataset(cfg, "train", tr, True), batch_size=cfg.batch_size, shuffle=True,
-            num_workers=cfg.num_workers, pin_memory=True, drop_last=True, persistent_workers=cfg.num_workers > 0,
-        )
-        dl_va = DataLoader(
-            GamusDataset(cfg, "val", va, False), batch_size=cfg.batch_size, shuffle=False,
-            num_workers=cfg.num_workers, pin_memory=True, persistent_workers=cfg.num_workers > 0,
-        )
-        return dl_tr, dl_va
+    if not tr or not va:
+        raise RuntimeError("no GAMUS tiles found — check data_source / data_root / internet")
+    if len(tr) < cfg.batch_size:
+        raise RuntimeError(f"train subset ({len(tr)}) < batch_size ({cfg.batch_size})")
+
+    dl_tr = DataLoader(
+        GamusDataset(cfg, "train", tr, True), batch_size=cfg.batch_size, shuffle=True,
+        num_workers=cfg.num_workers, pin_memory=True, drop_last=True, persistent_workers=cfg.num_workers > 0,
+    )
+    dl_va = DataLoader(
+        GamusDataset(cfg, "val", va, False), batch_size=cfg.batch_size, shuffle=False,
+        num_workers=cfg.num_workers, pin_memory=True, persistent_workers=cfg.num_workers > 0,
+    )
+    return dl_tr, dl_va
 
 
 # ===========================================================================
