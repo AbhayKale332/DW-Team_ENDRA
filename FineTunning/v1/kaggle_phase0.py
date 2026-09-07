@@ -298,10 +298,10 @@ def build_loaders(cfg: Config):
     # To re-enable the Hub download, uncomment the block below and pass
     # --data_source hf .
     # ------------------------------------------------------------------
-    # if cfg.data_source == "hf":
-    #     tr = ensure_hf_subset(cfg, "train", cfg.train_subset)
-    #     va = ensure_hf_subset(cfg, "val", cfg.val_subset)
-    # else:
+    if cfg.data_source == "hf":
+        tr = ensure_hf_subset(cfg, "train", cfg.train_subset)
+        va = ensure_hf_subset(cfg, "val", cfg.val_subset)
+    else:
     tr, va = list_local_stems(cfg, "train"), list_local_stems(cfg, "val")
     if cfg.train_subset or cfg.val_subset:
         rng = random.Random(cfg.seed)  # deterministic subset, matches old hf path
