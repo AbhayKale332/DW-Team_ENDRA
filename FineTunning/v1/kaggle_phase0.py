@@ -49,8 +49,10 @@ from pathlib import Path
 
 
 # Keep the CUDA caching allocator from fragmenting on the two T4s.  Must be set
-# before torch initialises CUDA; harmless when there is no GPU.
+# before torch initialises CUDA; harmless when there is no GPU.  torch >= 2.9
+# renamed the variable (PYTORCH_ALLOC_CONF); set both so it works on old + new.
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+os.environ.setdefault("PYTORCH_ALLOC_CONF", "expandable_segments:True")
 
 # Silence the Hugging Face download progress bars + chatty library logs.  These
 # tqdm bars redraw constantly and lag the Kaggle console / a slow terminal.
@@ -143,6 +145,7 @@ class Config:
     encoder_model_id: str = "facebook/dinov3-vitl16-pretrain-sat493m"
     encoder_feature_indices: tuple = (6, 12, 18, 24)   # hidden_states idx (0=embeddings)
     freeze_encoder: bool = True
+    encoder_half: bool = True        # load the frozen encoder in fp16 (~0.6 GB, not 1.2 GB)
     decoder_dim: int = 256
 
     # -- training ----------------------------------------------------
@@ -150,8 +153,11 @@ class Config:
     max_train_minutes: float = 150.0
     learning_rate: float = 3e-4
     weight_decay: float = 1e-2
-    batch_size: int = 4              # total across all GPUs (DataParallel splits it)
+    batch_size: int = 4              # per-device batch (or total across GPUs if data_parallel)
     grad_accum: int = 2              # effective batch = batch_size * grad_accum
+    data_parallel: bool = False      # nn.DataParallel is fragile on torch>=2.10 / cu12.8
+                                     #   (illegal-address + OOM on the 2nd T4); off by default.
+                                     #   Set true only on an environment where it's known good.
     grad_clip: float = 1.0
     amp: bool = True
     grad_checkpoint: bool = True     # checkpoint the DPT decoder blocks -> much less VRAM
@@ -383,9 +389,15 @@ class DINOv3Encoder(nn.Module):
         super().__init__()
         from transformers import AutoModel
 
-        self.model = AutoModel.from_pretrained(
-            cfg.encoder_model_id, token=cfg.hf_token or None, output_hidden_states=True
-        )
+        try:  # memory-efficient attention -> big VRAM saving on long token seqs
+            self.model = AutoModel.from_pretrained(
+                cfg.encoder_model_id, token=cfg.hf_token or None,
+                output_hidden_states=True, attn_implementation="sdpa",
+            )
+        except (ValueError, TypeError, ImportError, KeyError):
+            self.model = AutoModel.from_pretrained(
+                cfg.encoder_model_id, token=cfg.hf_token or None, output_hidden_states=True,
+            )
         self.patch = int(getattr(self.model.config, "patch_size", 16))
         self.hidden = int(self.model.config.hidden_size)
         self.n_prefix = 1 + int(getattr(self.model.config, "num_register_tokens", 0))
@@ -400,6 +412,8 @@ class DINOv3Encoder(nn.Module):
             for p in self.model.parameters():
                 p.requires_grad_(False)
             self.model.eval()
+            if cfg.encoder_half:
+                self.model.half()  # frozen + autocast anyway -> fp16 weights are free
         print(
             f"[model] encoder={cfg.encoder_model_id} hidden={self.hidden} "
             f"patch={self.patch} prefix_tokens={self.n_prefix} taps={self.idx} frozen={self.frozen}"
@@ -418,8 +432,17 @@ class DINOv3Encoder(nn.Module):
     def forward(self, pixel_values: torch.Tensor) -> list[torch.Tensor]:
         hp = pixel_values.shape[-2] // self.patch
         wp = pixel_values.shape[-1] // self.patch
-        ctx = torch.no_grad() if self.frozen else torch.enable_grad()
-        with ctx:
+        if self.frozen:
+            # Full no_grad (incl. the token->map reshape) + detach, so not one byte
+            # of the ViT-L activation graph is kept for backward.  .to(dtype) lets
+            # the encoder run in fp16 while the fp32 decoder input stays clean.
+            self.model.eval()
+            p_dtype = next(self.model.parameters()).dtype
+            with torch.no_grad():
+                hs = self.model(pixel_values=pixel_values.to(p_dtype)).hidden_states
+                outs = [self._tokens_to_map(hs[i], hp, wp).float() for i in self.idx]
+            return [o.detach() for o in outs]
+        with torch.enable_grad():
             hs = self.model(pixel_values=pixel_values).hidden_states
         return [self._tokens_to_map(hs[i], hp, wp) for i in self.idx]
 
@@ -683,7 +706,9 @@ def main() -> None:
     cfg = parse_config()
     cfg.hf_token = resolve_hf_token(cfg)
     set_seed(cfg.seed)
-    torch.backends.cudnn.benchmark = True
+    # benchmark=True triggers "FIND was unable to find an engine" on some
+    # cu12.8 / cuDNN-9 images (T4).  The heuristic path is a touch slower but robust.
+    torch.backends.cudnn.benchmark = False
 
     n_gpu = torch.cuda.device_count()
     device = torch.device("cuda" if n_gpu else "cpu")
@@ -709,10 +734,15 @@ def main() -> None:
     # loss graph — plain nn.DataParallel(net) gathers every prediction to GPU-0
     # and runs the loss there, which is what pinned ~13 GB on one card.
     train_model = LossWrapper(core, cfg)
-    if n_gpu > 1:
+    if n_gpu > 1 and cfg.data_parallel:
         train_model = nn.DataParallel(train_model)
         print(f"[model] nn.DataParallel over {n_gpu} GPUs, "
               f"per-GPU batch ~{max(1, cfg.batch_size // n_gpu)}")
+    else:
+        msg = f"[model] single-device on {device}  (batch {cfg.batch_size} x accum {cfg.grad_accum})"
+        if n_gpu > 1:
+            msg += "  — GPU1 idle; pass --data_parallel true only where DP is known good"
+        print(msg)
     if n_gpu:
         torch.cuda.empty_cache()
 

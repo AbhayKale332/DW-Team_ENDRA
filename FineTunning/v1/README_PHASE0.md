@@ -44,6 +44,16 @@ across both T4s, 12 epochs, hard stop at 150 min. First eval prints after epoch 
 # lighter encoder if the SAT weights are a problem
 !python kaggle_phase0.py --encoder_model_id facebook/dinov3-vitb16-pretrain-lvd1689m --batch_size 12
 
+# use BOTH T4s (nn.DataParallel) — only on an image where DP is known good.
+# torch>=2.10 / cu12.8 images crash with it; the default is single-device.
+!python kaggle_phase0.py --data_parallel true
+
+# out of memory? levers, most effective first:
+!python kaggle_phase0.py --train_size 448          # token count is quadratic
+!python kaggle_phase0.py --batch_size 2 --grad_accum 8
+!python kaggle_phase0.py --decoder_dim 192
+!python kaggle_phase0.py --encoder_half false      # only if fp16 encoder hurts val metrics
+
 # use a pre-mounted Kaggle Dataset instead of downloading
 !python kaggle_phase0.py --data_source local --data_root /kaggle/input/gamus
 ```
@@ -74,7 +84,8 @@ both the aligned and raw numbers.
 
 ## Known Phase-0 shortcuts (deliberate; fixed in Phase 2)
 
-- Val = deterministic centre 512 crop, not the full tile.
+- Val = deterministic centre `train_size` crop, not the full tile.
 - No GSD canonicalisation/jitter — trains and evals at GAMUS's native 0.33 m.
-- `nn.DataParallel`, not DDP.
+- Single-device by default (`--data_parallel true` for DP where it's stable; no DDP).
+- Frozen encoder loaded in fp16 by default (`--encoder_half false` to disable).
 - Semantic mapping for per-class metrics is assumed, not verified.
