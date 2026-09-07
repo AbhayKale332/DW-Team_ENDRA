@@ -2,39 +2,43 @@
 
 Fine-tuning experiments. Code is written locally, runs on **Kaggle** GPUs.
 
+> **v1 = DepthWizard Phase 0 spike.** DINOv3-SAT (frozen) → DPT decoder →
+> metric-nDSM head, trained on a GAMUS subset for a first val RMSE.
+> Everything is in one runnable file: **`v1/kaggle_phase0.py`**.
+> See **[`v1/README_PHASE0.md`](v1/README_PHASE0.md)**.
+
 ## Layout
 
 ```
 FineTunning/
-├── pyproject.toml          # local dev env only (uv)
-├── v1/                     # experiment version 1
-│   ├── main.py             # entrypoint: Step 1 install deps -> Step 2 train
-│   ├── config.py           # all knobs for this version
-│   ├── train.py            # the fine-tuning run
-│   ├── requirements-kaggle.txt   # deps installed into the Kaggle runtime
+├── pyproject.toml               # local dev env only (uv)
+├── v1/                          # experiment version 1 = DepthWizard Phase 0
+│   ├── kaggle_phase0.py         # the whole spike: GAMUS -> model -> train -> eval
+│   ├── eval_imele_on_gamus.py   # IMELE baseline row, same val split + metrics
+│   ├── README_PHASE0.md         # how to run it
+│   ├── main.py / train.py / config.py   # shims -> kaggle_phase0.main()
+│   ├── requirements-kaggle.txt
 │   └── utils/install_dependency.py
-├── v2/ ...                 # copy v1/ to start a new version
+├── v2/ ...                      # copy v1/ to start a new version
 ```
 
 ## Run on Kaggle
 
-New notebook, GPU on, Internet on. In a cell:
+New notebook, **Accelerator = "GPU T4 x2"**, Internet on. DINOv3-SAT is gated —
+accept its license and add an `HF_TOKEN` Kaggle Secret first
+(see [`v1/README_PHASE0.md`](v1/README_PHASE0.md)). Then, in a cell:
 
 ```python
 !git clone https://github.com/<you>/SIH.git
 %cd SIH/FineTunning/v1
-!python main.py
+!python kaggle_phase0.py          # or: !python main.py
 ```
 
-- `main.py` **Step 1** pip-installs `requirements-kaggle.txt` into the Kaggle
-  environment (`sys.executable -m pip install`). torch is left alone — Kaggle
-  ships it.
-- `main.py` **Step 2** imports `train.py` and runs it.
-
-Flags: `python main.py --skip-install` (deps already installed this session),
-`python main.py --install-only` (just Step 1).
-
-Set `HF_TOKEN` as a Kaggle Secret if the base model is gated.
+- `kaggle_phase0.py` self-installs the few missing deps (transformers,
+  huggingface_hub, h5py); torch is left alone — Kaggle ships it.
+- `main.py` is equivalent: **Step 1** installs `requirements-kaggle.txt`, **Step 2**
+  runs `train.run()` → `kaggle_phase0.main()`. Flags `--skip-install`,
+  `--install-only`; any other `--flag` is forwarded to `kaggle_phase0`.
 
 ## Local dev
 
@@ -46,5 +50,5 @@ uv sync          # creates .venv (no heavy deps by default)
 ## New version
 
 ```bash
-cp -r v1 v2      # then edit v2/config.py
+cp -r v1 v2      # then edit v2/kaggle_phase0.py::Config
 ```

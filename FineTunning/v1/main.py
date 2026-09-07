@@ -34,7 +34,8 @@ def main() -> None:
         action="store_true",
         help="run Step 1 and exit",
     )
-    args = parser.parse_args()
+    # Unknown flags (e.g. --epochs, --train_subset) are forwarded to kaggle_phase0.
+    args, _ = parser.parse_known_args()
 
     # Step 1: dependencies -> current (Kaggle) env
     if not args.skip_install:

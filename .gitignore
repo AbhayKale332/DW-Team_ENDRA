@@ -216,3 +216,15 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# DepthWizard — datasets & training artifacts (Phase 0+)
+FineTunning/*/data/
+FineTunning/*/outputs/
+data/gamus/
+*.h5
+*.pth
+*.pth.tar
+*.pt
+*.onnx
+imele_outputs/
+viewer_sample/

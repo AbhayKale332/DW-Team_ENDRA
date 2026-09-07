@@ -1,12 +1,9 @@
-# Dependencies installed into the Kaggle runtime by main.py (Step 1).
-# Kaggle already ships torch + CUDA, so torch is intentionally NOT pinned here.
-# Add / bump versions per experiment version.
+# Deps installed into the Kaggle runtime for DepthWizard Phase 0.
+# Kaggle already ships torch + CUDA + numpy + pillow + matplotlib — not pinned here.
+# kaggle_phase0.py also installs these itself if they are missing, so this file
+# is mainly for `python main.py` / local runs.
 
-transformers==4.44.2
-datasets==2.21.0
-accelerate==0.34.2
-peft==0.13.0
-bitsandbytes==0.43.3
-trl==0.9.6
-sentencepiece==0.2.0
-evaluate==0.4.3
+transformers>=4.56.0        # DINOv3 (DINOv3ViTModel) support landed in 4.56
+huggingface_hub>=0.34.0     # dataset subset download
+h5py>=3.10.0                # GAMUS tiles are one HDF5 per tile
+safetensors>=0.4.3
