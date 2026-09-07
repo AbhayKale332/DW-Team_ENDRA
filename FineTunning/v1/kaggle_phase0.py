@@ -302,27 +302,27 @@ def build_loaders(cfg: Config):
         tr = ensure_hf_subset(cfg, "train", cfg.train_subset)
         va = ensure_hf_subset(cfg, "val", cfg.val_subset)
     else:
-    tr, va = list_local_stems(cfg, "train"), list_local_stems(cfg, "val")
-    if cfg.train_subset or cfg.val_subset:
-        rng = random.Random(cfg.seed)  # deterministic subset, matches old hf path
-        rng.shuffle(tr)
-        rng.shuffle(va)
-        tr = sorted(tr[: cfg.train_subset]) if cfg.train_subset else tr
-        va = sorted(va[: cfg.val_subset]) if cfg.val_subset else va
-    if not tr or not va:
-        raise RuntimeError("no GAMUS tiles found — check data_source / data_root / internet")
-    if len(tr) < cfg.batch_size:
-        raise RuntimeError(f"train subset ({len(tr)}) < batch_size ({cfg.batch_size})")
+        tr, va = list_local_stems(cfg, "train"), list_local_stems(cfg, "val")
+        if cfg.train_subset or cfg.val_subset:
+            rng = random.Random(cfg.seed)  # deterministic subset, matches old hf path
+            rng.shuffle(tr)
+            rng.shuffle(va)
+            tr = sorted(tr[: cfg.train_subset]) if cfg.train_subset else tr
+            va = sorted(va[: cfg.val_subset]) if cfg.val_subset else va
+        if not tr or not va:
+            raise RuntimeError("no GAMUS tiles found — check data_source / data_root / internet")
+        if len(tr) < cfg.batch_size:
+            raise RuntimeError(f"train subset ({len(tr)}) < batch_size ({cfg.batch_size})")
 
-    dl_tr = DataLoader(
-        GamusDataset(cfg, "train", tr, True), batch_size=cfg.batch_size, shuffle=True,
-        num_workers=cfg.num_workers, pin_memory=True, drop_last=True, persistent_workers=cfg.num_workers > 0,
-    )
-    dl_va = DataLoader(
-        GamusDataset(cfg, "val", va, False), batch_size=cfg.batch_size, shuffle=False,
-        num_workers=cfg.num_workers, pin_memory=True, persistent_workers=cfg.num_workers > 0,
-    )
-    return dl_tr, dl_va
+        dl_tr = DataLoader(
+            GamusDataset(cfg, "train", tr, True), batch_size=cfg.batch_size, shuffle=True,
+            num_workers=cfg.num_workers, pin_memory=True, drop_last=True, persistent_workers=cfg.num_workers > 0,
+        )
+        dl_va = DataLoader(
+            GamusDataset(cfg, "val", va, False), batch_size=cfg.batch_size, shuffle=False,
+            num_workers=cfg.num_workers, pin_memory=True, persistent_workers=cfg.num_workers > 0,
+        )
+        return dl_tr, dl_va
 
 
 # ===========================================================================
