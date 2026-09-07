@@ -6,8 +6,8 @@ Goal (from `.agents/Depth_Wizard_Plan.md`, Phase 0):
 
 What this script does, end to end, with no other project files:
     1. pip-installs the few deps Kaggle is missing (transformers, huggingface_hub, h5py)
-    2. reads a deterministic subset of GAMUS tiles that are ALREADY on disk
-       (the Hub download is commented out in build_loaders — pass --data_root)
+    2. gets a deterministic subset of GAMUS tiles: downloads from the Hub
+       (--data_source hf) or reads them from --data_root (--data_source local)
     3. builds  DINOv3-SAT (frozen) -> DPT decoder -> single metric-nDSM head
     4. trains with AMP across both T4s (nn.DataParallel), wall-clock capped
     5. evaluates on the GAMUS val subset -> RMSE / MAE / Pearson r / delta1,
@@ -52,6 +52,19 @@ from pathlib import Path
 # before torch initialises CUDA; harmless when there is no GPU.
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
+# Silence the Hugging Face download progress bars + chatty library logs.  These
+# tqdm bars redraw constantly and lag the Kaggle console / a slow terminal.
+# Must be set before huggingface_hub / transformers are imported.
+for _k, _v in {
+    "HF_HUB_DISABLE_PROGRESS_BARS": "1",
+    "HF_HUB_DISABLE_TELEMETRY": "1",
+    "TRANSFORMERS_NO_ADVISORY_WARNINGS": "1",
+    "TRANSFORMERS_VERBOSITY": "error",
+    "HF_HUB_VERBOSITY": "error",
+    "TOKENIZERS_PARALLELISM": "false",
+}.items():
+    os.environ.setdefault(_k, _v)
+
 
 # ===========================================================================
 # 0. dependencies  (Kaggle already ships torch + CUDA + numpy + pillow + mpl)
@@ -82,6 +95,32 @@ from torch.utils.checkpoint import checkpoint  # noqa: E402
 from torch.utils.data import DataLoader, Dataset  # noqa: E402
 
 
+def _quiet_libraries() -> None:
+    """Kill progress bars / info logs that flood the console during downloads."""
+    import logging
+    import warnings
+
+    warnings.filterwarnings("ignore")
+    try:
+        from huggingface_hub.utils import disable_progress_bars
+
+        disable_progress_bars()
+    except Exception:
+        pass
+    try:
+        import transformers
+
+        transformers.logging.set_verbosity_error()
+        transformers.logging.disable_progress_bar()
+    except Exception:
+        pass
+    for name in ("huggingface_hub", "transformers", "filelock", "urllib3", "h5py"):
+        logging.getLogger(name).setLevel(logging.ERROR)
+
+
+_quiet_libraries()
+
+
 # ===========================================================================
 # 1. config
 # ===========================================================================
@@ -89,7 +128,7 @@ from torch.utils.data import DataLoader, Dataset  # noqa: E402
 class Config:
     # -- data ------------------------------------------------------------
     hf_dataset_repo: str = "earthflow/GAMUS"
-    data_source: str = "local"         # download step disabled below; tiles must already be on disk
+    data_source: str = "local"         # "hf" -> download subset from Hub; "local" -> read --data_root
     data_root: str = "/kaggle/working/data/gamus"
     train_subset: int = 1200          # 0 -> use every tile in the split
     val_subset: int = 300
@@ -199,6 +238,13 @@ def _read_h5(path: Path) -> np.ndarray:
 def ensure_hf_subset(cfg: Config, split: str, n: int) -> list[str]:
     from huggingface_hub import HfApi, hf_hub_download
 
+    try:  # belt-and-suspenders: kill tqdm bars even on older hub versions
+        from huggingface_hub.utils import disable_progress_bars
+
+        disable_progress_bars()
+    except Exception:
+        pass
+
     root = Path(cfg.data_root)
     api = HfApi(token=cfg.hf_token or None)
     repo_files = api.list_repo_files(cfg.hf_dataset_repo, repo_type="dataset")
@@ -235,8 +281,10 @@ def ensure_hf_subset(cfg: Config, split: str, n: int) -> list[str]:
     with ThreadPoolExecutor(max_workers=max(1, cfg.dl_workers)) as ex:
         for _ in ex.map(_fetch, rels):
             done += 1
-            if done % 300 == 0 or done == len(rels):
+            if done % 1000 == 0 or done == len(rels):
                 print(f"[data]   {split} {done}/{len(rels)} files  ({time.time() - t0:.0f}s)")
+    if rels:
+        print(f"[data] {split}: downloaded {len(rels)} files in {time.time() - t0:.0f}s")
     return stems
 
 
@@ -293,22 +341,22 @@ class GamusDataset(Dataset):
 
 def build_loaders(cfg: Config):
     # ------------------------------------------------------------------
-    # DATASET DOWNLOAD DISABLED — the GAMUS tiles are already on disk.
-    # Point --data_root at the folder that contains  images/ heights/ classes/.
-    # To re-enable the Hub download, uncomment the block below and pass
-    # --data_source hf .
+    # data_source == "hf"    -> download the deterministic subset from the Hub
+    # data_source == "local" -> read tiles already on disk under --data_root
+    #                           (--data_root must contain images/ heights/ classes/)
     # ------------------------------------------------------------------
     if cfg.data_source == "hf":
         tr = ensure_hf_subset(cfg, "train", cfg.train_subset)
         va = ensure_hf_subset(cfg, "val", cfg.val_subset)
     else:
-    tr, va = list_local_stems(cfg, "train"), list_local_stems(cfg, "val")
-    if cfg.train_subset or cfg.val_subset:
-        rng = random.Random(cfg.seed)  # deterministic subset, matches old hf path
-        rng.shuffle(tr)
-        rng.shuffle(va)
-        tr = sorted(tr[: cfg.train_subset]) if cfg.train_subset else tr
-        va = sorted(va[: cfg.val_subset]) if cfg.val_subset else va
+        tr, va = list_local_stems(cfg, "train"), list_local_stems(cfg, "val")
+        if cfg.train_subset or cfg.val_subset:
+            rng = random.Random(cfg.seed)  # deterministic subset, matches old hf path
+            rng.shuffle(tr)
+            rng.shuffle(va)
+            tr = sorted(tr[: cfg.train_subset]) if cfg.train_subset else tr
+            va = sorted(va[: cfg.val_subset]) if cfg.val_subset else va
+
     if not tr or not va:
         raise RuntimeError("no GAMUS tiles found — check data_source / data_root / internet")
     if len(tr) < cfg.batch_size:
