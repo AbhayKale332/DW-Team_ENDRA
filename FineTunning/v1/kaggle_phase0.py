@@ -52,6 +52,19 @@ from pathlib import Path
 # before torch initialises CUDA; harmless when there is no GPU.
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
+# Silence the Hugging Face download progress bars + chatty library logs.  These
+# tqdm bars redraw constantly and lag the Kaggle console / a slow terminal.
+# Must be set before huggingface_hub / transformers are imported.
+for _k, _v in {
+    "HF_HUB_DISABLE_PROGRESS_BARS": "1",
+    "HF_HUB_DISABLE_TELEMETRY": "1",
+    "TRANSFORMERS_NO_ADVISORY_WARNINGS": "1",
+    "TRANSFORMERS_VERBOSITY": "error",
+    "HF_HUB_VERBOSITY": "error",
+    "TOKENIZERS_PARALLELISM": "false",
+}.items():
+    os.environ.setdefault(_k, _v)
+
 
 # ===========================================================================
 # 0. dependencies  (Kaggle already ships torch + CUDA + numpy + pillow + mpl)
@@ -80,6 +93,32 @@ import torch.nn as nn  # noqa: E402
 import torch.nn.functional as F  # noqa: E402
 from torch.utils.checkpoint import checkpoint  # noqa: E402
 from torch.utils.data import DataLoader, Dataset  # noqa: E402
+
+
+def _quiet_libraries() -> None:
+    """Kill progress bars / info logs that flood the console during downloads."""
+    import logging
+    import warnings
+
+    warnings.filterwarnings("ignore")
+    try:
+        from huggingface_hub.utils import disable_progress_bars
+
+        disable_progress_bars()
+    except Exception:
+        pass
+    try:
+        import transformers
+
+        transformers.logging.set_verbosity_error()
+        transformers.logging.disable_progress_bar()
+    except Exception:
+        pass
+    for name in ("huggingface_hub", "transformers", "filelock", "urllib3", "h5py"):
+        logging.getLogger(name).setLevel(logging.ERROR)
+
+
+_quiet_libraries()
 
 
 # ===========================================================================
@@ -199,6 +238,13 @@ def _read_h5(path: Path) -> np.ndarray:
 def ensure_hf_subset(cfg: Config, split: str, n: int) -> list[str]:
     from huggingface_hub import HfApi, hf_hub_download
 
+    try:  # belt-and-suspenders: kill tqdm bars even on older hub versions
+        from huggingface_hub.utils import disable_progress_bars
+
+        disable_progress_bars()
+    except Exception:
+        pass
+
     root = Path(cfg.data_root)
     api = HfApi(token=cfg.hf_token or None)
     repo_files = api.list_repo_files(cfg.hf_dataset_repo, repo_type="dataset")
@@ -235,8 +281,10 @@ def ensure_hf_subset(cfg: Config, split: str, n: int) -> list[str]:
     with ThreadPoolExecutor(max_workers=max(1, cfg.dl_workers)) as ex:
         for _ in ex.map(_fetch, rels):
             done += 1
-            if done % 300 == 0 or done == len(rels):
+            if done % 1000 == 0 or done == len(rels):
                 print(f"[data]   {split} {done}/{len(rels)} files  ({time.time() - t0:.0f}s)")
+    if rels:
+        print(f"[data] {split}: downloaded {len(rels)} files in {time.time() - t0:.0f}s")
     return stems
 
 
