@@ -6,7 +6,8 @@ Goal (from `.agents/Depth_Wizard_Plan.md`, Phase 0):
 
 What this script does, end to end, with no other project files:
     1. pip-installs the few deps Kaggle is missing (transformers, huggingface_hub, h5py)
-    2. downloads a deterministic subset of earthflow/GAMUS from the Hub
+    2. reads a deterministic subset of GAMUS tiles that are ALREADY on disk
+       (the Hub download is commented out in build_loaders — pass --data_root)
     3. builds  DINOv3-SAT (frozen) -> DPT decoder -> single metric-nDSM head
     4. trains with AMP across both T4s (nn.DataParallel), wall-clock capped
     5. evaluates on the GAMUS val subset -> RMSE / MAE / Pearson r / delta1,
@@ -47,6 +48,11 @@ from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 
 
+# Keep the CUDA caching allocator from fragmenting on the two T4s.  Must be set
+# before torch initialises CUDA; harmless when there is no GPU.
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
+
 # ===========================================================================
 # 0. dependencies  (Kaggle already ships torch + CUDA + numpy + pillow + mpl)
 # ===========================================================================
@@ -72,6 +78,7 @@ import numpy as np  # noqa: E402
 import torch  # noqa: E402
 import torch.nn as nn  # noqa: E402
 import torch.nn.functional as F  # noqa: E402
+from torch.utils.checkpoint import checkpoint  # noqa: E402
 from torch.utils.data import DataLoader, Dataset  # noqa: E402
 
 
@@ -82,7 +89,7 @@ from torch.utils.data import DataLoader, Dataset  # noqa: E402
 class Config:
     # -- data ------------------------------------------------------------
     hf_dataset_repo: str = "earthflow/GAMUS"
-    data_source: str = "hf"            # "hf" -> download subset; "local" -> read data_root as-is
+    data_source: str = "local"         # download step disabled below; tiles must already be on disk
     data_root: str = "/kaggle/working/data/gamus"
     train_subset: int = 1200          # 0 -> use every tile in the split
     val_subset: int = 300
@@ -104,10 +111,12 @@ class Config:
     max_train_minutes: float = 150.0
     learning_rate: float = 3e-4
     weight_decay: float = 1e-2
-    batch_size: int = 8              # total across all GPUs (DataParallel splits it)
-    grad_accum: int = 1
+    batch_size: int = 4              # total across all GPUs (DataParallel splits it)
+    grad_accum: int = 2              # effective batch = batch_size * grad_accum
     grad_clip: float = 1.0
     amp: bool = True
+    grad_checkpoint: bool = True     # checkpoint the DPT decoder blocks -> much less VRAM
+    channels_last: bool = True       # channels_last convs -> better T4 throughput/VRAM
     seed: int = 42
 
     # -- loss  (SiLog + L1 + multi-scale gradient) -----------------
@@ -283,15 +292,23 @@ class GamusDataset(Dataset):
 
 
 def build_loaders(cfg: Config):
-    if cfg.data_source == "hf":
-        tr = ensure_hf_subset(cfg, "train", cfg.train_subset)
-        va = ensure_hf_subset(cfg, "val", cfg.val_subset)
-    else:
-        tr, va = list_local_stems(cfg, "train"), list_local_stems(cfg, "val")
-        if cfg.train_subset:
-            tr = tr[: cfg.train_subset]
-        if cfg.val_subset:
-            va = va[: cfg.val_subset]
+    # ------------------------------------------------------------------
+    # DATASET DOWNLOAD DISABLED — the GAMUS tiles are already on disk.
+    # Point --data_root at the folder that contains  images/ heights/ classes/.
+    # To re-enable the Hub download, uncomment the block below and pass
+    # --data_source hf .
+    # ------------------------------------------------------------------
+    # if cfg.data_source == "hf":
+    #     tr = ensure_hf_subset(cfg, "train", cfg.train_subset)
+    #     va = ensure_hf_subset(cfg, "val", cfg.val_subset)
+    # else:
+    tr, va = list_local_stems(cfg, "train"), list_local_stems(cfg, "val")
+    if cfg.train_subset or cfg.val_subset:
+        rng = random.Random(cfg.seed)  # deterministic subset, matches old hf path
+        rng.shuffle(tr)
+        rng.shuffle(va)
+        tr = sorted(tr[: cfg.train_subset]) if cfg.train_subset else tr
+        va = sorted(va[: cfg.val_subset]) if cfg.val_subset else va
     if not tr or not va:
         raise RuntimeError("no GAMUS tiles found — check data_source / data_root / internet")
     if len(tr) < cfg.batch_size:
@@ -388,8 +405,9 @@ class FeatureFusionBlock(nn.Module):
 class DPTDecoder(nn.Module):
     """4x ViT feature maps (all at 1/16) -> reassemble to {1/4,1/8,1/16,1/32} -> RefineNet fusion."""
 
-    def __init__(self, in_ch: int, dim: int):
+    def __init__(self, in_ch: int, dim: int, grad_checkpoint: bool = False):
         super().__init__()
+        self.grad_checkpoint = grad_checkpoint
         proj = [96, 192, 384, 768]
         self.proj = nn.ModuleList(nn.Conv2d(in_ch, p, 1) for p in proj)
         self.resample = nn.ModuleList([
@@ -409,11 +427,17 @@ class DPTDecoder(nn.Module):
     def forward(self, feats: list[torch.Tensor], out_hw) -> torch.Tensor:
         f = [self.resample[i](self.proj[i](feats[i])) for i in range(4)]
         f = [self.to_dim[i](f[i]) for i in range(4)]
-        x = self.fuse[3](f[3])
-        x = self.fuse[2](x, f[2])
-        x = self.fuse[1](x, f[1])
-        x = self.fuse[0](x, f[0])
-        x = self.head(x)
+
+        def run(fn, *a):
+            if self.grad_checkpoint and self.training:
+                return checkpoint(fn, *a, use_reentrant=False)
+            return fn(*a)
+
+        x = run(self.fuse[3], f[3])
+        x = run(self.fuse[2], x, f[2])
+        x = run(self.fuse[1], x, f[1])
+        x = run(self.fuse[0], x, f[0])
+        x = run(self.head, x)
         return F.interpolate(x, size=out_hw, mode="bilinear", align_corners=False)
 
 
@@ -421,7 +445,7 @@ class DepthWizardNet(nn.Module):
     def __init__(self, cfg: Config):
         super().__init__()
         self.encoder = DINOv3Encoder(cfg)
-        self.decoder = DPTDecoder(self.encoder.hidden, cfg.decoder_dim)
+        self.decoder = DPTDecoder(self.encoder.hidden, cfg.decoder_dim, cfg.grad_checkpoint)
 
     def forward(self, image: torch.Tensor) -> torch.Tensor:
         feats = self.encoder(image)
@@ -433,7 +457,7 @@ class DepthWizardNet(nn.Module):
 # 5. losses
 # ===========================================================================
 def gradient_loss(pred, target, valid, scales=4):
-    total = 0.0
+    total = pred.sum() * 0.0  # keep it a tensor even if no mask ever matches
     p, t, v = pred, target, valid.float()
     for _ in range(scales):
         for d in (1, 2):  # x, y
@@ -456,13 +480,39 @@ def silog_loss(pred, target, valid, lam, shift):
     return torch.sqrt((g ** 2).mean() - lam * (g.mean() ** 2) + 1e-7)
 
 
-def compute_loss(pred, target, valid, cfg: Config):
+def loss_terms(pred, target, valid, cfg: Config):
     m = valid.bool()
     l1 = F.l1_loss(pred[m], target[m]) if m.any() else pred.sum() * 0.0
     grad = gradient_loss(pred, target, valid)
     sil = silog_loss(pred, target, valid, cfg.silog_lambda, cfg.silog_shift)
+    return l1, grad, sil
+
+
+def compute_loss(pred, target, valid, cfg: Config):
+    l1, grad, sil = loss_terms(pred, target, valid, cfg)
     loss = cfg.w_l1 * l1 + cfg.w_grad * grad + cfg.w_silog * sil
     return loss, {"l1": float(l1), "grad": float(grad), "silog": float(sil)}
+
+
+class LossWrapper(nn.Module):
+    """Runs the net *and* the loss on each DataParallel replica, so the full-res
+    prediction and the loss math never get gathered onto GPU-0.  Returns
+    (loss[1], stats[1,3]); DataParallel concatenates these to (n_gpu, ...) and the
+    caller reduces with .mean(). This is what keeps the two T4s balanced."""
+
+    def __init__(self, net: nn.Module, cfg: Config):
+        super().__init__()
+        self.net = net
+        self.cfg = cfg
+
+    def forward(self, image, target, valid):
+        with torch.autocast("cuda", enabled=self.cfg.amp):
+            pred = self.net(image)
+        pred = pred.float()
+        l1, grad, sil = loss_terms(pred, target, valid, self.cfg)
+        loss = self.cfg.w_l1 * l1 + self.cfg.w_grad * grad + self.cfg.w_silog * sil
+        stats = torch.stack([l1.detach(), grad.detach(), sil.detach()]).view(1, 3)
+        return loss.view(1), stats
 
 
 # ===========================================================================
@@ -599,16 +649,24 @@ def main() -> None:
     dl_tr, dl_va = build_loaders(cfg)
     print(f"[data] train batches={len(dl_tr)}  val batches={len(dl_va)}")
 
-    model = DepthWizardNet(cfg).to(device)
-    trainable = [p for p in model.parameters() if p.requires_grad]
+    core = DepthWizardNet(cfg).to(device)
+    if cfg.channels_last and n_gpu:
+        core = core.to(memory_format=torch.channels_last)
+    trainable = [p for p in core.parameters() if p.requires_grad]
     n_train = sum(p.numel() for p in trainable)
-    n_total = sum(p.numel() for p in model.parameters())
+    n_total = sum(p.numel() for p in core.parameters())
     print(f"[model] trainable {n_train/1e6:.1f}M / {n_total/1e6:.1f}M params")
 
+    # Loss is computed inside this wrapper so each GPU keeps its own prediction +
+    # loss graph — plain nn.DataParallel(net) gathers every prediction to GPU-0
+    # and runs the loss there, which is what pinned ~13 GB on one card.
+    train_model = LossWrapper(core, cfg)
     if n_gpu > 1:
-        model = nn.DataParallel(model)
+        train_model = nn.DataParallel(train_model)
         print(f"[model] nn.DataParallel over {n_gpu} GPUs, "
-              f"per-GPU batch ~{cfg.batch_size // n_gpu}")
+              f"per-GPU batch ~{max(1, cfg.batch_size // n_gpu)}")
+    if n_gpu:
+        torch.cuda.empty_cache()
 
     opt = torch.optim.AdamW(trainable, lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
     steps_per_epoch = max(1, len(dl_tr) // cfg.grad_accum)
@@ -628,7 +686,7 @@ def main() -> None:
     for epoch in range(1, cfg.epochs + 1):
         if stop:
             break
-        model.train()
+        train_model.train()
         run_loss = 0.0
         parts_sum = {"l1": 0.0, "grad": 0.0, "silog": 0.0}
         parts = {"l1": 0.0, "grad": 0.0, "silog": 0.0}
@@ -639,10 +697,12 @@ def main() -> None:
             img = batch["image"].to(device, non_blocking=True)
             tgt = batch["target"].to(device, non_blocking=True)
             val = batch["valid"].to(device, non_blocking=True)
-            with torch.autocast("cuda", enabled=cfg.amp):
-                pred = model(img)
-                loss, parts = compute_loss(pred.float(), tgt, val, cfg)
-                loss = loss / cfg.grad_accum
+            if cfg.channels_last and n_gpu:
+                img = img.contiguous(memory_format=torch.channels_last)
+            # autocast runs inside LossWrapper so it also applies on DP replicas
+            loss_vec, stats = train_model(img, tgt, val)
+            loss = loss_vec.mean() / cfg.grad_accum
+            parts = dict(zip(("l1", "grad", "silog"), (float(v) for v in stats.mean(0))))
             scaler.scale(loss).backward()
 
             if (step + 1) % cfg.grad_accum == 0:
@@ -674,7 +734,9 @@ def main() -> None:
                **{f"train_{k}": v / nb for k, v in parts_sum.items()}}
 
         if epoch % cfg.eval_every == 0 or epoch == cfg.epochs or stop:
-            metrics = evaluate(model, dl_va, cfg, device)
+            if n_gpu:
+                torch.cuda.empty_cache()
+            metrics = evaluate(core, dl_va, cfg, device)  # eval on one GPU, no autograd
             g = metrics["global"]
             rec["val"] = metrics
             print(f"[eval] epoch {epoch}  RMSE={g['rmse_m']:.3f}m  MAE={g['mae_m']:.3f}m  "
@@ -684,7 +746,7 @@ def main() -> None:
                     print(f"[eval]   {name:11s} RMSE={cm['rmse_m']:.3f}m  MAE={cm['mae_m']:.3f}m  n={cm['n']}")
             if g["rmse_m"] < best_rmse and cfg.save_checkpoint:
                 best_rmse = g["rmse_m"]
-                sd = (model.module if isinstance(model, nn.DataParallel) else model).state_dict()
+                sd = core.state_dict()
                 torch.save({"epoch": epoch, "config": safe_config_dict(cfg), "metrics": metrics,
                             "model": {k: v for k, v in sd.items() if "encoder.model" not in k}},
                            Path(cfg.output_dir) / "best.pt")
@@ -699,7 +761,7 @@ def main() -> None:
 
     if cfg.export_viewer_sample:
         try:
-            export_viewer_sample(model, dl_va, cfg, device)
+            export_viewer_sample(core, dl_va, cfg, device)
         except Exception as e:  # never fail the run over a screenshot asset
             print(f"[viewer] export skipped: {e}")
 
