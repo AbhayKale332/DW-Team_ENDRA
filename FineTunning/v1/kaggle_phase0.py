@@ -345,17 +345,17 @@ def build_loaders(cfg: Config):
     # data_source == "local" -> read tiles already on disk under --data_root
     #                           (--data_root must contain images/ heights/ classes/)
     # ------------------------------------------------------------------
-    if cfg.data_source == "hf":
-        tr = ensure_hf_subset(cfg, "train", cfg.train_subset)
-        va = ensure_hf_subset(cfg, "val", cfg.val_subset)
-    else:
-        tr, va = list_local_stems(cfg, "train"), list_local_stems(cfg, "val")
-        if cfg.train_subset or cfg.val_subset:
-            rng = random.Random(cfg.seed)  # deterministic subset, matches old hf path
-            rng.shuffle(tr)
-            rng.shuffle(va)
-            tr = sorted(tr[: cfg.train_subset]) if cfg.train_subset else tr
-            va = sorted(va[: cfg.val_subset]) if cfg.val_subset else va
+    # if cfg.data_source == "hf":
+    #     tr = ensure_hf_subset(cfg, "train", cfg.train_subset)
+    #     va = ensure_hf_subset(cfg, "val", cfg.val_subset)
+    # else:
+    tr, va = list_local_stems(cfg, "train"), list_local_stems(cfg, "val")
+    if cfg.train_subset or cfg.val_subset:
+        rng = random.Random(cfg.seed)  # deterministic subset, matches old hf path
+        rng.shuffle(tr)
+        rng.shuffle(va)
+        tr = sorted(tr[: cfg.train_subset]) if cfg.train_subset else tr
+        va = sorted(va[: cfg.val_subset]) if cfg.val_subset else va
 
     if not tr or not va:
         raise RuntimeError("no GAMUS tiles found — check data_source / data_root / internet")
