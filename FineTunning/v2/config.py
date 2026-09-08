@@ -70,6 +70,7 @@ class Config:
     geonrw_gsd_m: float = 1.0
 
     # ----- model ---------------------------------------------------
+    # hardware target: 1x H100 80 GB SXM (Hopper, ~1979 bf16 TFLOPS), 24 vCPU
     encoder_model_id: str = "facebook/dinov3-vitl16-pretrain-sat493m"
     encoder_feature_indices: tuple = (6, 12, 18, 24)
     encoder_half: bool = True
@@ -87,18 +88,22 @@ class Config:
     finetune_epochs: int = 30
     pretrain_minutes: float = 120.0
     finetune_minutes: float = 300.0
-    learning_rate: float = 3e-4
+    learning_rate: float = 3.5e-4        # lightly scaled up for the larger batch
     weight_decay: float = 1e-2
-    batch_size: int = 32
+    batch_size: int = 40                 # H100 80 GB, fp16 frozen encoder @ 512px
     grad_accum: int = 1
     grad_clip: float = 1.0
-    num_workers: int = 16
-    prefetch_factor: int = 4
+    num_workers: int = 22                # 24 vCPU -> leave 2 for the main proc
+    prefetch_factor: int = 6
     amp: bool = True
-    amp_dtype: str = "bf16"               # bf16 on Blackwell; "fp16" fallback
+    amp_dtype: str = "bf16"              # bf16 on Hopper/H100; "fp16" fallback
     channels_last: bool = True
-    grad_checkpoint: bool = False         # 96 GB card -> off
-    compile_model: bool = False
+    grad_checkpoint: bool = False        # 80 GB card -> off
+    compile_model: bool = True           # torch.compile the net (Hopper: big win)
+    compile_mode: str = "default"       # "max-autotune" trades warmup for speed
+    cudnn_benchmark: bool = True         # tile_size is fixed -> autotune kernels
+    tf32: bool = True                    # TF32 matmul/conv on Tensor Cores
+    matmul_precision: str = "high"       # torch.set_float32_matmul_precision
     seed: int = 42
 
     # ----- loss weights -----------------------------------------
@@ -145,6 +150,8 @@ class Config:
         self.finetune_minutes = 15.0
         self.batch_size = 2
         self.num_workers = 2
+        self.compile_model = False        # skip compile warmup on a tiny run
+        self.cudnn_benchmark = False
         self.eval_every = 1
         self.n_qualitative = 2
         self.share_cloudflared = False

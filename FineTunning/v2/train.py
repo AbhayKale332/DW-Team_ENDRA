@@ -1,8 +1,8 @@
 """DepthWizard v2 trainer — SynRS3D pretrain -> GAMUS+GeoNRW fine-tune.
 
-Single GPU (target: 1x RTX PRO 6000, 96 GB).  bf16 autocast, channels_last, no
-grad-checkpoint.  Each stage is wall-clock capped and checkpointed so a killed
-vast.ai box is resumable.  At the end everything is zipped and shared over a
+Single GPU (target: 1x H100 80 GB SXM, Hopper).  bf16 autocast, channels_last,
+TF32 tensor cores, cuDNN autotune, torch.compile, no grad-checkpoint.  Each stage
+is wall-clock capped and checkpointed so a killed box is resumable.  At the end everything is zipped and shared over a
 cloudflared quick tunnel.
 
     python train.py                       # full run (reads config defaults)
@@ -23,6 +23,9 @@ from pathlib import Path
 
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+# 22 dataloader workers on 24 vCPU — keep each worker single-threaded so the
+# BLAS/OMP pools don't oversubscribe the box.
+os.environ.setdefault("OMP_NUM_THREADS", "1")
 
 import numpy as np
 import torch
@@ -251,7 +254,15 @@ def main() -> None:
     sys.stdout = sys.stderr = Tee(out_dir / "run.log")
     cfg.hf_token = resolve_hf_token(cfg)
     set_seed(cfg.seed)
-    torch.backends.cudnn.benchmark = False
+    # Hopper/H100 throughput knobs. Input tiles are a fixed size, so cuDNN
+    # autotuning pays off and TF32 tensor-core matmul/conv is a free ~2x on fp32.
+    torch.backends.cudnn.benchmark = cfg.cudnn_benchmark
+    torch.backends.cuda.matmul.allow_tf32 = cfg.tf32
+    torch.backends.cudnn.allow_tf32 = cfg.tf32
+    try:
+        torch.set_float32_matmul_precision(cfg.matmul_precision)
+    except Exception:  # noqa: BLE001
+        pass
 
     n_gpu = torch.cuda.device_count()
     device = torch.device("cuda" if n_gpu else "cpu")
@@ -265,6 +276,12 @@ def main() -> None:
     model = DepthWizardNetV2(cfg).to(device)
     if cfg.channels_last and n_gpu:
         model = model.to(memory_format=torch.channels_last)
+    if cfg.compile_model and n_gpu:
+        try:
+            model = torch.compile(model, mode=cfg.compile_mode)
+            print(f"[model] torch.compile enabled (mode={cfg.compile_mode})")
+        except Exception as e:  # noqa: BLE001
+            print(f"[model] torch.compile unavailable: {e}")
     if cfg.init_from and Path(cfg.init_from).is_file():
         sd = torch.load(cfg.init_from, map_location=device).get("model", {})
         missing, unexp = model.load_state_dict(sd, strict=False)
