@@ -1,0 +1,10 @@
+# DepthWizard v2 deps.  Kaggle / vast.ai PyTorch images already ship
+# torch + CUDA + numpy + pillow + matplotlib + scipy — not pinned here.
+
+transformers>=4.56.0        # DINOv3 (DINOv3ViTModel) support landed in 4.56
+huggingface_hub>=0.34.0    # streamed dataset downloads
+h5py>=3.10.0               # GAMUS tiles are one HDF5 per tile
+safetensors>=0.4.3
+tifffile>=2024.1.30        # SynRS3D / GeoNRW .tif tiles
+rasterio>=1.3.0            # GeoNRW .jp2 / .tif (falls back to PIL if missing)
+pytest>=7.4.0             # v2/tests
