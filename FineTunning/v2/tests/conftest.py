@@ -54,7 +54,7 @@ class _StubEncoder:
         import torch
         from torch import nn
 
-        with torch.random.fork_rng():
+        with torch.random.fork_rng(devices=[]):
             torch.manual_seed(0)  # deterministic -> save/reload tests are stable
             self._m = nn.Conv2d(3, self.hidden, 16, stride=16)
         self.frozen = True

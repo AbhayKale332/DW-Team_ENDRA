@@ -29,7 +29,7 @@ def _resize(arr: np.ndarray, out_hw: tuple[int, int], order: str) -> np.ndarray:
     if arr.ndim == 3:
         im = Image.fromarray(arr.astype(np.uint8))
         return np.asarray(im.resize((w, h), resample))
-    im = Image.fromarray(arr.astype(np.float32), mode="F")
+    im = Image.fromarray(arr.astype(np.float32))  # Pillow infers mode "F"
     return np.asarray(im.resize((w, h), resample), dtype=np.float32)
 
 

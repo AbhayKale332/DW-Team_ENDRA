@@ -36,7 +36,8 @@ def test_regression_finite_and_zero_on_match():
 def test_silog_zero_on_match():
     t = torch.rand(4, 1, 8, 8) * 10 + 1
     v = torch.ones_like(t, dtype=torch.bool)
-    assert silog_loss(t.clone(), t, v, 0.85, 1.0).item() < 1e-4
+    # exact match -> only the in-sqrt epsilon (1e-7) remains: sqrt(1e-7) ~= 3.2e-4
+    assert silog_loss(t.clone(), t, v, 0.85, 1.0).item() < 1e-3
 
 
 def test_bin_ce_finite():

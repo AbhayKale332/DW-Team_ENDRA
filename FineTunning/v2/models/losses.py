@@ -52,7 +52,8 @@ def regression_loss(pred, target, valid, cfg) -> tuple[torch.Tensor, dict]:
     grad = gradient_loss(pred, target, valid)
     sil = silog_loss(pred, target, valid, cfg.silog_lambda, cfg.silog_shift)
     total = cfg.w_l1 * l1 + cfg.w_grad * grad + cfg.w_silog * sil
-    return total, {"l1": float(l1), "grad": float(grad), "silog": float(sil)}
+    return total, {"l1": float(l1.detach()), "grad": float(grad.detach()),
+                   "silog": float(sil.detach())}
 
 
 def bin_ce_loss(probs, centres, target, valid) -> torch.Tensor:
@@ -98,9 +99,9 @@ def compute_losses(out: dict, batch: dict, cfg) -> tuple[torch.Tensor, dict]:
         + cfg.w_seg * lseg
     )
     stats = {
-        "loss": float(total),
+        "loss": float(total.detach()),
         "l1_a": sa["l1"], "l1_b": sb["l1"], "l1_fused": sf["l1"],
         "silog_fused": sf["silog"], "grad_fused": sf["grad"],
-        "bin_ce": float(lbin), "seg_ce": float(lseg),
+        "bin_ce": float(lbin.detach()), "seg_ce": float(lseg.detach()),
     }
     return total, stats
