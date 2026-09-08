@@ -100,7 +100,16 @@ class TileDatasetBase(Dataset):
                 idx = nxt
         else:
             rgb, height, seg, src_gsd, has_seg = self.load_tile(idx)
-        rng = np.random.default_rng(self.cfg.seed * 2_654_435_761 + idx * 2 + int(self.train))
+        # Train-time augmentation must be re-drawn every epoch.  Seeding off
+        # (seed, idx) alone made the draw a pure function of the tile index, so
+        # every epoch replayed the *same* GSD jitter, the same crop corner and
+        # the same dihedral for a given tile — 30 fine-tune epochs over one
+        # frozen augmented copy of the data.  Val keeps the deterministic seed
+        # (it only center-crops, but this keeps the split byte-reproducible).
+        if self.train:
+            rng = np.random.default_rng()
+        else:
+            rng = np.random.default_rng(self.cfg.seed * 2_654_435_761 + idx * 2)
 
         chosen_gsd = src_gsd
         if self.train and rng.random() < self.cfg.gsd_jitter_p:

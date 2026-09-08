@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import math
 import os
 import random
 import sys
@@ -98,6 +99,24 @@ def _amp_dtype(cfg: Config):
     return torch.bfloat16 if cfg.amp_dtype == "bf16" else torch.float16
 
 
+def lr_scale(progress: float, pct_start: float = 0.1, final_div: float = 1e2) -> float:
+    """OneCycle-shaped LR multiplier driven by *stage progress* in [0, 1].
+
+    Driving the shape off progress rather than a precomputed step count is what
+    makes this correct: stage P rotates a different SynRS3D archive in every
+    epoch, so its per-epoch batch counts ran 149/383/352/424/75/94.  The old
+    `OneCycleLR(total_steps=len(dl_tr) * epochs)` extrapolated epoch 1's 149
+    batches over all 6 epochs (894 steps vs the 1477 actually taken), hit its
+    floor at the end of epoch 3 and left epochs 4-6 running at lr=1.4e-09.
+    """
+    p = min(max(progress, 0.0), 1.0)
+    floor = 1.0 / final_div
+    if p < pct_start:                                    # linear warmup
+        return floor + (1.0 - floor) * (p / max(1e-8, pct_start))
+    q = (p - pct_start) / max(1e-8, 1.0 - pct_start)     # cosine anneal
+    return floor + (1.0 - floor) * 0.5 * (1.0 + math.cos(math.pi * q))
+
+
 def build_optimizer(cfg: Config, model: nn.Module, extra_params=None, extra_lr_mult=1.0):
     base = [p for n, p in model.named_parameters()
             if p.requires_grad and not n.startswith("encoder.model.")]
@@ -125,7 +144,7 @@ def train_stage(
     use_cuda = device.type == "cuda"
     scaler = torch.amp.GradScaler("cuda", enabled=cfg.amp and use_cuda and cfg.amp_dtype == "fp16")
     opt = build_optimizer(cfg, model)
-    sched = None
+    base_lrs = [g["lr"] for g in opt.param_groups]   # unscaled peaks; g["lr"] gets overwritten
     best = float("inf")
     t0 = time.time()
     unfreeze_epoch = round(cfg.unfreeze_at_frac * epochs) if unfreeze and cfg.unfreeze_last_n else None
@@ -139,14 +158,16 @@ def train_stage(
         if unfreeze_epoch and epoch == unfreeze_epoch:
             newly = model.encoder.unfreeze_last_n_blocks(cfg.unfreeze_last_n)
             if newly:
-                opt = build_optimizer(cfg, model, newly, cfg.unfreeze_lr_mult)
-
-        if sched is None:
-            steps = max(1, len(dl_tr) // cfg.grad_accum) * max(1, epochs - epoch + 1)
-            sched = torch.optim.lr_scheduler.OneCycleLR(
-                opt, max_lr=[g["lr"] for g in opt.param_groups],
-                total_steps=steps, pct_start=0.1,
-            )
+                # add_param_group keeps the AdamW moments for the decoder/heads.
+                # Rebuilding the optimizer here used to throw them away *and*
+                # orphan the scheduler (it stayed bound to the old optimizer),
+                # so the last 30% of stage F ran at a flat, un-annealed
+                # cfg.learning_rate.  The progress-driven lr_scale() below is
+                # optimizer-agnostic, so the curve now carries straight through.
+                opt.add_param_group(
+                    {"params": newly, "lr": cfg.learning_rate * cfg.unfreeze_lr_mult}
+                )
+                base_lrs.append(cfg.learning_rate * cfg.unfreeze_lr_mult)
 
         model.train()
         model.encoder.train()
@@ -155,8 +176,21 @@ def train_stage(
         nb = 0
         stop = False
 
+        n_steps = max(1, len(dl_tr))
         try:
           for step, batch in enumerate(dl_tr):
+            # Anneal on whichever runs out first: the epoch budget or the
+            # wall-clock cap.  Stage F is capped at 300 min but 30 epochs need
+            # ~360, so a pure epoch schedule would get cut off at ~80% of the
+            # cosine with the LR still high.
+            progress = max(
+                (epoch - 1 + step / n_steps) / max(1, epochs),
+                ((time.time() - t0) / 60.0) / max(1e-8, minutes),
+            )
+            scale = lr_scale(progress)
+            for g, b in zip(opt.param_groups, base_lrs):
+                g["lr"] = b * scale
+
             batch = _to_device(batch, device)
             ctx = (
                 torch.autocast("cuda", dtype=_amp_dtype(cfg))
@@ -181,8 +215,6 @@ def train_stage(
                 else:
                     opt.step()
                 opt.zero_grad(set_to_none=True)
-                if sched.last_epoch < sched.total_steps - 1:
-                    sched.step()
 
             run["loss"] += stats["loss"]
             nb += 1

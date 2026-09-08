@@ -69,7 +69,12 @@ def evaluate(model, loader, cfg, device, use_tta: bool = False) -> dict:
         if use_tta:
             pred = tta_predict(model, img, tuple(cfg.tta_scales), key="fused")
         else:
-            with torch.autocast("cuda", enabled=cfg.amp and device.type == "cuda"):
+            # Match the training autocast dtype — bare autocast() defaults to
+            # fp16, which evaluated the decoder in a different precision than it
+            # was trained in (cfg.amp_dtype is bf16 on Hopper).
+            amp_dt = torch.bfloat16 if cfg.amp_dtype == "bf16" else torch.float16
+            with torch.autocast("cuda", dtype=amp_dt,
+                                enabled=cfg.amp and device.type == "cuda"):
                 pred = model(img)["fused"].float()
         p, t = pred[val], tgt[val]
         gm.update(p, t)
