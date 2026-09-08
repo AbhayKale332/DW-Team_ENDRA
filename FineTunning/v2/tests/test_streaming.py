@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from dwdata.streaming import BoundedCacheHF
+from dwdata.streaming import BoundedCacheHF, purge_repos
 
 
 def test_lru_eviction(tmp_path):
@@ -83,6 +83,24 @@ def test_stale_extracted_flag_triggers_reextract(tmp_path, monkeypatch):
     monkeypatch.setattr(BoundedCacheHF, "_extract", staticmethod(lambda *a, **k: None))
     out = c.ensure_archive("a.zip")
     assert calls["n"] == 1 and (out / "opt" / "x.tif").exists()
+
+
+def test_purge_repos_drops_only_unkept(tmp_path):
+    for repo in ("JTRNEO/SynRS3D", "earthflow/GAMUS", "torchgeo/geonrw"):
+        c = BoundedCacheHF(repo, str(tmp_path), max_bytes=10**9)
+        (c.root / "blob.bin").write_bytes(b"x" * 4096)
+    # a stray non-repo dir (no "__") must be left alone
+    (tmp_path / "scratch").mkdir()
+
+    freed = purge_repos(str(tmp_path), ["earthflow/GAMUS", "torchgeo/geonrw"])
+
+    assert freed == 4096
+    assert not (tmp_path / "JTRNEO__SynRS3D").exists()
+    assert (tmp_path / "earthflow__GAMUS" / "blob.bin").exists()
+    assert (tmp_path / "torchgeo__geonrw" / "blob.bin").exists()
+    assert (tmp_path / "scratch").is_dir()
+    # no-op when cache dir is absent
+    assert purge_repos(str(tmp_path / "missing"), []) == 0
 
 
 @pytest.mark.hf

@@ -28,6 +28,16 @@ def _subset(stems: list[str], n: int, seed: int) -> list[str]:
 def build_finetune_loaders(cfg, token: str | None):
     from .gamus import GamusDataset, list_stems as gamus_stems, make_cache as gamus_cache
 
+    # Pretrain (SynRS3D) is done by the time we get here; its per-repo cache is
+    # capped independently of the finetune datasets, so drop it now instead of
+    # letting it hold ~50 GiB for the rest of the run.
+    if cfg.data_source != "local":
+        from .streaming import purge_repos
+
+        freed = purge_repos(cfg.cache_dir, [cfg.gamus_repo, cfg.geonrw_repo])
+        if freed:
+            print(f"[cache] freed {freed / 1024**3:.1f} GiB of non-finetune datasets")
+
     names = cfg.dataset_list()
     weights_cfg = cfg.sampler_weight_map()
     datasets, per_ds_weight = [], []
@@ -94,8 +104,12 @@ def build_finetune_loaders(cfg, token: str | None):
 
 
 def build_pretrain_dataset(cfg, token: str | None):
-    from .streaming import BoundedCacheHF
+    from .streaming import BoundedCacheHF, purge_repos
     from .synrs3d import SynRS3DArchiveDataset
+
+    # Bounded disk: only the pretrain dataset should be resident during stage P.
+    if cfg.data_source != "local":
+        purge_repos(cfg.cache_dir, [cfg.synrs3d_repo])
 
     cache = BoundedCacheHF(cfg.synrs3d_repo, cfg.cache_dir,
                            int(cfg.cache_max_gib * 1024**3), token=token)

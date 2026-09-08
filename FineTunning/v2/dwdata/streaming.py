@@ -289,6 +289,38 @@ class BoundedCacheHF:
         }
 
 
+def purge_repos(cache_dir: str, keep) -> int:
+    """Delete per-repo cache subdirs under ``cache_dir`` that aren't in ``keep``.
+
+    Every dataset repo gets its own ``<org>__<name>`` subdir under ``cache_dir``
+    with an *independent* size cap (see :class:`BoundedCacheHF`), and eviction
+    only ever looks inside one repo's subdir.  So data from a finished stage —
+    SynRS3D after pretrain — would otherwise sit at its full cap for the rest of
+    the run, making the total footprint ``n_repos * cap`` instead of one cap.
+    The trainer calls this on the way into a stage to drop the previous stage's
+    datasets.
+
+    ``keep`` is an iterable of repo ids (e.g. ``"earthflow/GAMUS"``).  Returns
+    the number of bytes removed.
+    """
+    root = Path(cache_dir)
+    if not root.is_dir():
+        return 0
+    keep_names = {r.replace("/", "__") for r in keep}
+    freed = 0
+    for d in sorted(root.iterdir()):
+        if (
+            not d.is_dir()
+            or d.is_symlink()
+            or "__" not in d.name
+            or d.name in keep_names
+        ):
+            continue
+        freed += BoundedCacheHF._tree_size(d)
+        shutil.rmtree(d, ignore_errors=True)
+    return freed
+
+
 def wait_for(fn, tries: int = 4, base: float = 1.5):
     """Small retry wrapper for flaky Hub reads inside DataLoader workers."""
     last = None
