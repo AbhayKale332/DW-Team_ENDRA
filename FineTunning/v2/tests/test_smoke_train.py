@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 
-from data.base import pack_sample
+from dwdata.base import pack_sample
 from eval.metrics import evaluate
 
 

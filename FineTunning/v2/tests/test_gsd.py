@@ -1,6 +1,6 @@
 import numpy as np
 
-from data.gsd import center_crop_or_pad, jitter_gsd, rescale_to_gsd, roundtrip_predict
+from dwdata.gsd import center_crop_or_pad, jitter_gsd, rescale_to_gsd, roundtrip_predict
 
 
 def test_rescale_changes_spacing_not_heights(synthetic_tile):

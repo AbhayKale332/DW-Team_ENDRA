@@ -231,7 +231,7 @@ class _Rotator:
     """Per-epoch SynRS3D archive rotation, exposes `.loader`."""
 
     def __init__(self, cfg, ds):
-        from data.loaders import pretrain_loader
+        from dwdata.loaders import pretrain_loader
 
         self.cfg = cfg
         self.ds = ds
@@ -278,7 +278,7 @@ def main() -> None:
     # ---- Stage P: pretrain -----------------------------------------
     if cfg.pretrain_dataset == "synrs3d" and not cfg.skip_pretrain:
         try:
-            from data.loaders import build_pretrain_dataset
+            from dwdata.loaders import build_pretrain_dataset
 
             ds = build_pretrain_dataset(cfg, cfg.hf_token or None)
             rot = _Rotator(cfg, ds)
@@ -289,7 +289,7 @@ def main() -> None:
             print(f"[pretrain] skipped due to error: {e}")
 
     # ---- Stage F: finetune ----------------------------------------
-    from data.loaders import build_finetune_loaders
+    from dwdata.loaders import build_finetune_loaders
 
     dl_tr, dl_va = build_finetune_loaders(cfg, cfg.hf_token or None)
     print(f"[data] finetune train batches={len(dl_tr)}  "

@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from data.streaming import BoundedCacheHF
+from dwdata.streaming import BoundedCacheHF
 
 
 def test_lru_eviction(tmp_path):
