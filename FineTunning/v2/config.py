@@ -142,8 +142,11 @@ class Config:
     def validate(self) -> Config:
         assert self.tile_size % 16 == 0, "tile_size must be a multiple of 16"
         assert self.amp_dtype in ("bf16", "fp16")
-        Path(self.output_dir).mkdir(parents=True, exist_ok=True)
-        Path(self.cache_dir).mkdir(parents=True, exist_ok=True)
+        for d in (self.output_dir, self.cache_dir):
+            try:
+                Path(d).mkdir(parents=True, exist_ok=True)
+            except OSError:
+                pass  # created lazily by whoever writes there
         if self.skip_pretrain:
             self.pretrain_dataset = ""
         return self
@@ -170,7 +173,11 @@ def parse_config(argv: list[str] | None = None) -> Config:
             continue
         t = type(cur)
         if t is bool:
-            p.add_argument(f"--{f.name}", type=lambda x: str(x).lower() in ("1", "true", "yes"))
+            # `--flag` -> True, `--flag false` -> False, absent -> None
+            p.add_argument(
+                f"--{f.name}", nargs="?", const=True, default=None,
+                type=lambda x: str(x).lower() in ("1", "true", "yes", "y"),
+            )
         else:
             p.add_argument(f"--{f.name}", type=t)
     args, _ = p.parse_known_args(argv)
