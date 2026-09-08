@@ -16,8 +16,19 @@ v2 vs v1:
 from __future__ import annotations
 
 import argparse
+import os
 from dataclasses import dataclass, fields
 from pathlib import Path
+
+# Directory that holds this file (``FineTunning/v2``).  All default output /
+# cache / local-data paths hang off here so the pipeline runs unchanged on
+# Kaggle, vast.ai or Lightning AI without any absolute host paths baked in.
+# Override any of them with the matching ``--flag`` or an env var.
+_V2_DIR = Path(__file__).resolve().parent
+
+_DEFAULT_OUTPUT_DIR = os.environ.get("DW_OUTPUT_DIR", str(_V2_DIR / "outputs" / "v2"))
+_DEFAULT_CACHE_DIR = os.environ.get("DW_CACHE_DIR", str(_V2_DIR / "outputs" / "dw_cache"))
+_DEFAULT_LOCAL_ROOT = os.environ.get("DW_LOCAL_ROOT", str(_V2_DIR / "data"))
 
 # 7-class GAMUS land-cover order (index -> name). v1's `class_names`.
 CLASS_NAMES: tuple[str, ...] = (
@@ -34,9 +45,9 @@ class Config:
     datasets: str = "gamus,geonrw"          # fine-tune mix; comma list of {gamus,geonrw,synrs3d}
     pretrain_dataset: str = "synrs3d"        # "" -> skip stage P
     data_source: str = "hf"                 # "hf" -> stream; "local" -> read <root>/<name>
-    cache_dir: str = "/tmp/dw_cache"
+    cache_dir: str = _DEFAULT_CACHE_DIR
     cache_max_gib: float = 50.0             # bounded-LRU cache ceiling
-    local_root: str = "/kaggle/input"       # used only when data_source == "local"
+    local_root: str = _DEFAULT_LOCAL_ROOT   # used only when data_source == "local"
 
     gamus_repo: str = "earthflow/GAMUS"
     geonrw_repo: str = "torchgeo/geonrw"
@@ -108,7 +119,7 @@ class Config:
     tta_scales: tuple = (1.0, 1.3)
     per_class_metrics: bool = True
     class_names: tuple = CLASS_NAMES
-    output_dir: str = "/kaggle/working/outputs/v2"
+    output_dir: str = _DEFAULT_OUTPUT_DIR
     n_qualitative: int = 8
 
     # ----- delivery -------------------------------------------
@@ -118,7 +129,7 @@ class Config:
 
     # ----- misc ----------------------------------------------
     hf_token: str = ""
-    smoke: bool = False                   # tiny end-to-end run (Kaggle CPU/T4 sanity)
+    smoke: bool = False                   # tiny end-to-end run (CPU / T4 sanity)
     skip_pretrain: bool = False
     init_from: str = ""                   # checkpoint to warm-start stage F from
 

@@ -1,9 +1,11 @@
 """Bundle the run's artifacts into one zip and expose it over a cloudflared
 quick tunnel — vast.ai has no persistent storage, so this is how the results get
-into Kaggle (`!wget <printed url>`).
+pulled elsewhere (`!wget <printed url>`).  On Lightning AI / Kaggle the zip also
+just sits in ``output_dir`` on persistent disk.
 
 Standalone use:
-    python package_results.py --output_dir /kaggle/working/outputs/v2 --serve
+    python package_results.py --serve                       # uses Config's output_dir
+    python package_results.py --output_dir some/dir --serve
 """
 
 from __future__ import annotations
@@ -19,6 +21,13 @@ import time
 import urllib.request
 import zipfile
 from pathlib import Path
+
+try:  # keep the default in one place (config.py); fall back if imported oddly
+    from config import Config as _Config
+
+    _DEFAULT_OUTPUT_DIR = _Config.output_dir
+except Exception:  # noqa: BLE001
+    _DEFAULT_OUTPUT_DIR = str(Path(__file__).resolve().parent / "outputs" / "v2")
 
 ZIP_NAME = "results_v2.zip"
 _CF_URL = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
@@ -165,7 +174,7 @@ def keep_alive(procs, minutes: float) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--output_dir", default="/kaggle/working/outputs/v2")
+    ap.add_argument("--output_dir", default=_DEFAULT_OUTPUT_DIR)
     ap.add_argument("--serve", action="store_true")
     ap.add_argument("--keep_alive_minutes", type=float, default=180.0)
     ap.add_argument("--port", type=int, default=8000)

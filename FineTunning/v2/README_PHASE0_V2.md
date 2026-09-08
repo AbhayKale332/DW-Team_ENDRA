@@ -33,7 +33,28 @@ never has to hold the full ~260 GB of source data.
 | `package_results.py` | `results_v2.zip` + `cloudflared tunnel --url` share |
 | `tests/` | `pytest` — offline unit tests + `-m hf` online tests |
 
-## 1. Test first (Kaggle, or anywhere with torch)
+## 0. Paths
+
+No host paths are baked in. `output_dir`, `cache_dir` and `local_root` default to
+`FineTunning/v2/outputs/{v2,dw_cache}` and `FineTunning/v2/data` (all gitignored).
+Override per run with `--output_dir` / `--cache_dir` / `--local_root`, or globally
+with the `DW_OUTPUT_DIR` / `DW_CACHE_DIR` / `DW_LOCAL_ROOT` env vars.
+
+### Lightning AI
+
+`on_start.sh` (in the Studio home dir) clones/pulls the repo and runs
+`python main.py "$@"`:
+
+```bash
+sh on_start.sh --smoke --datasets gamus    # tiny sanity run first
+sh on_start.sh                             # full pretrain -> finetune -> TTA -> zip
+```
+
+Set `HF_TOKEN` in the Studio environment first — the DINOv3-SAT encoder and GAMUS
+are gated. Results land in `FineTunning/v2/outputs/v2/` (persistent disk), so the
+cloudflared tunnel is optional here (`--share_cloudflared false`).
+
+## 1. Test first (Kaggle, Lightning AI, or anywhere with torch)
 
 ```bash
 cd FineTunning/v2
@@ -80,7 +101,7 @@ python main.py --datasets gamus --pretrain_dataset ""   # v1-style single datase
 python main.py --cache_max_gib 70            # bigger LRU cache if disk allows
 python main.py --batch_size 48 --num_workers 24
 python main.py --init_from outputs/v2/stageP_last.pt --skip_pretrain true   # resume at stage F
-python main.py --data_source local --local_root /kaggle/input/geonrw        # pre-mounted data
+python main.py --data_source local --local_root /path/to/pre-mounted/data   # skip HF streaming
 ```
 
 ## 3. Expected wall-clock (RTX PRO 6000, single card)

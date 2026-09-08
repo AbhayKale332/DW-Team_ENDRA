@@ -3,8 +3,8 @@
 Source: `torchgeo/geonrw` on HF — a single `nrw_dataset.tar.gz` (~32 GB).  It is
 NOT per-tile streamable, so v2 downloads + extracts the tar once into the bounded
 cache (`BoundedCacheHF.ensure_archive`) and reads tiles locally; the extracted
-tree is LRU-managed like everything else.  On Kaggle, point `--data_source local
---local_root /kaggle/input/geonrw` at the mounted dataset instead.
+tree is LRU-managed like everything else.  If the dataset is already on local
+disk, point `--data_source local --local_root <dir>` at it instead.
 
 Layout after extraction: city folders each with
     <utm1>_<utm2>_rgb.jp2   (1000x1000x3, ~0.1 m resampled to 1 m)
