@@ -17,6 +17,7 @@ SynRS3D 8-class -> GAMUS 7-class:
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import numpy as np
@@ -50,6 +51,40 @@ def _read_tif(path: Path) -> np.ndarray:
         return np.asarray(Image.open(path))
 
 
+# SynRS3D archives are not perfectly consistent: the RGB tile in ``opt/`` and its
+# nDSM / mask counterparts sometimes differ in sub-dir spelling, file extension,
+# or a trailing ``-<n>`` crop suffix.  Resolve the partner file tolerantly so a
+# single odd tile can't kill the whole pretrain stage.
+_NDSM_DIRS = ("gt_nDSM", "gt_ndsm", "nDSM", "ndsm", "gt_dsm", "dsm", "depth", "height")
+_SEG_DIRS = ("gt_ss_mask", "gt_ssmask", "ss_mask", "gt_sem", "semantic", "mask", "label")
+_SUFFIX_RE = re.compile(r"-\d+$")
+
+
+def _match_sibling(opt: Path, subdirs: tuple[str, ...]) -> Path | None:
+    root = opt.parent.parent
+    stems = [opt.stem]
+    base = _SUFFIX_RE.sub("", opt.stem)
+    if base != opt.stem:
+        stems.append(base)
+    for sub in subdirs:
+        d = root / sub
+        if not d.is_dir():
+            continue
+        cand = d / opt.name
+        if cand.exists():
+            return cand
+        for st in stems:
+            hits = sorted(d.glob(f"{st}.*")) or sorted(d.glob(f"{st}*"))
+            if hits:
+                return hits[0]
+    for sub in subdirs:
+        for st in stems:
+            hits = sorted(root.rglob(f"{sub}/{st}.*"))
+            if hits:
+                return hits[0]
+    return None
+
+
 def _archive_gsd(rel: str) -> float:
     for k, v in _ARCHIVE_GSD.items():
         if f"_{k}_" in rel:
@@ -67,11 +102,13 @@ class SynRS3DArchiveDataset(TileDatasetBase):
     def __init__(self, cfg, cache: BoundedCacheHF, train: bool = True):
         super().__init__(cfg, [], "synrs3d", train)
         self.cache = cache
-        self._tiles: list[tuple[Path, float]] = []  # (opt_path, gsd)
+        # (opt_path, ndsm_path, seg_path|None, gsd)
+        self._tiles: list[tuple[Path, Path, Path | None, float]] = []
 
     def ensure_ready(self, n_archives: int, epoch: int) -> None:
         pick = [ARCHIVES[(epoch * n_archives + i) % len(ARCHIVES)] for i in range(n_archives)]
-        tiles: list[tuple[Path, float]] = []
+        tiles: list[tuple[Path, Path, Path | None, float]] = []
+        skipped = 0
         for rel in pick:
             try:
                 d = self.cache.ensure_archive(rel)
@@ -80,22 +117,26 @@ class SynRS3DArchiveDataset(TileDatasetBase):
                 continue
             gsd = _archive_gsd(rel)
             for opt in sorted(d.rglob("opt/*.tif")):
-                tiles.append((opt, gsd))
+                ndsm_p = _match_sibling(opt, _NDSM_DIRS)
+                if ndsm_p is None:
+                    skipped += 1
+                    continue
+                tiles.append((opt, ndsm_p, _match_sibling(opt, _SEG_DIRS), gsd))
+        if skipped:
+            print(f"[synrs3d] {skipped} tiles skipped (no matching nDSM)")
         if self.cfg.pretrain_tiles and len(tiles) > self.cfg.pretrain_tiles:
             rng = np.random.default_rng(self.cfg.seed + epoch)
             idx = rng.choice(len(tiles), self.cfg.pretrain_tiles, replace=False)
             tiles = [tiles[i] for i in idx]
         self._tiles = tiles
-        self.stems = [p.stem for p, _ in tiles]
+        self.stems = [p.stem for p, *_ in tiles]
 
     def load_tile(self, idx: int):
-        opt, gsd = self._tiles[idx]
-        ndsm_p = opt.parent.parent / "gt_nDSM" / opt.name
-        seg_p = opt.parent.parent / "gt_ss_mask" / opt.name
+        opt, ndsm_p, seg_p, gsd = self._tiles[idx]
 
         rgb = np.asarray(_read_tif(opt))[..., :3].astype(np.uint8)
         ndsm = _read_tif(ndsm_p).astype(np.float32)
-        if seg_p.exists():
+        if seg_p is not None and seg_p.exists():
             seg_raw = _read_tif(seg_p).astype(np.int64)
             seg = np.vectorize(lambda v: _SYN_TO_GAMUS.get(int(v), 7))(seg_raw)
             has_seg = True
