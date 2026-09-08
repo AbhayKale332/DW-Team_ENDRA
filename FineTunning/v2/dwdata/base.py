@@ -87,7 +87,19 @@ class TileDatasetBase(Dataset):
     def __getitem__(self, idx: int) -> dict:
         from .gsd import center_crop_or_pad, jitter_gsd, rescale_to_gsd
 
-        rgb, height, seg, src_gsd, has_seg = self.load_tile(idx)
+        # A single missing/corrupt tile (streaming cache eviction race, killed
+        # download) must not abort a training stage — fall back to a nearby
+        # index a bounded number of times.
+        for _try in range(8):
+            try:
+                rgb, height, seg, src_gsd, has_seg = self.load_tile(idx)
+                break
+            except (FileNotFoundError, OSError) as e:
+                nxt = (idx * 1_000_003 + 17) % max(1, len(self.stems))
+                print(f"[{self.src}] tile {idx} unreadable ({e}); retrying with {nxt}")
+                idx = nxt
+        else:
+            rgb, height, seg, src_gsd, has_seg = self.load_tile(idx)
         rng = np.random.default_rng(self.cfg.seed * 2_654_435_761 + idx * 2 + int(self.train))
 
         chosen_gsd = src_gsd

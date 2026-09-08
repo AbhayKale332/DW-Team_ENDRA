@@ -107,6 +107,9 @@ class SynRS3DArchiveDataset(TileDatasetBase):
 
     def ensure_ready(self, n_archives: int, epoch: int) -> None:
         pick = [ARCHIVES[(epoch * n_archives + i) % len(ARCHIVES)] for i in range(n_archives)]
+        # Pin this epoch's archives so the eviction pass triggered by the second
+        # archive's download can't delete tiles from the first one mid-epoch.
+        self.cache.pin(pick)
         tiles: list[tuple[Path, Path, Path | None, float]] = []
         skipped = 0
         for rel in pick:
@@ -117,8 +120,10 @@ class SynRS3DArchiveDataset(TileDatasetBase):
                 continue
             gsd = _archive_gsd(rel)
             for opt in sorted(d.rglob("opt/*.tif")):
+                if not opt.is_file():
+                    continue
                 ndsm_p = _match_sibling(opt, _NDSM_DIRS)
-                if ndsm_p is None:
+                if ndsm_p is None or not ndsm_p.exists():
                     skipped += 1
                     continue
                 tiles.append((opt, ndsm_p, _match_sibling(opt, _SEG_DIRS), gsd))
@@ -131,11 +136,32 @@ class SynRS3DArchiveDataset(TileDatasetBase):
         self._tiles = tiles
         self.stems = [p.stem for p, *_ in tiles]
 
+    def _reextract_for(self, p: Path) -> None:
+        """A pinned archive should never be evicted mid-epoch, but if a tile
+        file goes missing anyway (killed run, disk hiccup) rebuild its archive
+        once before giving up."""
+        parts = p.parts
+        if "_extracted" in parts:
+            name = parts[parts.index("_extracted") + 1]
+            rel = name.replace("__", "/", 1)
+            try:
+                self.cache.ensure_archive(rel)
+            except Exception as e:  # noqa: BLE001
+                print(f"[synrs3d] re-extract failed for {rel}: {e}")
+
     def load_tile(self, idx: int):
         opt, ndsm_p, seg_p, gsd = self._tiles[idx]
 
-        rgb = np.asarray(_read_tif(opt))[..., :3].astype(np.uint8)
-        ndsm = _read_tif(ndsm_p).astype(np.float32)
+        for attempt in (0, 1):
+            try:
+                rgb = np.asarray(_read_tif(opt))[..., :3].astype(np.uint8)
+                ndsm = _read_tif(ndsm_p).astype(np.float32)
+                break
+            except (FileNotFoundError, OSError):
+                if attempt == 0:
+                    self._reextract_for(opt)
+                    continue
+                raise
         if seg_p is not None and seg_p.exists():
             seg_raw = _read_tif(seg_p).astype(np.int64)
             seg = np.vectorize(lambda v: _SYN_TO_GAMUS.get(int(v), 7))(seg_raw)

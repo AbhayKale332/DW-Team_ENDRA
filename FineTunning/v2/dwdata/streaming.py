@@ -19,6 +19,7 @@ reused from the `filelock` dep that `huggingface_hub` already pulls in).
 from __future__ import annotations
 
 import os
+import shutil
 import threading
 import time
 from pathlib import Path
@@ -46,6 +47,11 @@ class BoundedCacheHF:
         self._locks_guard = threading.Lock()
         self._evict_guard = threading.Lock()
         self._repo_files: list[str] | None = None
+        # `_extracted/<name>` dirs that eviction must never touch — the caller
+        # (e.g. the per-epoch SynRS3D rotation) pins the archives it is about to
+        # read so a concurrent download's eviction pass can't delete tiles that
+        # are already indexed for this epoch.
+        self._pinned: set[str] = set()
 
     # -- repo listing ------------------------------------------------
     def list_repo_files(self) -> list[str]:
@@ -77,6 +83,15 @@ class BoundedCacheHF:
     def local_path(self, rel: str) -> Path:
         return self.root / rel
 
+    @staticmethod
+    def _archive_name(rel: str) -> str:
+        return rel.replace("/", "__")
+
+    def pin(self, rels) -> None:
+        """Protect these archives' extracted dirs from eviction until the next
+        `pin()` call.  Pass the archives the current epoch will read."""
+        self._pinned = {self._archive_name(r) for r in rels}
+
     def get(self, rel: str) -> Path:
         dst = self.local_path(rel)
         if dst.is_file():
@@ -102,29 +117,66 @@ class BoundedCacheHF:
 
         `member_prefix` (optional) restricts extraction to members under a path.
         """
-        name = rel.replace("/", "__")
+        name = self._archive_name(rel)
         out_dir = self.root / "_extracted" / name
         done_flag = out_dir / ".extracted_ok"
-        if done_flag.is_file():
-            try:
-                os.utime(done_flag, None)
-            except OSError:
-                pass
+        if done_flag.is_file() and self._has_payload(out_dir):
+            self._touch_tree(out_dir)  # refresh LRU recency for this epoch
             return out_dir
 
         with self._lock_for(rel):
-            if done_flag.is_file():
+            if done_flag.is_file() and self._has_payload(out_dir):
+                self._touch_tree(out_dir)
                 return out_dir
-            arc = self._raw_download(rel)
+            # Either never extracted, or a previous eviction pass deleted tiles
+            # while leaving the ``.extracted_ok`` sentinel behind — wipe and redo.
+            if out_dir.exists():
+                shutil.rmtree(out_dir, ignore_errors=True)
             out_dir.mkdir(parents=True, exist_ok=True)
+            arc = self._raw_download(rel)
             self._extract(arc, out_dir, member_prefix)
             try:
                 arc.unlink()
             except OSError:
                 pass
+            self._touch_tree(out_dir)
             done_flag.write_text("ok")
         self._maybe_evict()
         return out_dir
+
+    @staticmethod
+    def _has_payload(d: Path) -> bool:
+        """True if `d` holds at least one real file besides the sentinel."""
+        if not d.is_dir():
+            return False
+        for p in d.rglob("*"):
+            if p.is_file() and p.name != ".extracted_ok":
+                return True
+        return False
+
+    @staticmethod
+    def _touch_tree(d: Path) -> None:
+        now = time.time()
+        for p in d.rglob("*"):
+            try:
+                os.utime(p, (now, now))
+            except OSError:
+                pass
+        try:
+            os.utime(d, (now, now))
+        except OSError:
+            pass
+
+    @staticmethod
+    def _tree_size(d: Path) -> int:
+        total = 0
+        for p in d.rglob("*"):
+            if p.is_file():
+                try:
+                    total += p.stat().st_size
+                except OSError:
+                    pass
+        return total
 
     def _raw_download(self, rel: str) -> Path:
         from huggingface_hub import hf_hub_download
@@ -176,13 +228,45 @@ class BoundedCacheHF:
             if size <= self.max_bytes:
                 return
             target = int(self.max_bytes * 0.9)
+
+            # 1) Evict whole extracted-archive dirs, least-recently-used first,
+            #    never one that is pinned for the current epoch.  Evicting a
+            #    directory as a unit (with its sentinel) means a half-deleted
+            #    archive can never masquerade as complete on the next pass.
+            ext_root = self.root / "_extracted"
+            if ext_root.is_dir():
+                archives = []
+                for d in ext_root.iterdir():
+                    if not d.is_dir() or d.name in self._pinned:
+                        continue
+                    flag = d / ".extracted_ok"
+                    try:
+                        mt = flag.stat().st_mtime if flag.is_file() else d.stat().st_mtime
+                    except OSError:
+                        mt = 0.0
+                    archives.append((mt, d))
+                archives.sort()  # oldest first
+                for _mt, d in archives:
+                    if size <= target:
+                        break
+                    sz = self._tree_size(d)
+                    shutil.rmtree(d, ignore_errors=True)
+                    size -= sz
+
+            if size <= target:
+                return
+
+            # 2) Evict loose per-file cache entries (e.g. GAMUS *.h5), oldest first.
             files = []
             for p in self.root.rglob("*"):
-                if p.is_file() and ".cache" not in p.parts and ".locks" not in p.parts:
-                    try:
-                        files.append((p.stat().st_mtime, p.stat().st_size, p))
-                    except OSError:
-                        pass
+                if not p.is_file():
+                    continue
+                if ".cache" in p.parts or ".locks" in p.parts or "_extracted" in p.parts:
+                    continue
+                try:
+                    files.append((p.stat().st_mtime, p.stat().st_size, p))
+                except OSError:
+                    pass
             files.sort()  # oldest first
             for _mt, sz, p in files:
                 if size <= target:

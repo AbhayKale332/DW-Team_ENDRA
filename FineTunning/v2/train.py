@@ -155,7 +155,8 @@ def train_stage(
         nb = 0
         stop = False
 
-        for step, batch in enumerate(dl_tr):
+        try:
+          for step, batch in enumerate(dl_tr):
             batch = _to_device(batch, device)
             ctx = (
                 torch.autocast("cuda", dtype=_amp_dtype(cfg))
@@ -194,6 +195,12 @@ def train_stage(
                 print(f"  [{stage}] wall-clock cap {minutes:.0f} min hit — stopping stage")
                 stop = True
                 break
+        except (FileNotFoundError, OSError) as e:
+            # Streaming-cache data error — don't lose the whole stage; end this
+            # epoch here and let the next one rotate a fresh archive set in.
+            print(f"  [{stage}] e{epoch} data error after {nb} steps: {e} — continuing")
+            if use_cuda:
+                torch.cuda.empty_cache()
 
         rec = {"stage": stage, "epoch": epoch, "train_loss": run["loss"] / max(1, nb)}
         if dl_va is not None and (epoch % cfg.eval_every == 0 or epoch == epochs or stop):
