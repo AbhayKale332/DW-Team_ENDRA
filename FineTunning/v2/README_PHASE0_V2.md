@@ -38,8 +38,8 @@ never has to hold the full ~260 GB of source data.
 ```bash
 cd FineTunning/v2
 pip install -r requirements-kaggle.txt
-pytest -q -m "not hf"          # offline: config, streaming LRU, GSD, model, losses, TTA, metrics, checkpoint, packaging, mini-train
-pytest -q -m hf                # online: pulls 2 real tiles per HF repo (needs HF_TOKEN for GAMUS)
+python -m pytest -q -m "not hf"   # NOTE: `python -m pytest` (puts v2/ on sys.path), not bare `pytest`
+python -m pytest -q -m hf          # online: pulls 2 real tiles per HF repo (needs HF_TOKEN for GAMUS)
 ```
 
 Then a real (tiny) end-to-end run on a Kaggle **T4**:

@@ -42,20 +42,32 @@ from models.losses import compute_losses
 
 
 class Tee:
-    """Mirror stdout/stderr to output_dir/run.log."""
+    """Mirror stdout/stderr to output_dir/run.log.  Proxies any other stream
+    attribute (isatty / fileno / encoding / …) to the real stdout so libraries
+    that introspect the stream (transformers, tqdm) keep working."""
 
     def __init__(self, path: Path):
         path.parent.mkdir(parents=True, exist_ok=True)
         self.f = open(path, "a", buffering=1)
-        self.stdout = sys.stdout
+        self.stream = sys.stdout
 
     def write(self, s):
-        self.stdout.write(s)
-        self.f.write(s)
+        self.stream.write(s)
+        try:
+            self.f.write(s)
+        except Exception:  # noqa: BLE001
+            pass
+        return len(s)
 
     def flush(self):
-        self.stdout.flush()
+        self.stream.flush()
         self.f.flush()
+
+    def isatty(self):
+        return False
+
+    def __getattr__(self, name):
+        return getattr(self.__dict__["stream"], name)
 
 
 def set_seed(s: int):
