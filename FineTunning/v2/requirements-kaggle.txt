@@ -1,0 +1,21 @@
+# DepthWizard v2 deps.  Kaggle / vast.ai / Lightning AI PyTorch images already
+# ship torch + CUDA + numpy + pillow — not pinned here.
+
+transformers>=4.56.0        # DINOv3 (DINOv3ViTModel) support landed in 4.56
+huggingface_hub>=0.34.0    # streamed dataset downloads
+h5py>=3.10.0               # GAMUS tiles are one HDF5 per tile
+safetensors>=0.4.3
+tifffile>=2024.1.30        # SynRS3D / GeoNRW .tif tiles
+rasterio>=1.3.0            # GeoNRW .jp2 / .tif (falls back to PIL if missing)
+pytest>=7.4.0             # v2/tests
+
+# Current Lightning AI / Colab images ship numpy 2.x but leave the rest of the
+# scientific stack on numpy-1.x wheels, which then fail to import ("numpy.dtype
+# size changed" / "numpy.core.multiarray failed to import").  transformers>=5
+# imports scikit-learn and pandas eagerly, so pin every companion to its first
+# numpy-2-ABI release.  These floors are still numpy-1.x compatible, so they are
+# a no-op on older Kaggle/vast images.
+scipy>=1.13.0             # geonrw nDSM proxy (has a numpy-only fallback)
+matplotlib>=3.9.0         # qualitative strips (falls back to greyscale)
+scikit-learn>=1.5.0       # transitive: transformers.generation
+pandas>=2.2.2             # transitive: transformers / scikit-learn

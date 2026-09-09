@@ -1,0 +1,838 @@
+/kaggle/working/DepthWizard/FineTunning/v1
+[env] torch=2.10.0+cu128 cuda=True gpus=2
+[env]   GPU0: Tesla T4
+[env]   GPU1: Tesla T4
+[data] train batches=1200  val batches=300
+[model] encoder=facebook/dinov3-vitl16-pretrain-sat493m hidden=1024 patch=16 prefix_tokens=5 taps=(6, 12, 18, 24) frozen=True
+[model] trainable 11.3M / 314.4M params
+[model] nn.DataParallel over 2 GPUs, per-GPU batch ~1
+  e1 s0/1200 loss=23.373 (l1=20.22 grad=3.18 silog=1.563) lr=1.20e-05 0min
+  e1 s20/1200 loss=3.909 (l1=2.40 grad=1.23 silog=0.890) lr=1.21e-05 0min
+  e1 s40/1200 loss=8.436 (l1=6.28 grad=1.94 silog=1.185) lr=1.25e-05 0min
+  e1 s60/1200 loss=0.281 (l1=0.20 grad=0.01 silog=0.077) lr=1.32e-05 0min
+  e1 s80/1200 loss=24.116 (l1=21.87 grad=2.34 silog=1.082) lr=1.42e-05 0min
+  e1 s100/1200 loss=3.400 (l1=2.13 grad=0.91 silog=0.819) lr=1.54e-05 0min
+  e1 s120/1200 loss=5.249 (l1=3.61 grad=1.30 silog=0.991) lr=1.69e-05 0min
+  e1 s140/1200 loss=7.036 (l1=4.32 grad=3.52 silog=0.952) lr=1.87e-05 0min
+  e1 s160/1200 loss=6.285 (l1=3.95 grad=2.78 silog=0.940) lr=2.07e-05 0min
+  e1 s180/1200 loss=3.951 (l1=2.68 grad=0.78 silog=0.880) lr=2.30e-05 0min
+  e1 s200/1200 loss=7.267 (l1=5.34 grad=1.72 silog=1.070) lr=2.55e-05 0min
+  e1 s220/1200 loss=8.268 (l1=6.74 grad=0.72 silog=1.171) lr=2.83e-05 0min
+  e1 s240/1200 loss=5.017 (l1=3.56 grad=1.05 silog=0.927) lr=3.13e-05 1min
+  e1 s260/1200 loss=6.084 (l1=4.37 grad=1.42 silog=1.006) lr=3.46e-05 1min
+  e1 s280/1200 loss=7.206 (l1=6.31 grad=0.19 silog=0.796) lr=3.81e-05 1min
+  e1 s300/1200 loss=7.512 (l1=5.30 grad=2.40 silog=1.012) lr=4.18e-05 1min
+  e1 s320/1200 loss=6.743 (l1=4.25 grad=2.97 silog=1.009) lr=4.58e-05 1min
+  e1 s340/1200 loss=2.038 (l1=1.05 grad=0.72 silog=0.628) lr=4.99e-05 1min
+  e1 s360/1200 loss=4.272 (l1=2.70 grad=1.31 silog=0.922) lr=5.43e-05 1min
+  e1 s380/1200 loss=5.739 (l1=3.62 grad=2.54 silog=0.854) lr=5.88e-05 1min
+  e1 s400/1200 loss=10.466 (l1=8.01 grad=2.07 silog=1.422) lr=6.36e-05 1min
+  e1 s420/1200 loss=2.762 (l1=1.60 grad=1.00 silog=0.659) lr=6.85e-05 1min
+  e1 s440/1200 loss=1.898 (l1=1.11 grad=0.46 silog=0.559) lr=7.36e-05 1min
+  e1 s460/1200 loss=3.679 (l1=2.15 grad=1.48 silog=0.785) lr=7.88e-05 1min
+  e1 s480/1200 loss=0.306 (l1=0.09 grad=0.08 silog=0.175) lr=8.42e-05 1min
+  e1 s500/1200 loss=4.261 (l1=2.81 grad=1.29 silog=0.803) lr=8.97e-05 1min
+  e1 s520/1200 loss=4.570 (l1=2.61 grad=2.11 silog=0.907) lr=9.53e-05 1min
+  e1 s540/1200 loss=2.854 (l1=1.68 grad=0.96 silog=0.693) lr=1.01e-04 1min
+  e1 s560/1200 loss=14.459 (l1=12.17 grad=2.37 silog=1.102) lr=1.07e-04 1min
+  e1 s580/1200 loss=11.649 (l1=8.31 grad=3.69 silog=1.495) lr=1.13e-04 1min
+  e1 s600/1200 loss=3.645 (l1=2.35 grad=1.18 silog=0.704) lr=1.19e-04 1min
+  e1 s620/1200 loss=6.311 (l1=3.85 grad=3.09 silog=0.915) lr=1.25e-04 1min
+  e1 s640/1200 loss=9.809 (l1=7.49 grad=2.43 silog=1.106) lr=1.31e-04 1min
+  e1 s660/1200 loss=1.030 (l1=0.47 grad=0.31 silog=0.399) lr=1.37e-04 1min
+  e1 s680/1200 loss=3.146 (l1=2.04 grad=0.99 silog=0.613) lr=1.44e-04 1min
+  e1 s700/1200 loss=2.989 (l1=2.04 grad=0.48 silog=0.708) lr=1.50e-04 1min
+  e1 s720/1200 loss=2.675 (l1=1.53 grad=0.97 silog=0.663) lr=1.56e-04 1min
+  e1 s740/1200 loss=0.630 (l1=0.29 grad=0.17 silog=0.258) lr=1.63e-04 1min
+  e1 s760/1200 loss=4.641 (l1=2.69 grad=2.33 silog=0.788) lr=1.69e-04 1min
+  e1 s780/1200 loss=1.689 (l1=0.91 grad=0.55 silog=0.511) lr=1.75e-04 1min
+  e1 s800/1200 loss=4.554 (l1=2.97 grad=1.21 silog=0.983) lr=1.81e-04 1min
+  e1 s820/1200 loss=4.481 (l1=3.05 grad=1.15 silog=0.858) lr=1.88e-04 2min
+  e1 s840/1200 loss=2.088 (l1=1.15 grad=0.66 silog=0.606) lr=1.94e-04 2min
+  e1 s860/1200 loss=8.658 (l1=5.50 grad=4.18 silog=1.073) lr=2.00e-04 2min
+  e1 s880/1200 loss=1.402 (l1=0.62 grad=0.55 silog=0.508) lr=2.06e-04 2min
+  e1 s900/1200 loss=3.938 (l1=2.72 grad=0.97 silog=0.728) lr=2.11e-04 2min
+  e1 s920/1200 loss=2.370 (l1=1.44 grad=0.60 silog=0.627) lr=2.17e-04 2min
+  e1 s940/1200 loss=9.667 (l1=7.74 grad=2.42 silog=0.720) lr=2.23e-04 2min
+  e1 s960/1200 loss=2.403 (l1=1.48 grad=0.64 silog=0.600) lr=2.28e-04 2min
+  e1 s980/1200 loss=4.877 (l1=3.38 grad=1.49 silog=0.750) lr=2.34e-04 2min
+  e1 s1000/1200 loss=2.942 (l1=1.92 grad=0.71 silog=0.666) lr=2.39e-04 2min
+  e1 s1020/1200 loss=2.514 (l1=1.40 grad=0.96 silog=0.630) lr=2.44e-04 2min
+  e1 s1040/1200 loss=10.074 (l1=8.19 grad=1.98 silog=0.893) lr=2.49e-04 2min
+  e1 s1060/1200 loss=2.158 (l1=1.25 grad=0.83 silog=0.499) lr=2.54e-04 2min
+  e1 s1080/1200 loss=0.740 (l1=0.29 grad=0.26 silog=0.317) lr=2.58e-04 2min
+  e1 s1100/1200 loss=3.021 (l1=1.81 grad=0.97 silog=0.725) lr=2.62e-04 2min
+  e1 s1120/1200 loss=3.066 (l1=1.77 grad=1.21 silog=0.695) lr=2.67e-04 2min
+  e1 s1140/1200 loss=5.294 (l1=3.94 grad=1.22 silog=0.737) lr=2.71e-04 2min
+  e1 s1160/1200 loss=6.648 (l1=4.13 grad=3.24 silog=0.898) lr=2.74e-04 2min
+  e1 s1180/1200 loss=4.496 (l1=3.15 grad=1.18 silog=0.751) lr=2.78e-04 2min
+[eval] epoch 1  RMSE=5.287m  MAE=2.655m  r=0.727  d1=0.533
+[eval]   ground      RMSE=2.090m  MAE=1.686m  n=41975
+[eval]   vegetation  RMSE=0.910m  MAE=0.264m  n=8681563
+[eval]   building    RMSE=0.940m  MAE=0.298m  n=10900729
+[eval]   water       RMSE=7.951m  MAE=6.163m  n=7583769
+[eval]   road        RMSE=0.869m  MAE=0.111m  n=587649
+[eval]   bridge      RMSE=3.295m  MAE=1.203m  n=7265291
+[eval]   other       RMSE=8.582m  MAE=6.265m  n=8850589
+[ckpt] new best RMSE 5.287m -> best.pt (decoder+head only)
+  e2 s0/1200 loss=2.751 (l1=1.67 grad=0.95 silog=0.612) lr=2.81e-04 2min
+  e2 s20/1200 loss=4.298 (l1=2.78 grad=1.65 silog=0.698) lr=2.84e-04 2min
+  e2 s40/1200 loss=3.199 (l1=1.97 grad=1.08 silog=0.685) lr=2.87e-04 2min
+  e2 s60/1200 loss=1.315 (l1=0.69 grad=0.37 silog=0.439) lr=2.89e-04 3min
+  e2 s80/1200 loss=5.067 (l1=3.69 grad=1.07 silog=0.842) lr=2.92e-04 3min
+  e2 s100/1200 loss=1.551 (l1=0.85 grad=0.47 silog=0.467) lr=2.94e-04 3min
+  e2 s120/1200 loss=6.519 (l1=4.88 grad=1.05 silog=1.117) lr=2.95e-04 3min
+  e2 s140/1200 loss=0.610 (l1=0.24 grad=0.13 silog=0.303) lr=2.97e-04 3min
+  e2 s160/1200 loss=0.868 (l1=0.28 grad=0.49 silog=0.338) lr=2.98e-04 3min
+  e2 s180/1200 loss=2.962 (l1=1.67 grad=1.21 silog=0.691) lr=2.99e-04 3min
+  e2 s200/1200 loss=4.243 (l1=2.65 grad=1.39 silog=0.895) lr=3.00e-04 3min
+  e2 s220/1200 loss=5.706 (l1=4.00 grad=1.08 silog=1.164) lr=3.00e-04 3min
+  e2 s240/1200 loss=6.410 (l1=4.67 grad=1.47 silog=1.002) lr=3.00e-04 3min
+  e2 s260/1200 loss=3.284 (l1=2.00 grad=1.05 silog=0.759) lr=3.00e-04 3min
+  e2 s280/1200 loss=4.542 (l1=2.50 grad=2.55 silog=0.761) lr=3.00e-04 3min
+  e2 s300/1200 loss=2.617 (l1=1.61 grad=0.64 silog=0.689) lr=3.00e-04 3min
+  e2 s320/1200 loss=3.557 (l1=2.33 grad=1.01 silog=0.719) lr=3.00e-04 3min
+  e2 s340/1200 loss=0.000 (l1=0.00 grad=0.00 silog=0.000) lr=3.00e-04 3min
+  e2 s360/1200 loss=1.604 (l1=0.79 grad=0.57 silog=0.534) lr=3.00e-04 3min
+  e2 s380/1200 loss=14.614 (l1=12.30 grad=1.50 silog=1.562) lr=3.00e-04 3min
+  e2 s400/1200 loss=4.256 (l1=2.60 grad=1.70 silog=0.808) lr=3.00e-04 3min
+  e2 s420/1200 loss=3.066 (l1=1.86 grad=1.06 silog=0.671) lr=3.00e-04 3min
+  e2 s440/1200 loss=12.966 (l1=10.95 grad=1.69 silog=1.165) lr=3.00e-04 3min
+  e2 s460/1200 loss=2.006 (l1=1.12 grad=0.89 silog=0.442) lr=3.00e-04 3min
+  e2 s480/1200 loss=5.776 (l1=4.09 grad=1.67 silog=0.853) lr=3.00e-04 3min
+  e2 s500/1200 loss=1.514 (l1=0.73 grad=0.70 silog=0.431) lr=3.00e-04 3min
+  e2 s520/1200 loss=5.017 (l1=3.48 grad=1.31 silog=0.883) lr=3.00e-04 3min
+  e2 s540/1200 loss=3.402 (l1=2.18 grad=1.09 silog=0.683) lr=3.00e-04 3min
+  e2 s560/1200 loss=1.514 (l1=0.81 grad=0.48 silog=0.463) lr=3.00e-04 3min
+  e2 s580/1200 loss=4.947 (l1=3.34 grad=1.55 silog=0.835) lr=2.99e-04 3min
+  e2 s600/1200 loss=1.398 (l1=0.70 grad=0.54 silog=0.428) lr=2.99e-04 3min
+  e2 s620/1200 loss=1.637 (l1=0.80 grad=0.62 silog=0.523) lr=2.99e-04 3min
+  e2 s640/1200 loss=1.445 (l1=0.71 grad=0.56 silog=0.451) lr=2.99e-04 4min
+  e2 s660/1200 loss=1.714 (l1=0.86 grad=0.62 silog=0.543) lr=2.99e-04 4min
+  e2 s680/1200 loss=1.542 (l1=0.74 grad=0.65 silog=0.474) lr=2.99e-04 4min
+  e2 s700/1200 loss=10.094 (l1=7.62 grad=1.95 silog=1.496) lr=2.99e-04 4min
+  e2 s720/1200 loss=5.793 (l1=4.00 grad=1.66 silog=0.963) lr=2.99e-04 4min
+  e2 s740/1200 loss=3.350 (l1=2.43 grad=0.55 silog=0.648) lr=2.99e-04 4min
+  e2 s760/1200 loss=2.100 (l1=1.22 grad=0.63 silog=0.565) lr=2.99e-04 4min
+  e2 s780/1200 loss=6.206 (l1=4.45 grad=1.72 silog=0.890) lr=2.99e-04 4min
+  e2 s800/1200 loss=8.591 (l1=5.48 grad=4.47 silog=0.875) lr=2.99e-04 4min
+  e2 s820/1200 loss=4.911 (l1=3.25 grad=1.91 silog=0.708) lr=2.99e-04 4min
+  e2 s840/1200 loss=4.583 (l1=2.77 grad=2.14 silog=0.745) lr=2.98e-04 4min
+  e2 s860/1200 loss=2.242 (l1=1.30 grad=0.77 silog=0.560) lr=2.98e-04 4min
+  e2 s880/1200 loss=2.236 (l1=1.30 grad=0.81 silog=0.528) lr=2.98e-04 4min
+  e2 s900/1200 loss=1.915 (l1=0.94 grad=0.82 silog=0.561) lr=2.98e-04 4min
+  e2 s920/1200 loss=2.457 (l1=1.56 grad=0.78 silog=0.500) lr=2.98e-04 4min
+  e2 s940/1200 loss=0.759 (l1=0.28 grad=0.20 silog=0.384) lr=2.98e-04 4min
+  e2 s960/1200 loss=7.936 (l1=6.33 grad=1.22 silog=0.999) lr=2.98e-04 4min
+  e2 s980/1200 loss=1.555 (l1=0.74 grad=0.71 silog=0.455) lr=2.98e-04 4min
+  e2 s1000/1200 loss=1.524 (l1=0.88 grad=0.46 silog=0.414) lr=2.97e-04 4min
+  e2 s1020/1200 loss=0.614 (l1=0.22 grad=0.18 silog=0.298) lr=2.97e-04 4min
+  e2 s1040/1200 loss=3.742 (l1=2.30 grad=1.46 silog=0.716) lr=2.97e-04 4min
+  e2 s1060/1200 loss=4.915 (l1=2.99 grad=2.08 silog=0.885) lr=2.97e-04 4min
+  e2 s1080/1200 loss=3.143 (l1=1.77 grad=1.44 silog=0.650) lr=2.97e-04 4min
+  e2 s1100/1200 loss=1.484 (l1=0.82 grad=0.43 silog=0.443) lr=2.97e-04 4min
+  e2 s1120/1200 loss=3.186 (l1=1.95 grad=0.97 silog=0.757) lr=2.97e-04 4min
+  e2 s1140/1200 loss=2.934 (l1=1.84 grad=0.94 silog=0.628) lr=2.96e-04 4min
+  e2 s1160/1200 loss=5.236 (l1=3.80 grad=1.46 silog=0.702) lr=2.96e-04 4min
+  e2 s1180/1200 loss=4.994 (l1=3.54 grad=1.31 silog=0.798) lr=2.96e-04 4min
+[eval] epoch 2  RMSE=4.141m  MAE=2.072m  r=0.778  d1=0.524
+[eval]   ground      RMSE=2.806m  MAE=1.959m  n=41975
+[eval]   vegetation  RMSE=1.256m  MAE=0.504m  n=8681563
+[eval]   building    RMSE=1.375m  MAE=0.577m  n=10900729
+[eval]   water       RMSE=6.158m  MAE=3.933m  n=7583769
+[eval]   road        RMSE=0.880m  MAE=0.136m  n=587649
+[eval]   bridge      RMSE=2.764m  MAE=1.157m  n=7265291
+[eval]   other       RMSE=6.508m  MAE=4.738m  n=8850589
+[ckpt] new best RMSE 4.141m -> best.pt (decoder+head only)
+  e3 s0/1200 loss=8.707 (l1=5.53 grad=4.88 silog=0.741) lr=2.96e-04 5min
+  e3 s20/1200 loss=3.660 (l1=2.07 grad=1.75 silog=0.715) lr=2.96e-04 5min
+  e3 s40/1200 loss=6.474 (l1=4.98 grad=1.19 silog=0.893) lr=2.96e-04 5min
+  e3 s60/1200 loss=1.883 (l1=1.25 grad=0.53 silog=0.369) lr=2.95e-04 5min
+  e3 s80/1200 loss=2.344 (l1=1.38 grad=0.97 silog=0.486) lr=2.95e-04 5min
+  e3 s100/1200 loss=4.461 (l1=2.67 grad=2.27 silog=0.662) lr=2.95e-04 5min
+  e3 s120/1200 loss=6.119 (l1=3.68 grad=3.08 silog=0.899) lr=2.95e-04 5min
+  e3 s140/1200 loss=3.737 (l1=2.46 grad=1.17 silog=0.691) lr=2.95e-04 5min
+  e3 s160/1200 loss=2.165 (l1=1.33 grad=0.63 silog=0.522) lr=2.94e-04 5min
+  e3 s180/1200 loss=1.770 (l1=0.97 grad=0.75 silog=0.424) lr=2.94e-04 5min
+  e3 s200/1200 loss=11.715 (l1=9.83 grad=2.09 silog=0.838) lr=2.94e-04 5min
+  e3 s220/1200 loss=2.154 (l1=1.18 grad=0.87 silog=0.540) lr=2.94e-04 5min
+  e3 s240/1200 loss=2.232 (l1=1.54 grad=0.51 silog=0.443) lr=2.94e-04 5min
+  e3 s260/1200 loss=11.304 (l1=9.43 grad=1.69 silog=1.028) lr=2.93e-04 5min
+  e3 s280/1200 loss=5.383 (l1=3.46 grad=2.16 silog=0.846) lr=2.93e-04 5min
+  e3 s300/1200 loss=3.454 (l1=2.64 grad=0.54 silog=0.546) lr=2.93e-04 5min
+  e3 s320/1200 loss=2.760 (l1=1.60 grad=1.18 silog=0.575) lr=2.93e-04 5min
+  e3 s340/1200 loss=0.610 (l1=0.22 grad=0.24 silog=0.275) lr=2.93e-04 5min
+  e3 s360/1200 loss=9.047 (l1=5.95 grad=4.48 silog=0.855) lr=2.92e-04 5min
+  e3 s380/1200 loss=4.419 (l1=3.13 grad=0.93 silog=0.819) lr=2.92e-04 5min
+  e3 s400/1200 loss=4.238 (l1=2.70 grad=1.47 silog=0.801) lr=2.92e-04 5min
+  e3 s420/1200 loss=3.553 (l1=2.36 grad=0.56 silog=0.910) lr=2.92e-04 5min
+  e3 s440/1200 loss=2.995 (l1=1.71 grad=1.07 silog=0.757) lr=2.91e-04 6min
+  e3 s460/1200 loss=2.674 (l1=1.58 grad=1.10 silog=0.538) lr=2.91e-04 6min
+  e3 s480/1200 loss=3.681 (l1=2.35 grad=1.33 silog=0.669) lr=2.91e-04 6min
+  e3 s500/1200 loss=2.146 (l1=1.29 grad=0.71 silog=0.506) lr=2.91e-04 6min
+  e3 s520/1200 loss=2.505 (l1=1.38 grad=1.15 silog=0.552) lr=2.90e-04 6min
+  e3 s540/1200 loss=1.449 (l1=0.82 grad=0.42 silog=0.420) lr=2.90e-04 6min
+  e3 s560/1200 loss=16.937 (l1=14.83 grad=2.81 silog=0.704) lr=2.90e-04 6min
+  e3 s580/1200 loss=6.993 (l1=5.10 grad=2.11 silog=0.842) lr=2.90e-04 6min
+  e3 s600/1200 loss=1.028 (l1=0.46 grad=0.11 silog=0.513) lr=2.89e-04 6min
+  e3 s620/1200 loss=2.911 (l1=1.62 grad=1.04 silog=0.773) lr=2.89e-04 6min
+  e3 s640/1200 loss=1.577 (l1=0.82 grad=0.71 silog=0.402) lr=2.89e-04 6min
+  e3 s660/1200 loss=5.398 (l1=3.72 grad=1.88 silog=0.739) lr=2.89e-04 6min
+  e3 s680/1200 loss=2.272 (l1=1.32 grad=0.76 silog=0.574) lr=2.88e-04 6min
+  e3 s700/1200 loss=5.579 (l1=3.08 grad=3.34 silog=0.825) lr=2.88e-04 6min
+  e3 s720/1200 loss=0.001 (l1=0.00 grad=0.00 silog=0.001) lr=2.88e-04 6min
+  e3 s740/1200 loss=0.214 (l1=0.04 grad=0.06 silog=0.143) lr=2.87e-04 6min
+  e3 s760/1200 loss=2.085 (l1=1.04 grad=0.92 silog=0.581) lr=2.87e-04 6min
+  e3 s780/1200 loss=4.050 (l1=2.32 grad=1.70 silog=0.884) lr=2.87e-04 6min
+  e3 s800/1200 loss=3.346 (l1=2.06 grad=1.19 silog=0.691) lr=2.87e-04 6min
+  e3 s820/1200 loss=7.399 (l1=5.33 grad=2.33 silog=0.909) lr=2.86e-04 6min
+  e3 s840/1200 loss=3.229 (l1=1.84 grad=1.56 silog=0.605) lr=2.86e-04 6min
+  e3 s860/1200 loss=0.871 (l1=0.55 grad=0.18 silog=0.233) lr=2.86e-04 6min
+  e3 s880/1200 loss=2.231 (l1=1.22 grad=0.97 silog=0.521) lr=2.85e-04 6min
+  e3 s900/1200 loss=4.033 (l1=2.59 grad=1.50 silog=0.688) lr=2.85e-04 6min
+  e3 s920/1200 loss=5.046 (l1=3.28 grad=2.07 silog=0.729) lr=2.85e-04 6min
+  e3 s940/1200 loss=5.865 (l1=4.15 grad=1.94 silog=0.747) lr=2.84e-04 6min
+  e3 s960/1200 loss=12.966 (l1=11.14 grad=1.41 silog=1.125) lr=2.84e-04 6min
+  e3 s980/1200 loss=0.501 (l1=0.15 grad=0.15 silog=0.272) lr=2.84e-04 6min
+  e3 s1000/1200 loss=3.088 (l1=1.92 grad=0.97 silog=0.688) lr=2.83e-04 6min
+  e3 s1020/1200 loss=0.894 (l1=0.39 grad=0.20 silog=0.406) lr=2.83e-04 6min
+  e3 s1040/1200 loss=4.334 (l1=2.60 grad=1.90 silog=0.786) lr=2.83e-04 7min
+  e3 s1060/1200 loss=4.087 (l1=2.57 grad=1.38 silog=0.826) lr=2.82e-04 7min
+  e3 s1080/1200 loss=1.981 (l1=1.08 grad=0.60 silog=0.600) lr=2.82e-04 7min
+  e3 s1100/1200 loss=2.471 (l1=1.52 grad=0.92 silog=0.493) lr=2.82e-04 7min
+  e3 s1120/1200 loss=0.687 (l1=0.28 grad=0.13 silog=0.339) lr=2.81e-04 7min
+  e3 s1140/1200 loss=3.617 (l1=2.52 grad=1.00 silog=0.599) lr=2.81e-04 7min
+  e3 s1160/1200 loss=2.803 (l1=1.63 grad=1.10 silog=0.624) lr=2.81e-04 7min
+  e3 s1180/1200 loss=4.723 (l1=2.88 grad=2.17 silog=0.760) lr=2.80e-04 7min
+[eval] epoch 3  RMSE=4.175m  MAE=2.032m  r=0.805  d1=0.570
+[eval]   ground      RMSE=2.247m  MAE=1.687m  n=41975
+[eval]   vegetation  RMSE=1.057m  MAE=0.353m  n=8681563
+[eval]   building    RMSE=1.163m  MAE=0.419m  n=10900729
+[eval]   water       RMSE=6.434m  MAE=4.196m  n=7583769
+[eval]   road        RMSE=0.824m  MAE=0.115m  n=587649
+[eval]   bridge      RMSE=2.803m  MAE=1.079m  n=7265291
+[eval]   other       RMSE=6.459m  MAE=4.720m  n=8850589
+  e4 s0/1200 loss=3.703 (l1=2.01 grad=1.87 silog=0.757) lr=2.80e-04 7min
+  e4 s20/1200 loss=4.581 (l1=2.82 grad=2.18 silog=0.668) lr=2.80e-04 7min
+  e4 s40/1200 loss=2.679 (l1=1.68 grad=0.95 silog=0.522) lr=2.79e-04 7min
+  e4 s60/1200 loss=4.342 (l1=2.81 grad=1.59 silog=0.731) lr=2.79e-04 7min
+  e4 s80/1200 loss=1.859 (l1=1.08 grad=0.61 silog=0.478) lr=2.78e-04 7min
+  e4 s100/1200 loss=5.237 (l1=3.58 grad=1.70 silog=0.810) lr=2.78e-04 7min
+  e4 s120/1200 loss=6.300 (l1=4.65 grad=1.71 silog=0.793) lr=2.78e-04 7min
+  e4 s140/1200 loss=10.101 (l1=7.93 grad=2.97 silog=0.685) lr=2.77e-04 7min
+  e4 s160/1200 loss=2.465 (l1=1.39 grad=1.08 silog=0.532) lr=2.77e-04 7min
+  e4 s180/1200 loss=5.913 (l1=4.15 grad=1.98 silog=0.776) lr=2.76e-04 7min
+  e4 s200/1200 loss=5.772 (l1=4.10 grad=1.70 silog=0.822) lr=2.76e-04 7min
+  e4 s220/1200 loss=4.096 (l1=2.60 grad=1.42 silog=0.781) lr=2.76e-04 7min
+  e4 s240/1200 loss=2.654 (l1=1.67 grad=0.86 silog=0.550) lr=2.75e-04 7min
+  e4 s260/1200 loss=3.096 (l1=1.80 grad=1.14 silog=0.728) lr=2.75e-04 7min
+  e4 s280/1200 loss=2.953 (l1=1.81 grad=0.93 silog=0.674) lr=2.74e-04 8min
+  e4 s300/1200 loss=1.283 (l1=0.60 grad=0.58 silog=0.396) lr=2.74e-04 8min
+  e4 s320/1200 loss=0.791 (l1=0.30 grad=0.33 silog=0.323) lr=2.74e-04 8min
+  e4 s340/1200 loss=5.256 (l1=3.81 grad=1.30 silog=0.792) lr=2.73e-04 8min
+  e4 s360/1200 loss=2.132 (l1=1.13 grad=0.80 silog=0.601) lr=2.73e-04 8min
+  e4 s380/1200 loss=1.137 (l1=0.58 grad=0.35 silog=0.380) lr=2.72e-04 8min
+  e4 s400/1200 loss=4.072 (l1=2.99 grad=0.56 silog=0.800) lr=2.72e-04 8min
+  e4 s420/1200 loss=3.703 (l1=2.52 grad=0.96 silog=0.700) lr=2.72e-04 8min
+  e4 s440/1200 loss=2.007 (l1=1.07 grad=0.85 silog=0.511) lr=2.71e-04 8min
+  e4 s460/1200 loss=3.021 (l1=1.82 grad=1.21 silog=0.597) lr=2.71e-04 8min
+  e4 s480/1200 loss=1.429 (l1=0.75 grad=0.53 silog=0.410) lr=2.70e-04 8min
+  e4 s500/1200 loss=5.343 (l1=3.12 grad=2.77 silog=0.834) lr=2.70e-04 8min
+  e4 s520/1200 loss=1.814 (l1=0.94 grad=0.72 silog=0.510) lr=2.69e-04 8min
+  e4 s540/1200 loss=6.180 (l1=3.67 grad=3.14 silog=0.942) lr=2.69e-04 8min
+  e4 s560/1200 loss=2.577 (l1=1.59 grad=0.63 silog=0.672) lr=2.69e-04 8min
+  e4 s580/1200 loss=0.863 (l1=0.35 grad=0.28 silog=0.370) lr=2.68e-04 8min
+  e4 s600/1200 loss=1.923 (l1=1.08 grad=0.37 silog=0.657) lr=2.68e-04 8min
+  e4 s620/1200 loss=5.522 (l1=3.17 grad=3.10 silog=0.801) lr=2.67e-04 8min
+  e4 s640/1200 loss=3.411 (l1=2.12 grad=1.09 silog=0.745) lr=2.67e-04 8min
+  e4 s660/1200 loss=3.220 (l1=1.90 grad=1.22 silog=0.713) lr=2.66e-04 8min
+  e4 s680/1200 loss=2.301 (l1=1.23 grad=1.02 silog=0.561) lr=2.66e-04 8min
+  e4 s700/1200 loss=2.988 (l1=1.77 grad=1.10 silog=0.667) lr=2.65e-04 8min
+  e4 s720/1200 loss=1.971 (l1=1.17 grad=0.67 silog=0.464) lr=2.65e-04 8min
+  e4 s740/1200 loss=1.549 (l1=0.81 grad=0.55 silog=0.459) lr=2.64e-04 8min
+  e4 s760/1200 loss=6.989 (l1=4.15 grad=3.98 silog=0.850) lr=2.64e-04 8min
+  e4 s780/1200 loss=3.220 (l1=1.98 grad=1.25 silog=0.618) lr=2.63e-04 8min
+  e4 s800/1200 loss=5.356 (l1=4.00 grad=1.52 silog=0.594) lr=2.63e-04 8min
+  e4 s820/1200 loss=0.655 (l1=0.26 grad=0.24 silog=0.273) lr=2.62e-04 8min
+  e4 s840/1200 loss=4.592 (l1=2.99 grad=1.67 silog=0.761) lr=2.62e-04 8min
+  e4 s860/1200 loss=0.693 (l1=0.26 grad=0.22 silog=0.324) lr=2.62e-04 9min
+  e4 s880/1200 loss=1.334 (l1=0.61 grad=0.65 silog=0.397) lr=2.61e-04 9min
+  e4 s900/1200 loss=4.842 (l1=2.81 grad=2.64 silog=0.713) lr=2.61e-04 9min
+  e4 s920/1200 loss=3.290 (l1=2.14 grad=1.11 silog=0.589) lr=2.60e-04 9min
+  e4 s940/1200 loss=3.224 (l1=2.20 grad=0.87 silog=0.587) lr=2.60e-04 9min
+  e4 s960/1200 loss=0.301 (l1=0.08 grad=0.10 silog=0.168) lr=2.59e-04 9min
+  e4 s980/1200 loss=1.620 (l1=0.80 grad=0.70 silog=0.475) lr=2.59e-04 9min
+  e4 s1000/1200 loss=2.162 (l1=1.24 grad=0.87 silog=0.481) lr=2.58e-04 9min
+  e4 s1020/1200 loss=6.832 (l1=4.23 grad=3.36 silog=0.917) lr=2.58e-04 9min
+  e4 s1040/1200 loss=2.346 (l1=1.27 grad=0.97 silog=0.592) lr=2.57e-04 9min
+  e4 s1060/1200 loss=2.145 (l1=1.15 grad=0.52 silog=0.737) lr=2.57e-04 9min
+  e4 s1080/1200 loss=1.098 (l1=0.58 grad=0.22 silog=0.402) lr=2.56e-04 9min
+  e4 s1100/1200 loss=2.671 (l1=1.73 grad=0.76 silog=0.563) lr=2.55e-04 9min
+  e4 s1120/1200 loss=2.635 (l1=1.63 grad=0.88 silog=0.564) lr=2.55e-04 9min
+  e4 s1140/1200 loss=0.895 (l1=0.40 grad=0.37 silog=0.315) lr=2.54e-04 9min
+  e4 s1160/1200 loss=2.165 (l1=1.31 grad=0.88 silog=0.419) lr=2.54e-04 9min
+  e4 s1180/1200 loss=0.661 (l1=0.27 grad=0.13 silog=0.325) lr=2.53e-04 9min
+[eval] epoch 4  RMSE=4.337m  MAE=2.051m  r=0.812  d1=0.577
+[eval]   ground      RMSE=2.377m  MAE=1.695m  n=41975
+[eval]   vegetation  RMSE=0.980m  MAE=0.325m  n=8681563
+[eval]   building    RMSE=0.983m  MAE=0.342m  n=10900729
+[eval]   water       RMSE=6.071m  MAE=3.838m  n=7583769
+[eval]   road        RMSE=0.842m  MAE=0.103m  n=587649
+[eval]   bridge      RMSE=2.953m  MAE=1.088m  n=7265291
+[eval]   other       RMSE=7.237m  MAE=5.239m  n=8850589
+  e5 s0/1200 loss=3.443 (l1=2.20 grad=1.00 silog=0.743) lr=2.53e-04 9min
+  e5 s20/1200 loss=3.737 (l1=2.38 grad=1.45 silog=0.626) lr=2.52e-04 9min
+  e5 s40/1200 loss=1.131 (l1=0.50 grad=0.42 silog=0.421) lr=2.52e-04 9min
+  e5 s60/1200 loss=3.914 (l1=2.43 grad=1.53 silog=0.725) lr=2.51e-04 9min
+  e5 s80/1200 loss=7.207 (l1=5.56 grad=1.88 silog=0.700) lr=2.51e-04 9min
+  e5 s100/1200 loss=0.666 (l1=0.33 grad=0.22 silog=0.223) lr=2.50e-04 10min
+  e5 s120/1200 loss=2.299 (l1=1.37 grad=0.89 silog=0.488) lr=2.50e-04 10min
+  e5 s140/1200 loss=4.897 (l1=3.27 grad=1.71 silog=0.769) lr=2.49e-04 10min
+  e5 s160/1200 loss=1.464 (l1=0.73 grad=0.61 silog=0.423) lr=2.49e-04 10min
+  e5 s180/1200 loss=3.496 (l1=2.00 grad=1.67 silog=0.660) lr=2.48e-04 10min
+  e5 s200/1200 loss=1.704 (l1=0.93 grad=0.71 silog=0.419) lr=2.47e-04 10min
+  e5 s220/1200 loss=2.010 (l1=1.13 grad=0.75 silog=0.499) lr=2.47e-04 10min
+  e5 s240/1200 loss=10.686 (l1=6.48 grad=6.48 silog=0.960) lr=2.46e-04 10min
+  e5 s260/1200 loss=9.594 (l1=7.75 grad=2.33 silog=0.675) lr=2.46e-04 10min
+  e5 s280/1200 loss=1.887 (l1=1.10 grad=0.51 silog=0.538) lr=2.45e-04 10min
+  e5 s300/1200 loss=2.362 (l1=1.35 grad=0.98 silog=0.525) lr=2.45e-04 10min
+  e5 s320/1200 loss=2.349 (l1=1.28 grad=0.93 silog=0.606) lr=2.44e-04 10min
+  e5 s340/1200 loss=4.755 (l1=2.63 grad=2.60 silog=0.827) lr=2.44e-04 10min
+  e5 s360/1200 loss=0.829 (l1=0.36 grad=0.31 silog=0.320) lr=2.43e-04 10min
+  e5 s380/1200 loss=3.963 (l1=2.25 grad=2.15 silog=0.636) lr=2.42e-04 10min
+  e5 s400/1200 loss=4.049 (l1=2.24 grad=2.07 silog=0.774) lr=2.42e-04 10min
+  e5 s420/1200 loss=2.060 (l1=1.26 grad=0.76 silog=0.420) lr=2.41e-04 10min
+  e5 s440/1200 loss=0.931 (l1=0.39 grad=0.34 silog=0.375) lr=2.41e-04 10min
+  e5 s460/1200 loss=5.681 (l1=4.05 grad=1.57 silog=0.841) lr=2.40e-04 10min
+  e5 s480/1200 loss=2.738 (l1=1.67 grad=0.96 silog=0.587) lr=2.40e-04 10min
+  e5 s500/1200 loss=1.307 (l1=0.76 grad=0.52 silog=0.283) lr=2.39e-04 10min
+  e5 s520/1200 loss=5.278 (l1=3.86 grad=1.27 silog=0.779) lr=2.38e-04 10min
+  e5 s540/1200 loss=4.621 (l1=2.86 grad=2.19 silog=0.672) lr=2.38e-04 10min
+  e5 s560/1200 loss=6.644 (l1=4.15 grad=3.52 silog=0.728) lr=2.37e-04 10min
+  e5 s580/1200 loss=2.245 (l1=1.27 grad=0.86 silog=0.546) lr=2.37e-04 10min
+  e5 s600/1200 loss=1.350 (l1=0.67 grad=0.57 silog=0.400) lr=2.36e-04 10min
+  e5 s620/1200 loss=4.631 (l1=3.23 grad=1.06 silog=0.875) lr=2.35e-04 10min
+  e5 s640/1200 loss=4.767 (l1=2.86 grad=2.35 silog=0.734) lr=2.35e-04 10min
+  e5 s660/1200 loss=0.564 (l1=0.20 grad=0.22 silog=0.256) lr=2.34e-04 10min
+  e5 s680/1200 loss=6.961 (l1=5.07 grad=2.27 silog=0.759) lr=2.34e-04 11min
+  e5 s700/1200 loss=2.353 (l1=1.36 grad=0.88 silog=0.552) lr=2.33e-04 11min
+  e5 s720/1200 loss=3.557 (l1=2.24 grad=1.24 silog=0.694) lr=2.32e-04 11min
+  e5 s740/1200 loss=7.878 (l1=5.73 grad=2.03 silog=1.129) lr=2.32e-04 11min
+  e5 s760/1200 loss=7.175 (l1=5.33 grad=2.25 silog=0.718) lr=2.31e-04 11min
+  e5 s780/1200 loss=2.327 (l1=1.35 grad=0.94 silog=0.506) lr=2.31e-04 11min
+  e5 s800/1200 loss=3.536 (l1=2.42 grad=0.94 silog=0.642) lr=2.30e-04 11min
+  e5 s820/1200 loss=1.990 (l1=1.13 grad=0.81 silog=0.456) lr=2.29e-04 11min
+  e5 s840/1200 loss=3.904 (l1=2.49 grad=1.42 silog=0.701) lr=2.29e-04 11min
+  e5 s860/1200 loss=1.858 (l1=1.09 grad=0.52 silog=0.504) lr=2.28e-04 11min
+  e5 s880/1200 loss=1.819 (l1=1.00 grad=0.68 silog=0.475) lr=2.27e-04 11min
+  e5 s900/1200 loss=0.441 (l1=0.14 grad=0.04 silog=0.277) lr=2.27e-04 11min
+  e5 s920/1200 loss=1.916 (l1=0.82 grad=1.09 silog=0.549) lr=2.26e-04 11min
+  e5 s940/1200 loss=1.662 (l1=0.96 grad=0.57 silog=0.417) lr=2.26e-04 11min
+  e5 s960/1200 loss=5.450 (l1=3.93 grad=1.74 silog=0.648) lr=2.25e-04 11min
+  e5 s980/1200 loss=2.581 (l1=1.47 grad=0.94 silog=0.644) lr=2.24e-04 11min
+  e5 s1000/1200 loss=2.636 (l1=1.55 grad=1.11 silog=0.535) lr=2.24e-04 11min
+  e5 s1020/1200 loss=5.209 (l1=3.53 grad=1.69 silog=0.838) lr=2.23e-04 11min
+  e5 s1040/1200 loss=1.935 (l1=1.02 grad=0.82 silog=0.498) lr=2.22e-04 11min
+  e5 s1060/1200 loss=4.386 (l1=2.78 grad=1.52 silog=0.850) lr=2.22e-04 11min
+  e5 s1080/1200 loss=11.647 (l1=9.65 grad=1.56 silog=1.216) lr=2.21e-04 11min
+  e5 s1100/1200 loss=2.307 (l1=1.24 grad=0.92 silog=0.603) lr=2.20e-04 11min
+  e5 s1120/1200 loss=1.621 (l1=0.86 grad=0.72 silog=0.396) lr=2.20e-04 11min
+  e5 s1140/1200 loss=3.574 (l1=2.24 grad=1.19 silog=0.740) lr=2.19e-04 11min
+  e5 s1160/1200 loss=2.836 (l1=1.66 grad=0.98 silog=0.689) lr=2.19e-04 11min
+  e5 s1180/1200 loss=12.458 (l1=10.54 grad=1.74 silog=1.043) lr=2.18e-04 11min
+[eval] epoch 5  RMSE=3.609m  MAE=1.754m  r=0.829  d1=0.619
+[eval]   ground      RMSE=3.114m  MAE=2.291m  n=41975
+[eval]   vegetation  RMSE=1.186m  MAE=0.352m  n=8681563
+[eval]   building    RMSE=1.367m  MAE=0.445m  n=10900729
+[eval]   water       RMSE=5.616m  MAE=3.499m  n=7583769
+[eval]   road        RMSE=0.806m  MAE=0.106m  n=587649
+[eval]   bridge      RMSE=2.659m  MAE=1.028m  n=7265291
+[eval]   other       RMSE=5.293m  MAE=3.948m  n=8850589
+[ckpt] new best RMSE 3.609m -> best.pt (decoder+head only)
+  e6 s0/1200 loss=4.162 (l1=2.25 grad=2.41 silog=0.707) lr=2.17e-04 12min
+  e6 s20/1200 loss=4.559 (l1=3.22 grad=1.68 silog=0.499) lr=2.17e-04 12min
+  e6 s40/1200 loss=10.729 (l1=9.05 grad=1.47 silog=0.950) lr=2.16e-04 12min
+  e6 s60/1200 loss=4.673 (l1=2.92 grad=2.19 silog=0.662) lr=2.15e-04 12min
+  e6 s80/1200 loss=0.935 (l1=0.49 grad=0.32 silog=0.285) lr=2.15e-04 12min
+  e6 s100/1200 loss=8.129 (l1=5.09 grad=4.49 silog=0.793) lr=2.14e-04 12min
+  e6 s120/1200 loss=1.961 (l1=1.17 grad=0.74 silog=0.423) lr=2.13e-04 12min
+  e6 s140/1200 loss=11.352 (l1=9.47 grad=2.80 silog=0.484) lr=2.13e-04 12min
+  e6 s160/1200 loss=1.980 (l1=0.97 grad=0.92 silog=0.551) lr=2.12e-04 12min
+  e6 s180/1200 loss=0.860 (l1=0.28 grad=0.49 silog=0.331) lr=2.11e-04 12min
+  e6 s200/1200 loss=1.763 (l1=0.95 grad=0.74 silog=0.444) lr=2.11e-04 12min
+  e6 s220/1200 loss=2.103 (l1=1.08 grad=1.01 silog=0.518) lr=2.10e-04 12min
+  e6 s240/1200 loss=2.655 (l1=1.56 grad=1.00 silog=0.594) lr=2.09e-04 12min
+  e6 s260/1200 loss=5.889 (l1=3.57 grad=3.18 silog=0.730) lr=2.09e-04 12min
+  e6 s280/1200 loss=0.830 (l1=0.41 grad=0.22 silog=0.304) lr=2.08e-04 12min
+  e6 s300/1200 loss=2.887 (l1=1.70 grad=1.18 silog=0.596) lr=2.07e-04 12min
+  e6 s320/1200 loss=3.603 (l1=2.34 grad=1.29 silog=0.624) lr=2.07e-04 12min
+  e6 s340/1200 loss=1.541 (l1=0.77 grad=0.72 silog=0.412) lr=2.06e-04 12min
+  e6 s360/1200 loss=1.665 (l1=0.97 grad=0.63 silog=0.381) lr=2.05e-04 12min
+  e6 s380/1200 loss=2.054 (l1=1.18 grad=0.83 silog=0.464) lr=2.05e-04 12min
+  e6 s400/1200 loss=2.066 (l1=1.12 grad=0.89 silog=0.505) lr=2.04e-04 12min
+  e6 s420/1200 loss=0.415 (l1=0.14 grad=0.14 silog=0.210) lr=2.03e-04 12min
+  e6 s440/1200 loss=1.280 (l1=0.65 grad=0.47 silog=0.393) lr=2.03e-04 12min
+  e6 s460/1200 loss=3.381 (l1=1.77 grad=1.84 silog=0.688) lr=2.02e-04 12min
+  e6 s480/1200 loss=4.169 (l1=2.73 grad=1.34 silog=0.771) lr=2.01e-04 12min
+  e6 s500/1200 loss=7.615 (l1=5.89 grad=2.30 silog=0.575) lr=2.01e-04 13min
+  e6 s520/1200 loss=2.171 (l1=1.32 grad=0.75 silog=0.479) lr=2.00e-04 13min
+  e6 s540/1200 loss=1.463 (l1=0.95 grad=0.35 silog=0.336) lr=1.99e-04 13min
+  e6 s560/1200 loss=3.761 (l1=2.14 grad=1.87 silog=0.690) lr=1.98e-04 13min
+  e6 s580/1200 loss=1.959 (l1=1.07 grad=0.64 silog=0.570) lr=1.98e-04 13min
+  e6 s600/1200 loss=2.576 (l1=1.54 grad=1.03 silog=0.525) lr=1.97e-04 13min
+  e6 s620/1200 loss=2.124 (l1=1.16 grad=0.88 silog=0.523) lr=1.96e-04 13min
+  e6 s640/1200 loss=4.386 (l1=2.91 grad=1.48 silog=0.743) lr=1.96e-04 13min
+  e6 s660/1200 loss=2.380 (l1=1.46 grad=0.90 silog=0.469) lr=1.95e-04 13min
+  e6 s680/1200 loss=5.036 (l1=2.84 grad=2.94 silog=0.723) lr=1.94e-04 13min
+  e6 s700/1200 loss=5.615 (l1=3.82 grad=1.91 silog=0.841) lr=1.94e-04 13min
+  e6 s720/1200 loss=2.352 (l1=1.35 grad=0.99 silog=0.503) lr=1.93e-04 13min
+  e6 s740/1200 loss=3.452 (l1=1.90 grad=1.88 silog=0.610) lr=1.92e-04 13min
+  e6 s760/1200 loss=1.763 (l1=1.14 grad=0.47 silog=0.383) lr=1.92e-04 13min
+  e6 s780/1200 loss=0.347 (l1=0.11 grad=0.11 silog=0.186) lr=1.91e-04 13min
+  e6 s800/1200 loss=0.839 (l1=0.33 grad=0.30 silog=0.357) lr=1.90e-04 13min
+  e6 s820/1200 loss=3.805 (l1=2.30 grad=1.47 silog=0.768) lr=1.89e-04 13min
+  e6 s840/1200 loss=4.218 (l1=2.50 grad=2.08 silog=0.679) lr=1.89e-04 13min
+  e6 s860/1200 loss=4.801 (l1=3.34 grad=1.49 silog=0.723) lr=1.88e-04 13min
+  e6 s880/1200 loss=2.894 (l1=1.57 grad=1.34 silog=0.656) lr=1.87e-04 13min
+  e6 s900/1200 loss=8.027 (l1=6.68 grad=2.02 silog=0.343) lr=1.87e-04 13min
+  e6 s920/1200 loss=1.497 (l1=0.80 grad=0.62 silog=0.390) lr=1.86e-04 13min
+  e6 s940/1200 loss=2.722 (l1=1.76 grad=0.89 silog=0.518) lr=1.85e-04 13min
+  e6 s960/1200 loss=6.104 (l1=4.58 grad=1.24 silog=0.908) lr=1.85e-04 13min
+  e6 s980/1200 loss=9.603 (l1=7.37 grad=1.89 silog=1.293) lr=1.84e-04 13min
+  e6 s1000/1200 loss=0.995 (l1=0.44 grad=0.28 silog=0.410) lr=1.83e-04 13min
+  e6 s1020/1200 loss=6.575 (l1=4.00 grad=3.63 silog=0.758) lr=1.82e-04 13min
+  e6 s1040/1200 loss=1.050 (l1=0.51 grad=0.24 silog=0.415) lr=1.82e-04 13min
+  e6 s1060/1200 loss=4.208 (l1=2.86 grad=1.27 silog=0.710) lr=1.81e-04 13min
+  e6 s1080/1200 loss=1.361 (l1=0.68 grad=0.55 silog=0.403) lr=1.80e-04 14min
+  e6 s1100/1200 loss=1.783 (l1=0.92 grad=0.38 silog=0.671) lr=1.80e-04 14min
+  e6 s1120/1200 loss=1.290 (l1=0.77 grad=0.32 silog=0.355) lr=1.79e-04 14min
+  e6 s1140/1200 loss=0.737 (l1=0.33 grad=0.27 silog=0.271) lr=1.78e-04 14min
+  e6 s1160/1200 loss=0.644 (l1=0.24 grad=0.26 silog=0.274) lr=1.77e-04 14min
+  e6 s1180/1200 loss=1.212 (l1=0.61 grad=0.40 silog=0.401) lr=1.77e-04 14min
+[eval] epoch 6  RMSE=3.506m  MAE=1.742m  r=0.840  d1=0.573
+[eval]   ground      RMSE=3.046m  MAE=2.302m  n=41975
+[eval]   vegetation  RMSE=1.424m  MAE=0.507m  n=8681563
+[eval]   building    RMSE=1.495m  MAE=0.586m  n=10900729
+[eval]   water       RMSE=5.285m  MAE=3.163m  n=7583769
+[eval]   road        RMSE=1.360m  MAE=0.364m  n=587649
+[eval]   bridge      RMSE=2.602m  MAE=1.057m  n=7265291
+[eval]   other       RMSE=5.158m  MAE=3.812m  n=8850589
+[ckpt] new best RMSE 3.506m -> best.pt (decoder+head only)
+  e7 s0/1200 loss=2.618 (l1=1.55 grad=1.08 silog=0.525) lr=1.76e-04 14min
+  e7 s20/1200 loss=7.871 (l1=4.92 grad=4.24 silog=0.832) lr=1.75e-04 14min
+  e7 s40/1200 loss=1.771 (l1=1.03 grad=0.61 silog=0.435) lr=1.75e-04 14min
+  e7 s60/1200 loss=1.160 (l1=0.55 grad=0.38 silog=0.418) lr=1.74e-04 14min
+  e7 s80/1200 loss=6.582 (l1=5.17 grad=2.19 silog=0.318) lr=1.73e-04 14min
+  e7 s100/1200 loss=3.394 (l1=2.19 grad=1.06 silog=0.670) lr=1.72e-04 14min
+  e7 s120/1200 loss=1.594 (l1=0.86 grad=0.66 silog=0.399) lr=1.72e-04 14min
+  e7 s140/1200 loss=4.612 (l1=3.02 grad=1.70 silog=0.744) lr=1.71e-04 14min
+  e7 s160/1200 loss=5.539 (l1=3.17 grad=3.09 silog=0.823) lr=1.70e-04 14min
+  e7 s180/1200 loss=5.194 (l1=3.64 grad=1.85 silog=0.626) lr=1.70e-04 14min
+  e7 s200/1200 loss=1.029 (l1=0.44 grad=0.40 silog=0.387) lr=1.69e-04 14min
+  e7 s220/1200 loss=5.640 (l1=3.94 grad=2.01 silog=0.694) lr=1.68e-04 14min
+  e7 s240/1200 loss=9.075 (l1=6.91 grad=1.86 silog=1.233) lr=1.67e-04 14min
+  e7 s260/1200 loss=5.104 (l1=2.91 grad=2.90 silog=0.744) lr=1.67e-04 14min
+  e7 s280/1200 loss=1.737 (l1=0.93 grad=0.80 silog=0.403) lr=1.66e-04 14min
+  e7 s300/1200 loss=3.575 (l1=2.19 grad=1.35 silog=0.707) lr=1.65e-04 14min
+  e7 s320/1200 loss=4.025 (l1=2.77 grad=1.07 silog=0.721) lr=1.64e-04 15min
+  e7 s340/1200 loss=3.885 (l1=2.53 grad=1.42 silog=0.643) lr=1.64e-04 15min
+  e7 s360/1200 loss=0.920 (l1=0.39 grad=0.25 silog=0.402) lr=1.63e-04 15min
+  e7 s380/1200 loss=3.848 (l1=2.32 grad=1.57 silog=0.744) lr=1.62e-04 15min
+  e7 s400/1200 loss=2.185 (l1=1.23 grad=0.93 silog=0.487) lr=1.62e-04 15min
+  e7 s420/1200 loss=2.117 (l1=1.30 grad=0.61 silog=0.513) lr=1.61e-04 15min
+  e7 s440/1200 loss=1.849 (l1=0.92 grad=0.86 silog=0.500) lr=1.60e-04 15min
+  e7 s460/1200 loss=6.488 (l1=4.83 grad=2.18 silog=0.568) lr=1.59e-04 15min
+  e7 s480/1200 loss=3.862 (l1=2.62 grad=1.46 silog=0.515) lr=1.59e-04 15min
+  e7 s500/1200 loss=2.725 (l1=1.86 grad=0.72 silog=0.504) lr=1.58e-04 15min
+  e7 s520/1200 loss=1.736 (l1=0.89 grad=0.78 silog=0.453) lr=1.57e-04 15min
+  e7 s540/1200 loss=4.859 (l1=3.29 grad=1.67 silog=0.734) lr=1.56e-04 15min
+  e7 s560/1200 loss=2.456 (l1=1.40 grad=0.96 silog=0.578) lr=1.56e-04 15min
+  e7 s580/1200 loss=2.783 (l1=1.46 grad=1.55 silog=0.549) lr=1.55e-04 15min
+  e7 s600/1200 loss=3.654 (l1=2.30 grad=1.27 silog=0.718) lr=1.54e-04 15min
+  e7 s620/1200 loss=7.109 (l1=5.33 grad=2.19 silog=0.688) lr=1.54e-04 15min
+  e7 s640/1200 loss=1.522 (l1=0.79 grad=0.66 silog=0.402) lr=1.53e-04 15min
+  e7 s660/1200 loss=13.829 (l1=12.16 grad=1.28 silog=1.032) lr=1.52e-04 15min
+  e7 s680/1200 loss=4.708 (l1=3.47 grad=1.05 silog=0.712) lr=1.51e-04 15min
+  e7 s700/1200 loss=2.329 (l1=1.50 grad=0.30 silog=0.679) lr=1.51e-04 15min
+  e7 s720/1200 loss=2.763 (l1=1.57 grad=1.14 silog=0.629) lr=1.50e-04 15min
+  e7 s740/1200 loss=3.850 (l1=2.15 grad=1.86 silog=0.769) lr=1.49e-04 15min
+  e7 s760/1200 loss=1.127 (l1=0.54 grad=0.47 silog=0.353) lr=1.48e-04 15min
+  e7 s780/1200 loss=0.372 (l1=0.12 grad=0.08 silog=0.206) lr=1.48e-04 15min
+  e7 s800/1200 loss=4.929 (l1=3.36 grad=1.64 silog=0.745) lr=1.47e-04 15min
+  e7 s820/1200 loss=1.826 (l1=1.00 grad=0.80 silog=0.426) lr=1.46e-04 15min
+  e7 s840/1200 loss=3.066 (l1=1.60 grad=1.63 silog=0.646) lr=1.46e-04 15min
+  e7 s860/1200 loss=3.610 (l1=2.02 grad=1.62 silog=0.776) lr=1.45e-04 15min
+  e7 s880/1200 loss=3.411 (l1=2.19 grad=1.14 silog=0.646) lr=1.44e-04 15min
+  e7 s900/1200 loss=2.010 (l1=1.23 grad=0.53 silog=0.518) lr=1.43e-04 16min
+  e7 s920/1200 loss=2.189 (l1=1.22 grad=0.83 silog=0.550) lr=1.43e-04 16min
+  e7 s940/1200 loss=1.144 (l1=0.59 grad=0.39 silog=0.356) lr=1.42e-04 16min
+  e7 s960/1200 loss=1.138 (l1=0.56 grad=0.31 silog=0.423) lr=1.41e-04 16min
+  e7 s980/1200 loss=1.632 (l1=0.84 grad=0.75 silog=0.414) lr=1.40e-04 16min
+  e7 s1000/1200 loss=4.816 (l1=3.30 grad=1.56 silog=0.736) lr=1.40e-04 16min
+  e7 s1020/1200 loss=5.590 (l1=4.03 grad=1.58 silog=0.769) lr=1.39e-04 16min
+  e7 s1040/1200 loss=3.269 (l1=2.28 grad=1.03 silog=0.476) lr=1.38e-04 16min
+  e7 s1060/1200 loss=1.419 (l1=0.66 grad=0.57 silog=0.472) lr=1.38e-04 16min
+  e7 s1080/1200 loss=8.594 (l1=5.09 grad=5.02 silog=0.996) lr=1.37e-04 16min
+  e7 s1100/1200 loss=2.039 (l1=1.13 grad=0.88 silog=0.467) lr=1.36e-04 16min
+  e7 s1120/1200 loss=0.052 (l1=0.00 grad=0.01 silog=0.045) lr=1.35e-04 16min
+  e7 s1140/1200 loss=1.621 (l1=0.86 grad=0.74 silog=0.389) lr=1.35e-04 16min
+  e7 s1160/1200 loss=0.510 (l1=0.19 grad=0.19 silog=0.223) lr=1.34e-04 16min
+  e7 s1180/1200 loss=2.212 (l1=1.27 grad=0.71 silog=0.584) lr=1.33e-04 16min
+[eval] epoch 7  RMSE=3.385m  MAE=1.672m  r=0.848  d1=0.606
+[eval]   ground      RMSE=3.757m  MAE=3.024m  n=41975
+[eval]   vegetation  RMSE=1.424m  MAE=0.475m  n=8681563
+[eval]   building    RMSE=1.475m  MAE=0.520m  n=10900729
+[eval]   water       RMSE=5.032m  MAE=3.048m  n=7583769
+[eval]   road        RMSE=1.537m  MAE=0.377m  n=587649
+[eval]   bridge      RMSE=2.570m  MAE=1.030m  n=7265291
+[eval]   other       RMSE=4.985m  MAE=3.692m  n=8850589
+[ckpt] new best RMSE 3.385m -> best.pt (decoder+head only)
+  e8 s0/1200 loss=1.687 (l1=0.80 grad=0.79 silog=0.495) lr=1.33e-04 16min
+  e8 s20/1200 loss=2.031 (l1=1.03 grad=0.89 silog=0.551) lr=1.32e-04 16min
+  e8 s40/1200 loss=3.383 (l1=2.04 grad=1.39 silog=0.645) lr=1.31e-04 16min
+  e8 s60/1200 loss=3.793 (l1=2.14 grad=2.03 silog=0.636) lr=1.30e-04 16min
+  e8 s80/1200 loss=3.158 (l1=1.88 grad=1.30 silog=0.629) lr=1.30e-04 16min
+  e8 s100/1200 loss=1.302 (l1=0.66 grad=0.39 silog=0.450) lr=1.29e-04 16min
+  e8 s120/1200 loss=2.421 (l1=1.39 grad=1.09 silog=0.489) lr=1.28e-04 16min
+  e8 s140/1200 loss=4.677 (l1=2.92 grad=2.06 silog=0.725) lr=1.27e-04 17min
+  e8 s160/1200 loss=2.432 (l1=1.46 grad=0.92 silog=0.513) lr=1.27e-04 17min
+  e8 s180/1200 loss=3.836 (l1=2.46 grad=1.40 silog=0.672) lr=1.26e-04 17min
+  e8 s200/1200 loss=2.185 (l1=1.16 grad=1.06 silog=0.496) lr=1.25e-04 17min
+  e8 s220/1200 loss=1.731 (l1=0.92 grad=0.76 silog=0.434) lr=1.25e-04 17min
+  e8 s240/1200 loss=3.615 (l1=2.14 grad=1.67 silog=0.642) lr=1.24e-04 17min
+  e8 s260/1200 loss=11.849 (l1=9.97 grad=0.54 silog=1.609) lr=1.23e-04 17min
+  e8 s280/1200 loss=1.996 (l1=1.07 grad=0.88 silog=0.490) lr=1.22e-04 17min
+  e8 s300/1200 loss=3.717 (l1=2.65 grad=0.97 silog=0.579) lr=1.22e-04 17min
+  e8 s320/1200 loss=1.635 (l1=0.81 grad=0.83 silog=0.416) lr=1.21e-04 17min
+  e8 s340/1200 loss=2.703 (l1=1.76 grad=0.93 silog=0.475) lr=1.20e-04 17min
+  e8 s360/1200 loss=1.791 (l1=0.99 grad=0.63 silog=0.492) lr=1.20e-04 17min
+  e8 s380/1200 loss=2.666 (l1=1.53 grad=1.11 silog=0.577) lr=1.19e-04 17min
+  e8 s400/1200 loss=1.613 (l1=0.85 grad=0.66 silog=0.433) lr=1.18e-04 17min
+  e8 s420/1200 loss=4.180 (l1=2.63 grad=1.62 silog=0.745) lr=1.17e-04 17min
+  e8 s440/1200 loss=1.817 (l1=0.96 grad=0.86 silog=0.426) lr=1.17e-04 17min
+  e8 s460/1200 loss=2.644 (l1=1.52 grad=1.12 silog=0.562) lr=1.16e-04 17min
+  e8 s480/1200 loss=0.655 (l1=0.26 grad=0.26 silog=0.261) lr=1.15e-04 17min
+  e8 s500/1200 loss=1.650 (l1=0.82 grad=0.57 silog=0.546) lr=1.15e-04 17min
+  e8 s520/1200 loss=1.674 (l1=0.91 grad=0.71 silog=0.409) lr=1.14e-04 17min
+  e8 s540/1200 loss=1.362 (l1=0.72 grad=0.51 silog=0.384) lr=1.13e-04 17min
+  e8 s560/1200 loss=1.043 (l1=0.53 grad=0.33 silog=0.345) lr=1.13e-04 17min
+  e8 s580/1200 loss=2.285 (l1=1.35 grad=0.90 silog=0.485) lr=1.12e-04 17min
+  e8 s600/1200 loss=2.235 (l1=1.30 grad=0.80 silog=0.532) lr=1.11e-04 17min
+  e8 s620/1200 loss=2.960 (l1=1.83 grad=1.09 silog=0.583) lr=1.10e-04 17min
+  e8 s640/1200 loss=2.189 (l1=1.27 grad=0.73 silog=0.551) lr=1.10e-04 17min
+  e8 s660/1200 loss=3.358 (l1=2.18 grad=1.04 silog=0.662) lr=1.09e-04 17min
+  e8 s680/1200 loss=3.196 (l1=2.09 grad=1.26 silog=0.475) lr=1.08e-04 17min
+  e8 s700/1200 loss=4.039 (l1=2.52 grad=1.83 silog=0.609) lr=1.08e-04 17min
+  e8 s720/1200 loss=0.916 (l1=0.45 grad=0.33 silog=0.300) lr=1.07e-04 18min
+  e8 s740/1200 loss=3.513 (l1=2.21 grad=1.30 silog=0.648) lr=1.06e-04 18min
+  e8 s760/1200 loss=1.398 (l1=0.58 grad=0.68 silog=0.481) lr=1.06e-04 18min
+  e8 s780/1200 loss=1.271 (l1=0.56 grad=0.57 silog=0.430) lr=1.05e-04 18min
+  e8 s800/1200 loss=5.264 (l1=3.19 grad=2.61 silog=0.768) lr=1.04e-04 18min
+  e8 s820/1200 loss=1.392 (l1=0.67 grad=0.67 silog=0.392) lr=1.03e-04 18min
+  e8 s840/1200 loss=9.920 (l1=8.24 grad=1.53 silog=0.913) lr=1.03e-04 18min
+  e8 s860/1200 loss=1.255 (l1=0.67 grad=0.50 silog=0.332) lr=1.02e-04 18min
+  e8 s880/1200 loss=2.972 (l1=1.85 grad=1.07 silog=0.585) lr=1.01e-04 18min
+  e8 s900/1200 loss=1.054 (l1=0.50 grad=0.51 silog=0.300) lr=1.01e-04 18min
+  e8 s920/1200 loss=3.453 (l1=1.95 grad=1.61 silog=0.702) lr=1.00e-04 18min
+  e8 s940/1200 loss=2.921 (l1=1.78 grad=0.55 silog=0.870) lr=9.93e-05 18min
+  e8 s960/1200 loss=2.279 (l1=1.38 grad=0.72 silog=0.533) lr=9.86e-05 18min
+  e8 s980/1200 loss=8.788 (l1=6.68 grad=2.66 silog=0.781) lr=9.79e-05 18min
+  e8 s1000/1200 loss=1.099 (l1=0.59 grad=0.28 silog=0.368) lr=9.73e-05 18min
+  e8 s1020/1200 loss=1.444 (l1=0.71 grad=0.70 silog=0.385) lr=9.66e-05 18min
+  e8 s1040/1200 loss=1.568 (l1=0.89 grad=0.56 silog=0.400) lr=9.59e-05 18min
+  e8 s1060/1200 loss=2.642 (l1=1.81 grad=0.51 silog=0.577) lr=9.52e-05 18min
+  e8 s1080/1200 loss=9.360 (l1=5.60 grad=5.77 silog=0.880) lr=9.46e-05 18min
+  e8 s1100/1200 loss=1.113 (l1=0.53 grad=0.40 silog=0.378) lr=9.39e-05 18min
+  e8 s1120/1200 loss=9.422 (l1=6.85 grad=3.27 silog=0.939) lr=9.32e-05 18min
+  e8 s1140/1200 loss=2.386 (l1=1.38 grad=1.06 silog=0.473) lr=9.25e-05 18min
+  e8 s1160/1200 loss=2.364 (l1=1.28 grad=1.13 silog=0.520) lr=9.19e-05 18min
+  e8 s1180/1200 loss=2.374 (l1=1.58 grad=0.62 silog=0.482) lr=9.12e-05 18min
+[eval] epoch 8  RMSE=3.369m  MAE=1.713m  r=0.851  d1=0.592
+[eval]   ground      RMSE=4.514m  MAE=3.590m  n=41975
+[eval]   vegetation  RMSE=1.581m  MAE=0.542m  n=8681563
+[eval]   building    RMSE=1.634m  MAE=0.596m  n=10900729
+[eval]   water       RMSE=4.960m  MAE=3.118m  n=7583769
+[eval]   road        RMSE=1.713m  MAE=0.404m  n=587649
+[eval]   bridge      RMSE=2.590m  MAE=1.095m  n=7265291
+[eval]   other       RMSE=4.869m  MAE=3.620m  n=8850589
+[ckpt] new best RMSE 3.369m -> best.pt (decoder+head only)
+  e9 s0/1200 loss=2.184 (l1=1.24 grad=0.82 silog=0.534) lr=9.05e-05 19min
+  e9 s20/1200 loss=2.003 (l1=1.11 grad=0.87 silog=0.460) lr=8.99e-05 19min
+  e9 s40/1200 loss=2.815 (l1=1.69 grad=1.13 silog=0.560) lr=8.92e-05 19min
+  e9 s60/1200 loss=3.040 (l1=1.59 grad=1.50 silog=0.696) lr=8.85e-05 19min
+  e9 s80/1200 loss=8.023 (l1=4.70 grad=4.89 silog=0.878) lr=8.79e-05 19min
+  e9 s100/1200 loss=3.152 (l1=2.25 grad=0.84 silog=0.479) lr=8.72e-05 19min
+  e9 s120/1200 loss=3.539 (l1=2.12 grad=1.43 silog=0.707) lr=8.65e-05 19min
+  e9 s140/1200 loss=2.759 (l1=1.74 grad=0.98 silog=0.523) lr=8.59e-05 19min
+  e9 s160/1200 loss=1.681 (l1=0.82 grad=0.83 silog=0.441) lr=8.52e-05 19min
+  e9 s180/1200 loss=2.009 (l1=1.08 grad=0.97 silog=0.441) lr=8.46e-05 19min
+  e9 s200/1200 loss=2.677 (l1=1.58 grad=1.06 silog=0.567) lr=8.39e-05 19min
+  e9 s220/1200 loss=4.006 (l1=2.30 grad=1.84 silog=0.789) lr=8.33e-05 19min
+  e9 s240/1200 loss=1.641 (l1=0.99 grad=0.51 silog=0.398) lr=8.26e-05 19min
+  e9 s260/1200 loss=5.904 (l1=3.53 grad=3.15 silog=0.800) lr=8.20e-05 19min
+  e9 s280/1200 loss=1.920 (l1=1.14 grad=0.74 silog=0.407) lr=8.13e-05 19min
+  e9 s300/1200 loss=2.890 (l1=1.49 grad=1.67 silog=0.570) lr=8.07e-05 19min
+  e9 s320/1200 loss=1.969 (l1=0.98 grad=0.91 silog=0.535) lr=8.00e-05 19min
+  e9 s340/1200 loss=1.953 (l1=0.99 grad=0.98 silog=0.472) lr=7.94e-05 19min
+  e9 s360/1200 loss=4.668 (l1=2.66 grad=2.36 silog=0.830) lr=7.87e-05 19min
+  e9 s380/1200 loss=6.130 (l1=4.68 grad=1.53 silog=0.687) lr=7.81e-05 19min
+  e9 s400/1200 loss=1.593 (l1=0.92 grad=0.60 silog=0.372) lr=7.75e-05 19min
+  e9 s420/1200 loss=2.686 (l1=1.58 grad=1.07 silog=0.573) lr=7.68e-05 19min
+  e9 s440/1200 loss=1.426 (l1=0.72 grad=0.62 silog=0.397) lr=7.62e-05 19min
+  e9 s460/1200 loss=3.436 (l1=2.10 grad=1.34 silog=0.663) lr=7.56e-05 19min
+  e9 s480/1200 loss=9.758 (l1=8.26 grad=2.32 silog=0.332) lr=7.49e-05 19min
+  e9 s500/1200 loss=3.032 (l1=1.84 grad=1.14 silog=0.627) lr=7.43e-05 19min
+  e9 s520/1200 loss=2.169 (l1=1.21 grad=0.93 silog=0.494) lr=7.37e-05 19min
+  e9 s540/1200 loss=1.614 (l1=0.82 grad=0.66 silog=0.461) lr=7.31e-05 20min
+  e9 s560/1200 loss=1.976 (l1=1.08 grad=0.66 silog=0.562) lr=7.24e-05 20min
+  e9 s580/1200 loss=0.920 (l1=0.39 grad=0.23 silog=0.413) lr=7.18e-05 20min
+  e9 s600/1200 loss=2.274 (l1=1.27 grad=0.89 silog=0.562) lr=7.12e-05 20min
+  e9 s620/1200 loss=6.688 (l1=3.97 grad=3.74 silog=0.853) lr=7.06e-05 20min
+  e9 s640/1200 loss=9.342 (l1=5.59 grad=5.75 silog=0.881) lr=7.00e-05 20min
+  e9 s660/1200 loss=0.921 (l1=0.41 grad=0.37 silog=0.323) lr=6.93e-05 20min
+  e9 s680/1200 loss=6.127 (l1=4.60 grad=1.88 silog=0.591) lr=6.87e-05 20min
+  e9 s700/1200 loss=4.015 (l1=2.27 grad=2.18 silog=0.655) lr=6.81e-05 20min
+  e9 s720/1200 loss=2.945 (l1=2.01 grad=0.78 silog=0.541) lr=6.75e-05 20min
+  e9 s740/1200 loss=4.174 (l1=2.68 grad=1.64 silog=0.668) lr=6.69e-05 20min
+  e9 s760/1200 loss=0.220 (l1=0.06 grad=0.07 silog=0.125) lr=6.63e-05 20min
+  e9 s780/1200 loss=2.794 (l1=1.70 grad=0.84 silog=0.673) lr=6.57e-05 20min
+  e9 s800/1200 loss=1.061 (l1=0.66 grad=0.31 silog=0.246) lr=6.51e-05 20min
+  e9 s820/1200 loss=4.498 (l1=2.93 grad=1.77 silog=0.684) lr=6.45e-05 20min
+  e9 s840/1200 loss=0.604 (l1=0.21 grad=0.25 silog=0.267) lr=6.39e-05 20min
+  e9 s860/1200 loss=3.596 (l1=2.23 grad=1.57 silog=0.579) lr=6.33e-05 20min
+  e9 s880/1200 loss=0.572 (l1=0.29 grad=0.16 silog=0.205) lr=6.27e-05 20min
+  e9 s900/1200 loss=2.565 (l1=1.35 grad=1.24 silog=0.592) lr=6.21e-05 20min
+  e9 s920/1200 loss=6.954 (l1=5.57 grad=2.18 silog=0.294) lr=6.15e-05 20min
+  e9 s940/1200 loss=1.306 (l1=0.68 grad=0.50 silog=0.378) lr=6.10e-05 20min
+  e9 s960/1200 loss=2.237 (l1=1.29 grad=0.99 silog=0.456) lr=6.04e-05 20min
+  e9 s980/1200 loss=4.371 (l1=3.15 grad=1.46 silog=0.485) lr=5.98e-05 20min
+  e9 s1000/1200 loss=2.011 (l1=1.07 grad=0.78 silog=0.548) lr=5.92e-05 20min
+  e9 s1020/1200 loss=2.147 (l1=1.28 grad=0.70 silog=0.518) lr=5.86e-05 20min
+  e9 s1040/1200 loss=1.634 (l1=0.75 grad=0.62 silog=0.573) lr=5.81e-05 20min
+  e9 s1060/1200 loss=1.964 (l1=1.13 grad=0.73 silog=0.466) lr=5.75e-05 20min
+  e9 s1080/1200 loss=5.009 (l1=3.32 grad=1.89 silog=0.744) lr=5.69e-05 20min
+  e9 s1100/1200 loss=2.579 (l1=1.39 grad=1.24 silog=0.570) lr=5.63e-05 20min
+  e9 s1120/1200 loss=3.774 (l1=2.72 grad=0.97 silog=0.570) lr=5.58e-05 20min
+  e9 s1140/1200 loss=0.539 (l1=0.21 grad=0.19 silog=0.234) lr=5.52e-05 21min
+  e9 s1160/1200 loss=3.253 (l1=1.98 grad=1.23 silog=0.654) lr=5.46e-05 21min
+  e9 s1180/1200 loss=0.428 (l1=0.19 grad=0.13 silog=0.177) lr=5.41e-05 21min
+[eval] epoch 9  RMSE=3.388m  MAE=1.646m  r=0.853  d1=0.631
+[eval]   ground      RMSE=4.201m  MAE=3.083m  n=41975
+[eval]   vegetation  RMSE=1.431m  MAE=0.411m  n=8681563
+[eval]   building    RMSE=1.505m  MAE=0.451m  n=10900729
+[eval]   water       RMSE=4.939m  MAE=3.096m  n=7583769
+[eval]   road        RMSE=1.554m  MAE=0.351m  n=587649
+[eval]   bridge      RMSE=2.586m  MAE=1.004m  n=7265291
+[eval]   other       RMSE=5.051m  MAE=3.693m  n=8850589
+  e10 s0/1200 loss=3.132 (l1=2.01 grad=1.25 silog=0.491) lr=5.35e-05 21min
+  e10 s20/1200 loss=3.864 (l1=2.41 grad=1.61 silog=0.649) lr=5.30e-05 21min
+  e10 s40/1200 loss=3.484 (l1=2.43 grad=0.96 silog=0.578) lr=5.24e-05 21min
+  e10 s60/1200 loss=0.000 (l1=0.00 grad=0.00 silog=0.000) lr=5.19e-05 21min
+  e10 s80/1200 loss=0.396 (l1=0.15 grad=0.16 silog=0.171) lr=5.13e-05 21min
+  e10 s100/1200 loss=0.503 (l1=0.22 grad=0.16 silog=0.205) lr=5.08e-05 21min
+  e10 s120/1200 loss=4.078 (l1=2.64 grad=1.44 silog=0.713) lr=5.02e-05 21min
+  e10 s140/1200 loss=0.043 (l1=0.00 grad=0.00 silog=0.038) lr=4.97e-05 21min
+  e10 s160/1200 loss=1.856 (l1=1.06 grad=0.62 silog=0.483) lr=4.91e-05 21min
+  e10 s180/1200 loss=1.427 (l1=0.77 grad=0.56 silog=0.376) lr=4.86e-05 21min
+  e10 s200/1200 loss=4.183 (l1=2.83 grad=1.27 silog=0.722) lr=4.81e-05 21min
+  e10 s220/1200 loss=3.253 (l1=2.08 grad=0.97 silog=0.684) lr=4.75e-05 21min
+  e10 s240/1200 loss=6.367 (l1=3.83 grad=3.29 silog=0.893) lr=4.70e-05 21min
+  e10 s260/1200 loss=1.366 (l1=0.67 grad=0.65 silog=0.370) lr=4.65e-05 21min
+  e10 s280/1200 loss=2.169 (l1=1.21 grad=0.94 silog=0.488) lr=4.60e-05 21min
+  e10 s300/1200 loss=1.480 (l1=0.93 grad=0.45 silog=0.328) lr=4.54e-05 21min
+  e10 s320/1200 loss=4.610 (l1=3.13 grad=1.54 silog=0.709) lr=4.49e-05 21min
+  e10 s340/1200 loss=1.114 (l1=0.51 grad=0.53 silog=0.337) lr=4.44e-05 21min
+  e10 s360/1200 loss=1.659 (l1=0.95 grad=0.59 silog=0.409) lr=4.39e-05 22min
+  e10 s380/1200 loss=3.118 (l1=2.01 grad=0.99 silog=0.609) lr=4.34e-05 22min
+  e10 s400/1200 loss=0.535 (l1=0.18 grad=0.21 silog=0.252) lr=4.29e-05 22min
+  e10 s420/1200 loss=2.283 (l1=1.26 grad=1.02 silog=0.511) lr=4.24e-05 22min
+  e10 s440/1200 loss=1.051 (l1=0.72 grad=0.09 silog=0.285) lr=4.18e-05 22min
+  e10 s460/1200 loss=3.099 (l1=1.90 grad=1.18 silog=0.615) lr=4.13e-05 22min
+  e10 s480/1200 loss=0.877 (l1=0.37 grad=0.35 silog=0.338) lr=4.08e-05 22min
+  e10 s500/1200 loss=1.540 (l1=0.75 grad=0.79 silog=0.397) lr=4.03e-05 22min
+  e10 s520/1200 loss=1.665 (l1=0.88 grad=0.78 silog=0.394) lr=3.99e-05 22min
+  e10 s540/1200 loss=1.695 (l1=0.93 grad=0.41 silog=0.560) lr=3.94e-05 22min
+  e10 s560/1200 loss=3.122 (l1=1.94 grad=1.22 silog=0.567) lr=3.89e-05 22min
+  e10 s580/1200 loss=6.186 (l1=4.55 grad=1.62 silog=0.826) lr=3.84e-05 22min
+  e10 s600/1200 loss=4.529 (l1=2.49 grad=2.77 silog=0.655) lr=3.79e-05 22min
+  e10 s620/1200 loss=3.942 (l1=2.44 grad=1.48 silog=0.766) lr=3.74e-05 22min
+  e10 s640/1200 loss=1.841 (l1=0.92 grad=0.73 silog=0.556) lr=3.69e-05 22min
+  e10 s660/1200 loss=4.331 (l1=3.32 grad=0.63 silog=0.698) lr=3.65e-05 22min
+  e10 s680/1200 loss=2.143 (l1=1.14 grad=0.92 silog=0.544) lr=3.60e-05 22min
+  e10 s700/1200 loss=9.692 (l1=8.22 grad=1.35 silog=0.801) lr=3.55e-05 22min
+  e10 s720/1200 loss=2.299 (l1=1.30 grad=1.07 silog=0.466) lr=3.50e-05 22min
+  e10 s740/1200 loss=1.219 (l1=0.71 grad=0.38 silog=0.322) lr=3.46e-05 22min
+  e10 s760/1200 loss=1.908 (l1=1.04 grad=0.79 silog=0.475) lr=3.41e-05 22min
+  e10 s780/1200 loss=2.479 (l1=1.39 grad=0.81 silog=0.684) lr=3.37e-05 22min
+  e10 s800/1200 loss=3.518 (l1=2.17 grad=1.42 silog=0.635) lr=3.32e-05 22min
+  e10 s820/1200 loss=6.618 (l1=4.91 grad=2.29 silog=0.568) lr=3.27e-05 22min
+  e10 s840/1200 loss=7.581 (l1=4.57 grad=4.29 silog=0.866) lr=3.23e-05 22min
+  e10 s860/1200 loss=2.988 (l1=1.74 grad=1.39 silog=0.555) lr=3.18e-05 22min
+  e10 s880/1200 loss=1.039 (l1=0.50 grad=0.50 silog=0.291) lr=3.14e-05 22min
+  e10 s900/1200 loss=2.646 (l1=1.52 grad=1.05 silog=0.607) lr=3.10e-05 22min
+  e10 s920/1200 loss=2.711 (l1=1.61 grad=1.06 silog=0.571) lr=3.05e-05 22min
+  e10 s940/1200 loss=4.556 (l1=2.99 grad=1.74 silog=0.699) lr=3.01e-05 22min
+  e10 s960/1200 loss=0.003 (l1=0.00 grad=0.00 silog=0.002) lr=2.96e-05 23min
+  e10 s980/1200 loss=3.667 (l1=2.38 grad=1.01 silog=0.781) lr=2.92e-05 23min
+  e10 s1000/1200 loss=7.655 (l1=5.37 grad=2.89 silog=0.843) lr=2.88e-05 23min
+  e10 s1020/1200 loss=2.888 (l1=1.93 grad=0.93 silog=0.490) lr=2.84e-05 23min
+  e10 s1040/1200 loss=2.743 (l1=1.60 grad=0.99 silog=0.648) lr=2.79e-05 23min
+  e10 s1060/1200 loss=2.774 (l1=1.50 grad=1.40 silog=0.577) lr=2.75e-05 23min
+  e10 s1080/1200 loss=7.164 (l1=5.55 grad=2.60 silog=0.321) lr=2.71e-05 23min
+  e10 s1100/1200 loss=1.142 (l1=0.54 grad=0.52 silog=0.342) lr=2.67e-05 23min
+  e10 s1120/1200 loss=2.066 (l1=1.20 grad=0.78 silog=0.479) lr=2.63e-05 23min
+  e10 s1140/1200 loss=5.406 (l1=4.09 grad=1.17 silog=0.733) lr=2.58e-05 23min
+  e10 s1160/1200 loss=1.829 (l1=0.91 grad=0.89 silog=0.474) lr=2.54e-05 23min
+  e10 s1180/1200 loss=2.145 (l1=1.18 grad=0.98 silog=0.480) lr=2.50e-05 23min
+[eval] epoch 10  RMSE=3.357m  MAE=1.648m  r=0.855  d1=0.625
+[eval]   ground      RMSE=4.486m  MAE=3.370m  n=41975
+[eval]   vegetation  RMSE=1.413m  MAE=0.429m  n=8681563
+[eval]   building    RMSE=1.500m  MAE=0.473m  n=10900729
+[eval]   water       RMSE=4.941m  MAE=3.114m  n=7583769
+[eval]   road        RMSE=1.693m  MAE=0.393m  n=587649
+[eval]   bridge      RMSE=2.583m  MAE=1.001m  n=7265291
+[eval]   other       RMSE=4.948m  MAE=3.641m  n=8850589
+[ckpt] new best RMSE 3.357m -> best.pt (decoder+head only)
+  e11 s0/1200 loss=0.561 (l1=0.21 grad=0.18 silog=0.258) lr=2.46e-05 23min
+  e11 s20/1200 loss=6.555 (l1=4.62 grad=2.43 silog=0.723) lr=2.42e-05 23min
+  e11 s40/1200 loss=4.668 (l1=2.97 grad=1.79 silog=0.802) lr=2.38e-05 23min
+  e11 s60/1200 loss=4.644 (l1=3.21 grad=1.72 silog=0.578) lr=2.35e-05 23min
+  e11 s80/1200 loss=1.628 (l1=0.80 grad=0.78 silog=0.439) lr=2.31e-05 23min
+  e11 s100/1200 loss=2.831 (l1=1.71 grad=1.15 silog=0.547) lr=2.27e-05 23min
+  e11 s120/1200 loss=2.442 (l1=1.49 grad=0.89 silog=0.507) lr=2.23e-05 23min
+  e11 s140/1200 loss=3.734 (l1=2.33 grad=1.40 silog=0.706) lr=2.19e-05 23min
+  e11 s160/1200 loss=1.210 (l1=0.58 grad=0.61 silog=0.331) lr=2.15e-05 23min
+  e11 s180/1200 loss=4.296 (l1=3.06 grad=1.25 silog=0.613) lr=2.12e-05 24min
+  e11 s200/1200 loss=1.566 (l1=0.76 grad=0.84 silog=0.387) lr=2.08e-05 24min
+  e11 s220/1200 loss=1.235 (l1=0.59 grad=0.49 silog=0.398) lr=2.04e-05 24min
+  e11 s240/1200 loss=2.271 (l1=1.20 grad=1.07 silog=0.540) lr=2.01e-05 24min
+  e11 s260/1200 loss=2.559 (l1=1.47 grad=1.12 silog=0.535) lr=1.97e-05 24min
+  e11 s280/1200 loss=5.383 (l1=3.50 grad=2.02 silog=0.869) lr=1.93e-05 24min
+  e11 s300/1200 loss=0.647 (l1=0.23 grad=0.24 silog=0.295) lr=1.90e-05 24min
+  e11 s320/1200 loss=4.333 (l1=2.85 grad=1.65 silog=0.651) lr=1.86e-05 24min
+  e11 s340/1200 loss=0.645 (l1=0.25 grad=0.27 silog=0.259) lr=1.83e-05 24min
+  e11 s360/1200 loss=1.523 (l1=0.77 grad=0.73 silog=0.388) lr=1.79e-05 24min
+  e11 s380/1200 loss=1.653 (l1=0.83 grad=0.81 silog=0.413) lr=1.76e-05 24min
+  e11 s400/1200 loss=3.238 (l1=2.05 grad=1.33 silog=0.519) lr=1.73e-05 24min
+  e11 s420/1200 loss=1.174 (l1=0.55 grad=0.60 silog=0.326) lr=1.69e-05 24min
+  e11 s440/1200 loss=0.952 (l1=0.54 grad=0.24 silog=0.290) lr=1.66e-05 24min
+  e11 s460/1200 loss=4.894 (l1=3.25 grad=1.86 silog=0.712) lr=1.63e-05 24min
+  e11 s480/1200 loss=0.932 (l1=0.44 grad=0.41 silog=0.291) lr=1.59e-05 24min
+  e11 s500/1200 loss=0.935 (l1=0.43 grad=0.45 silog=0.281) lr=1.56e-05 24min
+  e11 s520/1200 loss=1.868 (l1=1.02 grad=0.84 silog=0.433) lr=1.53e-05 24min
+  e11 s540/1200 loss=1.991 (l1=1.07 grad=0.92 silog=0.464) lr=1.50e-05 24min
+  e11 s560/1200 loss=1.582 (l1=1.20 grad=0.25 silog=0.260) lr=1.46e-05 24min
+  e11 s580/1200 loss=1.922 (l1=0.96 grad=0.97 silog=0.475) lr=1.43e-05 24min
+  e11 s600/1200 loss=1.177 (l1=0.55 grad=0.58 silog=0.341) lr=1.40e-05 24min
+  e11 s620/1200 loss=8.554 (l1=6.72 grad=2.59 silog=0.539) lr=1.37e-05 24min
+  e11 s640/1200 loss=0.507 (l1=0.18 grad=0.14 silog=0.256) lr=1.34e-05 24min
+  e11 s660/1200 loss=2.051 (l1=1.09 grad=0.85 silog=0.531) lr=1.31e-05 24min
+  e11 s680/1200 loss=0.300 (l1=0.08 grad=0.10 silog=0.164) lr=1.28e-05 24min
+  e11 s700/1200 loss=1.489 (l1=0.73 grad=0.76 silog=0.384) lr=1.25e-05 24min
+  e11 s720/1200 loss=1.304 (l1=0.62 grad=0.64 silog=0.366) lr=1.22e-05 24min
+  e11 s740/1200 loss=2.275 (l1=1.29 grad=0.95 silog=0.508) lr=1.20e-05 24min
+  e11 s760/1200 loss=1.315 (l1=0.63 grad=0.53 silog=0.421) lr=1.17e-05 24min
+  e11 s780/1200 loss=1.721 (l1=0.92 grad=0.65 silog=0.481) lr=1.14e-05 25min
+  e11 s800/1200 loss=1.564 (l1=0.80 grad=0.63 silog=0.443) lr=1.11e-05 25min
+  e11 s820/1200 loss=4.532 (l1=2.96 grad=1.54 silog=0.797) lr=1.08e-05 25min
+  e11 s840/1200 loss=4.592 (l1=3.05 grad=1.60 silog=0.742) lr=1.06e-05 25min
+  e11 s860/1200 loss=2.271 (l1=1.33 grad=0.88 silog=0.501) lr=1.03e-05 25min
+  e11 s880/1200 loss=1.666 (l1=0.88 grad=0.73 silog=0.425) lr=1.00e-05 25min
+  e11 s900/1200 loss=3.204 (l1=1.74 grad=1.80 silog=0.561) lr=9.78e-06 25min
+  e11 s920/1200 loss=5.186 (l1=3.46 grad=1.72 silog=0.871) lr=9.53e-06 25min
+  e11 s940/1200 loss=1.103 (l1=0.53 grad=0.48 silog=0.332) lr=9.27e-06 25min
+  e11 s960/1200 loss=9.842 (l1=7.47 grad=3.72 silog=0.511) lr=9.02e-06 25min
+  e11 s980/1200 loss=0.174 (l1=0.05 grad=0.04 silog=0.108) lr=8.78e-06 25min
+  e11 s1000/1200 loss=1.850 (l1=1.08 grad=0.71 silog=0.421) lr=8.53e-06 25min
+  e11 s1020/1200 loss=0.315 (l1=0.11 grad=0.12 silog=0.142) lr=8.29e-06 25min
+  e11 s1040/1200 loss=1.463 (l1=0.98 grad=0.46 silog=0.251) lr=8.06e-06 25min
+  e11 s1060/1200 loss=1.544 (l1=0.89 grad=0.59 silog=0.361) lr=7.82e-06 25min
+  e11 s1080/1200 loss=3.134 (l1=1.71 grad=1.56 silog=0.643) lr=7.59e-06 25min
+  e11 s1100/1200 loss=0.623 (l1=0.26 grad=0.20 silog=0.268) lr=7.37e-06 25min
+  e11 s1120/1200 loss=2.819 (l1=1.46 grad=1.56 silog=0.582) lr=7.14e-06 25min
+  e11 s1140/1200 loss=2.849 (l1=1.57 grad=1.45 silog=0.551) lr=6.92e-06 25min
+  e11 s1160/1200 loss=5.555 (l1=3.28 grad=2.92 silog=0.819) lr=6.71e-06 25min
+  e11 s1180/1200 loss=6.324 (l1=4.47 grad=2.29 silog=0.707) lr=6.49e-06 25min
+[eval] epoch 11  RMSE=3.321m  MAE=1.632m  r=0.856  d1=0.620
+[eval]   ground      RMSE=4.520m  MAE=3.265m  n=41975
+[eval]   vegetation  RMSE=1.475m  MAE=0.454m  n=8681563
+[eval]   building    RMSE=1.506m  MAE=0.479m  n=10900729
+[eval]   water       RMSE=4.862m  MAE=3.046m  n=7583769
+[eval]   road        RMSE=1.684m  MAE=0.390m  n=587649
+[eval]   bridge      RMSE=2.567m  MAE=1.018m  n=7265291
+[eval]   other       RMSE=4.882m  MAE=3.573m  n=8850589
+[ckpt] new best RMSE 3.321m -> best.pt (decoder+head only)
+  e12 s0/1200 loss=2.854 (l1=1.71 grad=1.07 silog=0.608) lr=6.28e-06 25min
+  e12 s20/1200 loss=6.736 (l1=4.79 grad=2.32 silog=0.789) lr=6.08e-06 26min
+  e12 s40/1200 loss=4.234 (l1=2.96 grad=1.48 silog=0.532) lr=5.87e-06 26min
+  e12 s60/1200 loss=2.441 (l1=1.26 grad=1.25 silog=0.558) lr=5.67e-06 26min
+  e12 s80/1200 loss=0.872 (l1=0.39 grad=0.27 silog=0.350) lr=5.48e-06 26min
+  e12 s100/1200 loss=3.507 (l1=2.12 grad=1.32 silog=0.726) lr=5.28e-06 26min
+  e12 s120/1200 loss=1.883 (l1=1.10 grad=0.67 silog=0.444) lr=5.09e-06 26min
+  e12 s140/1200 loss=3.131 (l1=1.98 grad=1.11 silog=0.592) lr=4.91e-06 26min
+  e12 s160/1200 loss=1.311 (l1=0.62 grad=0.63 silog=0.370) lr=4.72e-06 26min
+  e12 s180/1200 loss=2.395 (l1=1.34 grad=0.93 silog=0.587) lr=4.55e-06 26min
+  e12 s200/1200 loss=3.420 (l1=2.13 grad=1.33 silog=0.628) lr=4.37e-06 26min
+  e12 s220/1200 loss=1.215 (l1=0.58 grad=0.49 silog=0.394) lr=4.20e-06 26min
+  e12 s240/1200 loss=3.622 (l1=2.01 grad=1.90 silog=0.661) lr=4.03e-06 26min
+  e12 s260/1200 loss=1.908 (l1=1.02 grad=0.88 silog=0.453) lr=3.86e-06 26min
+  e12 s280/1200 loss=4.628 (l1=2.94 grad=1.79 silog=0.790) lr=3.70e-06 26min
+  e12 s300/1200 loss=4.487 (l1=2.93 grad=1.73 silog=0.692) lr=3.54e-06 26min
+  e12 s320/1200 loss=3.845 (l1=2.16 grad=2.13 silog=0.618) lr=3.39e-06 26min
+  e12 s340/1200 loss=1.737 (l1=0.88 grad=0.85 silog=0.433) lr=3.23e-06 26min
+  e12 s360/1200 loss=1.541 (l1=0.77 grad=0.71 silog=0.410) lr=3.09e-06 26min
+  e12 s380/1200 loss=4.060 (l1=2.59 grad=1.63 silog=0.653) lr=2.94e-06 26min
+  e12 s400/1200 loss=1.491 (l1=0.77 grad=0.71 silog=0.366) lr=2.80e-06 26min
+  e12 s420/1200 loss=5.091 (l1=3.43 grad=1.83 silog=0.743) lr=2.66e-06 26min
+  e12 s440/1200 loss=1.623 (l1=0.56 grad=1.08 silog=0.517) lr=2.53e-06 26min
+  e12 s460/1200 loss=1.750 (l1=0.98 grad=0.60 silog=0.476) lr=2.40e-06 26min
+  e12 s480/1200 loss=3.439 (l1=2.10 grad=1.56 silog=0.560) lr=2.27e-06 26min
+  e12 s500/1200 loss=1.957 (l1=1.02 grad=0.93 silog=0.467) lr=2.14e-06 26min
+  e12 s520/1200 loss=4.332 (l1=2.65 grad=2.02 silog=0.668) lr=2.02e-06 26min
+  e12 s540/1200 loss=1.554 (l1=0.87 grad=0.58 silog=0.396) lr=1.91e-06 26min
+  e12 s560/1200 loss=2.504 (l1=1.35 grad=1.20 silog=0.554) lr=1.79e-06 26min
+  e12 s580/1200 loss=1.192 (l1=0.60 grad=0.56 silog=0.312) lr=1.68e-06 26min
+  e12 s600/1200 loss=2.093 (l1=1.17 grad=0.86 silog=0.498) lr=1.57e-06 27min
+  e12 s620/1200 loss=0.026 (l1=0.00 grad=0.00 silog=0.023) lr=1.47e-06 27min
+  e12 s640/1200 loss=2.814 (l1=1.45 grad=1.56 silog=0.581) lr=1.37e-06 27min
+  e12 s660/1200 loss=1.588 (l1=0.86 grad=0.40 silog=0.530) lr=1.27e-06 27min
+  e12 s680/1200 loss=4.381 (l1=2.83 grad=1.65 silog=0.721) lr=1.18e-06 27min
+  e12 s700/1200 loss=7.149 (l1=5.12 grad=2.41 silog=0.823) lr=1.09e-06 27min
+  e12 s720/1200 loss=4.407 (l1=2.46 grad=2.45 silog=0.726) lr=1.01e-06 27min
+  e12 s740/1200 loss=2.698 (l1=1.44 grad=1.38 silog=0.564) lr=9.25e-07 27min
+  e12 s760/1200 loss=2.219 (l1=1.23 grad=0.96 silog=0.506) lr=8.46e-07 27min
+  e12 s780/1200 loss=4.849 (l1=2.62 grad=2.98 silog=0.742) lr=7.71e-07 27min
+  e12 s800/1200 loss=6.089 (l1=4.81 grad=1.93 silog=0.320) lr=6.99e-07 27min
+  e12 s820/1200 loss=1.904 (l1=1.04 grad=0.69 silog=0.514) lr=6.30e-07 27min
+  e12 s840/1200 loss=4.292 (l1=2.78 grad=1.63 silog=0.702) lr=5.66e-07 27min
+  e12 s860/1200 loss=3.701 (l1=2.43 grad=1.33 silog=0.603) lr=5.04e-07 27min
+  e12 s880/1200 loss=3.260 (l1=2.03 grad=1.24 silog=0.611) lr=4.47e-07 27min
+  e12 s900/1200 loss=0.636 (l1=0.25 grad=0.26 silog=0.256) lr=3.92e-07 27min
+  e12 s920/1200 loss=1.753 (l1=0.89 grad=0.86 silog=0.433) lr=3.42e-07 27min
+  e12 s940/1200 loss=2.221 (l1=1.25 grad=0.95 silog=0.502) lr=2.94e-07 27min
+  e12 s960/1200 loss=3.599 (l1=2.28 grad=1.30 silog=0.672) lr=2.51e-07 27min
+  e12 s980/1200 loss=2.058 (l1=1.32 grad=0.53 silog=0.472) lr=2.11e-07 27min
+  e12 s1000/1200 loss=0.158 (l1=0.03 grad=0.05 silog=0.103) lr=1.74e-07 27min
+  e12 s1020/1200 loss=2.655 (l1=1.56 grad=1.01 silog=0.588) lr=1.41e-07 27min
+  e12 s1040/1200 loss=5.143 (l1=3.47 grad=2.00 silog=0.677) lr=1.11e-07 27min
+  e12 s1060/1200 loss=1.078 (l1=0.51 grad=0.47 silog=0.326) lr=8.51e-08 27min
+  e12 s1080/1200 loss=0.391 (l1=0.14 grad=0.16 silog=0.170) lr=6.26e-08 27min
+  e12 s1100/1200 loss=2.027 (l1=0.97 grad=1.07 silog=0.519) lr=4.35e-08 27min
+  e12 s1120/1200 loss=1.101 (l1=0.58 grad=0.38 silog=0.328) lr=2.80e-08 27min
+  e12 s1140/1200 loss=3.518 (l1=2.13 grad=1.45 silog=0.664) lr=1.60e-08 27min
+  e12 s1160/1200 loss=1.670 (l1=0.89 grad=0.77 silog=0.401) lr=7.56e-09 27min
+  e12 s1180/1200 loss=5.335 (l1=3.46 grad=2.02 silog=0.862) lr=2.63e-09 28min
+[eval] epoch 12  RMSE=3.340m  MAE=1.622m  r=0.855  d1=0.626
+[eval]   ground      RMSE=4.170m  MAE=2.920m  n=41975
+[eval]   vegetation  RMSE=1.383m  MAE=0.408m  n=8681563
+[eval]   building    RMSE=1.471m  MAE=0.455m  n=10900729
+[eval]   water       RMSE=4.975m  MAE=3.091m  n=7583769
+[eval]   road        RMSE=1.598m  MAE=0.365m  n=587649
+[eval]   bridge      RMSE=2.545m  MAE=0.989m  n=7265291
+[eval]   other       RMSE=4.900m  MAE=3.588m  n=8850589
+[viewer] wrote sample -> /kaggle/working/outputs/v1/viewer_sample
+
+================================================================
+DONE — best GAMUS val RMSE: 3.321 m   (28 min, 2x T4)
+artifacts: /kaggle/working/outputs/v1/metrics.json, best.pt, viewer_sample/
+================================================================

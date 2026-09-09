@@ -48,9 +48,9 @@
 </div>
 <div id="hint">drag = orbit · scroll = zoom · first-person: WASD + mouse-drag</div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.128.0/three.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.128.0/controls/OrbitControls.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.128.0/controls/PointerLockControls.js"></script>
+<script src="vendor/three.min.js"></script>
+<script src="vendor/OrbitControls.js"></script>
+<script src="vendor/PointerLockControls.js"></script>
 <script>
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0d1013);
@@ -99,7 +99,9 @@ function buildMesh() {
   loader.load(store.height, hTex => {
     // read the 16-bit-ish PNG back to a Float32 displacement grid
     const img = hTex.image;
-    const N = meta.size_px || img.width;
+    // meta.size_px may be a scalar or an [w, h] array
+    const sp = Array.isArray(meta.size_px) ? meta.size_px[0] : meta.size_px;
+    const world = (typeof sp === 'number' && isFinite(sp)) ? sp : img.width;
     const c = document.createElement('canvas');
     c.width = img.width; c.height = img.height;
     const ctx = c.getContext('2d');
@@ -107,15 +109,26 @@ function buildMesh() {
     const data = ctx.getImageData(0, 0, img.width, img.height).data;
 
     const span = (meta.height_max_m - meta.height_min_m) || 1;
-    const world = N;                        // 1 world unit per pixel
-    const geo = new THREE.PlaneGeometry(world, world, img.width - 1, img.height - 1);
+    const hmin = isFinite(meta.height_min_m) ? meta.height_min_m : 0;
+    const gsd = (typeof meta.gsd_m === 'number' && meta.gsd_m > 0) ? meta.gsd_m : 0.33;
+
+    // Decimate the grid so the index count stays under the WebGL
+    // max-vert-ids-per-draw limit (~30M indices => ~2200 segments/side).
+    const MAX_SEG = 2000;
+    const segX = Math.min(img.width - 1, MAX_SEG);
+    const segY = Math.min(img.height - 1, MAX_SEG);
+    const geo = new THREE.PlaneGeometry(world, world, segX, segY);
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position;
+    const vertsX = segX + 1;
     for (let i = 0; i < pos.count; i++) {
-      const px = i % img.width, py = (img.height - 1) - Math.floor(i / img.width);
+      const gx = i % vertsX, gy = Math.floor(i / vertsX);
+      const px = Math.min(img.width  - 1, Math.round(gx / segX * (img.width  - 1)));
+      const pyTop = Math.min(img.height - 1, Math.round(gy / segY * (img.height - 1)));
+      const py = (img.height - 1) - pyTop;
       const g = data[(py * img.width + px) * 4] / 255;     // 8-bit read is enough for a spike
-      const h_m = meta.height_min_m + g * span;
-      pos.setY(i, h_m / (meta.gsd_m || 0.33));             // metres -> pixel units, matches XZ scale
+      const h_m = hmin + g * span;
+      pos.setY(i, h_m / gsd);                              // metres -> pixel units, matches XZ scale
     }
     geo.computeVertexNormals();
 
