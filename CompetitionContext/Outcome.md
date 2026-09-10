@@ -72,4 +72,93 @@ Target hardware: 1× RTX PRO 6000 (96 GB), ~6–8 GPU-h.
 
 | Run | Stage | Datasets | Epochs | Val RMSE (m) | RMSE+TTA (m) | MAE | r | δ1 | Notes |
 |---|---|---|---|---|---|---|---|---|---|
-| _pending_ | P + F | SynRS3D → GAMUS+GeoNRW | 6 + 30 | — | — | — | — | — | first v2 run |
+| 2026-09-09 | P + F | SynRS3D → GAMUS+GeoNRW | 6 + **20 of 30** | **3.068** (e18) | _never measured_ | 1.538 | 0.890 | 0.615 | **crashed at e21**; 75 min of a 300 min budget |
+
+**The run did not finish.** `train.py` died in `encoder.unfreeze_last_n_blocks`:
+
+```
+AttributeError: cannot locate transformer blocks on the encoder
+```
+
+`models/encoder.py::_blocks()` searched `model.{layer,layers,blocks}` and
+`model.encoder.{...}`; the real HF layout is `DINOv3ViTModel.model.layer`. So the
+encoder was **never unfrozen** (the run trained ~11 M decoder params on a frozen
+backbone — v1's architecture), and `final_plain` / `final_tta` / `viewer_sample` /
+`qualitative` were never written. **The 8× TTA number in the deck does not exist yet.**
+
+Per-epoch val RMSE (m): e2 3.68 · e4 3.68 · e6 3.58 · e8 3.34 · e10 3.39 · e12 3.55 ·
+e14 3.21 · e16 3.21 · **e18 3.07** · e20 3.18 — still improving when it died.
+
+Stage P (SynRS3D pretrain) train loss went **up**: 9.62 → 7.02 → 8.83 → 10.70 →
+8.84 → 13.07, because each epoch rotated in a different archive with a different
+height distribution under a schedule that assumed one. ~25 % of the compute budget.
+
+### Where the error actually is (measured, GAMUS val tile `DC_38_35`)
+
+| region | GT mean | pred mean | MAE |
+|---|---|---|---|
+| GT < 1 m (flat ground, roads) | ~0.2 m | 0.48 m | **0.48 m** |
+| GT > 15 m (tall structures) | 20.00 m | 15.45 m | **5.33 m** |
+
+Global RMSE 3.07 m; **balanced RMSE 4.19 m**. In-domain the model is good on flat
+ground and underestimates tall structures by ~4.5 m. Head B (adaptive bins) was
+supposed to fix this and did not — its CE sat at 0.06–0.13 all run, i.e. it
+collapsed and the gate just copied Head A.
+
+### The cross-sensor failure (this is what the flythrough video shows)
+
+`austin1.tif` (Inria Aerial, 0.3 m — nearly the same GSD as GAMUS):
+
+| | GAMUS val | Inria austin1 |
+|---|---|---|
+| pixels below 1 m | 56 % (GT 58 %) | **28 %** |
+| median predicted height | — | **4.04 m** |
+| mean predicted height | 3.67 m (GT 4.10) | **5.24 m** |
+
+Out of domain the model puts ~4 m of height on flat ground and the render is a
+crumpled mountain range instead of flat ground with discrete buildings. v2 had
+**zero photometric augmentation** and no radiometric normalisation. ISRO will
+supply Cartosat imagery with different radiometry at final evaluation, so this is
+the single biggest risk to the 50 % accuracy score.
+
+### Two silent data bugs
+
+1. **~41 % of every training pixel was black padding labelled 0 m and marked
+   valid.** `TileDatasetBase` resampled the whole tile to a random GSD *then*
+   centre-cropped/padded to 512; GAMUS 1024 px @ 0.33 m cannot fill a 512 crop
+   beyond 0.66 m GSD, and the jitter range went to 2.0 m. Measured:
+   P(padding | jittered) = 0.765, P(>50 % padded) = 0.491.
+2. **Augmentation was frozen across epochs** — the RNG was seeded off
+   `(seed, tile_index)`, so all 30 epochs replayed one augmented copy of the data.
+
+### ⚠ The per-class table above (and in v1) is wrong
+
+GAMUS class ids do not match the assumed name order. Measured on the val split:
+id 5 ("bridge") is **7.27 M px = 16 % of the split**; id 0 ("ground") is
+**41 975 px = 0.1 %**. Bridges are not 16 % of an aerial scene. **Do not quote
+per-class numbers to an ISRO judge until the id order is verified against the
+GAMUS paper.** v3 reports neutral `class0..class6` labels plus a measured
+histogram so the mapping can be fixed from evidence.
+
+---
+
+## v3 — `FineTunning/v3/`  _(built, tested, not yet trained)_
+
+Rewrite driven by the measurements above. See `FineTunning/v3/README.md` §1 for
+the full post-mortem. Headline changes:
+
+* crop-then-resample scale augmentation → **no padding, ever** (fixes 41 % of pixels)
+* structural transformer-block discovery → **the encoder actually unfreezes**, fully,
+  with layer-wise LR decay (0.8) after a 2-epoch frozen warmup
+* scene percentile stretch + photometric jitter + `flatness`/`normal` losses →
+  cross-sensor robustness
+* height-stratum inverse-frequency loss weighting → tall-structure tail
+* data materialised once into memmap shards → GPU-bound instead of network-bound
+* one sources mix in one sampler instead of a sequential pretrain stage
+* **one inference path**, its contract serialised into every checkpoint
+* new diagnostics: `balanced_rmse_m`, `tall_gt15m.bias_m`, `flat_lt1m.bias_m`,
+  `class_stats`, and `final_sliding_tta` (full tiles, native GSD, inference path)
+
+| Run | Datasets | Epochs | RMSE (m) | balanced | tall bias | flat bias | Notes |
+|---|---|---|---|---|---|---|---|
+| _pending_ | GAMUS + SynRS3D | 26 | — | — | — | — | 1× H100, ~5–6 h |

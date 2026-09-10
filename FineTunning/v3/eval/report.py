@@ -1,0 +1,103 @@
+"""metrics.json, the viewer sample, and RGB | pred | GT | error strips."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import numpy as np
+import torch
+
+
+def write_metrics_json(path, cfg, spec, history, best_rmse, elapsed_min, extra=None):
+    from config import safe_config_dict
+
+    payload = {
+        "config": safe_config_dict(cfg),
+        "preproc": spec.to_dict(),
+        "history": history,
+        "best_val_rmse_m": best_rmse,
+        "elapsed_min": elapsed_min,
+    }
+    if extra:
+        payload.update(extra)
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(payload, f, indent=2, default=str)
+
+
+def colorize(a: np.ndarray, vmin: float = 0.0, vmax: float | None = None) -> np.ndarray:
+    hi = float(vmax if vmax is not None else np.nanmax(a))
+    x = np.clip((a - vmin) / max(hi - vmin, 1e-6), 0, 1)
+    try:
+        import matplotlib
+
+        cmap = matplotlib.colormaps["turbo"]
+        return (cmap(x)[..., :3] * 255).astype(np.uint8)
+    except Exception:  # noqa: BLE001
+        g = (x * 255).astype(np.uint8)
+        return np.stack([g, g, g], -1)
+
+
+def _predict(model, ds, i, cfg, spec, device):
+    from infer.engine import predict_scene
+
+    s = ds[i]
+    rgb = s["rgb_u8"].numpy()
+    amp_dt = (torch.bfloat16 if cfg.amp_dtype == "bf16" else torch.float16) \
+        if (cfg.amp and device.type == "cuda") else None
+    height, _ = predict_scene(model, rgb, float(s["gsd_m"]), spec, device,
+                              tta=False, amp_dtype=amp_dt,
+                              batch_tiles=max(1, cfg.batch_size // 2))
+    return s, rgb, height
+
+
+@torch.no_grad()
+def export_viewer_sample(model, ds, cfg, spec, device):
+    """A metric-recoverable height map for `viewer/`.
+
+    The 16-bit PNG carries an explicit affine encoding in meta.json AND a raw
+    float32 .npy, so heights survive the trip to the renderer.  (v2 wrote a
+    min-max normalised PNG whose scale lived only in a sibling file that the
+    viewer never read, which is why its 3D range read 0-34 m regardless.)
+    """
+    from PIL import Image
+
+    model.eval()
+    s, rgb, pred = _predict(model, ds, 0, cfg, spec, device)
+    gt = s["target"].numpy()
+    d = Path(cfg.output_dir) / "viewer_sample"
+    d.mkdir(parents=True, exist_ok=True)
+
+    Image.fromarray(rgb).save(d / "rgb.png")
+    lo, hi = 0.0, float(max(np.nanmax(pred), 1.0))
+    Image.fromarray(((np.clip(pred, lo, hi) - lo) / (hi - lo) * 65535)
+                    .astype(np.uint16)).save(d / "height16.png")
+    np.save(d / "pred_ndsm_m.npy", pred.astype(np.float32))
+    np.save(d / "gt_ndsm_m.npy", gt.astype(np.float32))
+    (d / "meta.json").write_text(json.dumps({
+        "stem": s["stem"], "src": s["src"],
+        "height_min_m": lo, "height_max_m": hi,
+        "gsd_m": float(s["gsd_m"]), "size_px": list(pred.shape),
+        "encode": "height_m = height_min_m + (png16/65535)*(height_max_m-height_min_m)",
+    }, indent=2))
+    print(f"[viewer] wrote sample -> {d}")
+
+
+@torch.no_grad()
+def export_qualitative(model, ds, cfg, spec, device, n: int):
+    from PIL import Image
+
+    model.eval()
+    d = Path(cfg.output_dir) / "qualitative"
+    d.mkdir(parents=True, exist_ok=True)
+    for i in range(min(n, len(ds))):
+        s, rgb, pred = _predict(model, ds, i, cfg, spec, device)
+        gt = s["target"].numpy()
+        vmax = float(max(gt.max(), pred.max(), 1.0))
+        strip = np.concatenate([
+            rgb, colorize(pred, 0, vmax), colorize(gt, 0, vmax),
+            colorize(np.abs(pred - gt), 0, max(vmax * 0.4, 1.0)),
+        ], axis=1)
+        Image.fromarray(strip).save(d / f"{s['src']}_{s['stem']}.png")
+    print(f"[qual] wrote {min(n, len(ds))} strips -> {d}  (RGB | pred | GT | |err|)")
