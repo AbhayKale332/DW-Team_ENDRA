@@ -42,17 +42,35 @@ with the `DW_OUTPUT_DIR` / `DW_CACHE_DIR` / `DW_LOCAL_ROOT` env vars.
 
 ### Lightning AI
 
-`on_start.sh` (in the Studio home dir) clones/pulls the repo and runs
-`python main.py "$@"`:
+`on_start.sh` (repo root; copy it to the Studio home dir) is the whole run:
+clone/pull → install → train → package → reclaim disk.
 
 ```bash
-sh on_start.sh --smoke --datasets gamus    # tiny sanity run first
+sh on_start.sh --smoke --datasets gamus    # tiny sanity run first (own output dir)
 sh on_start.sh                             # full pretrain -> finetune -> TTA -> zip
+sh on_start.sh --background                # detach; tail the printed log
+sh on_start.sh --install-only              # just deps
 ```
 
-Set `HF_TOKEN` in the Studio environment first — the DINOv3-SAT encoder and GAMUS
-are gated. Results land in `FineTunning/v2/outputs/v2/` (persistent disk), so the
-cloudflared tunnel is optional here (`--share_cloudflared false`).
+Set `HF_TOKEN` in the Studio environment first (or `echo hf_xxx > ~/.hf_token`) —
+the DINOv3-SAT encoder and GAMUS are both gated.
+
+It keeps the Studio inside its 100 GB quota by putting everything disposable on a
+path it owns and deleting it when the run finishes:
+
+| Path | Fate |
+|---|---|
+| `~/DepthWizard-results/v2/` | **kept** — `best.pt`, `last.pt`, `stageP_last.pt`, `metrics.json`, `config.json`, `run.log`, `viewer_sample/`, `qualitative/`, `results_v2.zip`, `RUN_MANIFEST.txt` |
+| `~/DepthWizard/` | **kept** — the checkout |
+| `~/dw_cache/` | wiped — streamed GAMUS / GeoNRW / SynRS3D tiles (`DW_CACHE_DIR`) |
+| `~/hf_home/`, pip / triton / inductor caches | wiped — all re-downloadable |
+
+The per-dataset LRU cap is sized from free disk at boot (`--cache_max_gib`, or
+`DW_CACHE_MAX_GIB`), a watchdog sheds partial downloads if free space drops under
+12 GiB, and a completion marker stops a Studio restart from silently retraining
+(`--force` overrides). A run killed mid-flight keeps its cache and auto-resumes
+stage F from `last.pt` on the next start. Results sit on persistent disk, so the
+cloudflared tunnel is off by default here.
 
 ## 1. Test first (Kaggle, Lightning AI, or anywhere with torch)
 
