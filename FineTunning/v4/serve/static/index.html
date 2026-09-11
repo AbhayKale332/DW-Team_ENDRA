@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DepthWizard — upload</title>
+<style>
+  :root{color-scheme:dark;--bg:#0d1013;--panel:#151a20;--line:#252c34;--ink:#e8ecf1;
+        --dim:#8a949e;--accent:#2d6cdf;--warn:#e5793a}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);
+       font:14px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;
+       display:flex;align-items:center;justify-content:center;padding:24px}
+  .card{width:100%;max-width:620px;background:var(--panel);border:1px solid var(--line);
+        border-radius:14px;padding:26px 28px 24px}
+  h1{margin:0 0 3px;font-size:20px}
+  .sub{color:var(--dim);margin:0 0 22px;font-size:13px}
+  #drop{border:1.5px dashed #38414c;border-radius:10px;padding:32px 18px;text-align:center;
+        cursor:pointer;transition:.15s;color:var(--dim)}
+  #drop.hot{border-color:var(--accent);background:#16202f;color:var(--ink)}
+  #drop b{color:var(--ink)}
+  .opts{display:grid;grid-template-columns:1fr 1fr;gap:12px 18px;margin:20px 0 6px}
+  label{display:block;color:#b8c2cc;font-size:12px;margin-bottom:4px}
+  input[type=number],select{width:100%;background:#0f1318;color:var(--ink);
+    border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:inherit;font-size:13px}
+  .chk{display:flex;align-items:center;gap:7px;color:#b8c2cc;font-size:13px;margin-top:20px}
+  button{width:100%;margin-top:18px;padding:11px;background:var(--accent);color:#fff;
+    border:0;border-radius:8px;font:inherit;font-weight:650;cursor:pointer;font-size:14px}
+  button:disabled{background:#2a323c;color:var(--dim);cursor:default}
+  .bar{height:6px;background:#0f1318;border-radius:4px;overflow:hidden;margin-top:16px;display:none}
+  .bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .25s}
+  #status{margin-top:10px;color:var(--dim);font-size:12.5px;min-height:20px}
+  #status a{color:#7aa9ff}
+  .meta{margin-top:20px;padding-top:14px;border-top:1px solid var(--line);
+        color:var(--dim);font-size:11.5px}
+  code{background:#0f1318;padding:1px 5px;border-radius:4px}
+  .err{color:var(--warn)}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>DepthWizard</h1>
+  <p class="sub">Single-view optical imagery → metric DSM → navigable 3D terrain.
+     PNG / JPG for a relative surface, GeoTIFF for absolute metres.</p>
+
+  <div id="drop">
+    <b>Drop an image here</b> or click to choose<br>
+    <span style="font-size:12px">PNG · JPG · TIFF / GeoTIFF</span>
+    <input type="file" id="file" accept=".png,.jpg,.jpeg,.tif,.tiff" hidden>
+  </div>
+
+  <div class="opts">
+    <div>
+      <label>Ground sample distance (m/px)</label>
+      <input type="number" id="gsd" step="0.01" min="0" placeholder="auto from GeoTIFF">
+    </div>
+    <div>
+      <label>Terrain source (absolute DSM)</label>
+      <select id="dem_source">
+        <option value="copernicus30">Copernicus GLO-30</option>
+        <option value="srtm30">SRTM 30 m</option>
+        <option value="cartodem">CartoDEM (local file)</option>
+      </select>
+    </div>
+    <label class="chk"><input type="checkbox" id="tta"> 8× dihedral TTA <span
+      style="color:var(--dim)">(slower, lower RMSE)</span></label>
+    <label class="chk"><input type="checkbox" id="absolute"> absolute DSM <span
+      style="color:var(--dim)">(needs a GeoTIFF)</span></label>
+  </div>
+
+  <button id="go" disabled>Estimate elevation</button>
+  <div class="bar"><i></i></div>
+  <div id="status"></div>
+
+  <div class="meta" id="health">checking service…</div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let chosen = null;
+
+$('drop').onclick = () => $('file').click();
+$('file').onchange = (e) => pick(e.target.files[0]);
+for (const ev of ['dragenter', 'dragover']) {
+  $('drop').addEventListener(ev, (e) => { e.preventDefault(); $('drop').classList.add('hot'); });
+}
+for (const ev of ['dragleave', 'drop']) {
+  $('drop').addEventListener(ev, (e) => { e.preventDefault(); $('drop').classList.remove('hot'); });
+}
+$('drop').addEventListener('drop', (e) => pick(e.dataTransfer.files[0]));
+
+function pick(f) {
+  if (!f) return;
+  chosen = f;
+  $('drop').innerHTML = `<b>${f.name}</b><br><span style="font-size:12px">` +
+    `${(f.size / 1048576).toFixed(1)} MB — click to change</span>`;
+  $('go').disabled = false;
+}
+
+$('go').onclick = async () => {
+  if (!chosen) return;
+  $('go').disabled = true;
+  document.querySelector('.bar').style.display = 'block';
+  const fd = new FormData();
+  fd.append('file', chosen);
+  fd.append('gsd', $('gsd').value || '0');
+  fd.append('tta', $('tta').checked);
+  fd.append('absolute', $('absolute').checked);
+  fd.append('dem_source', $('dem_source').value);
+  let job;
+  try {
+    const r = await fetch('/api/predict', { method: 'POST', body: fd });
+    if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+    job = await r.json();
+  } catch (e) {
+    $('status').innerHTML = `<span class="err">${e.message}</span>`;
+    $('go').disabled = false;
+    return;
+  }
+  poll(job);
+};
+
+async function poll(job) {
+  const bar = document.querySelector('.bar i');
+  for (;;) {
+    const s = await fetch(job.status_url).then((r) => r.json());
+    bar.style.width = `${(s.progress * 100).toFixed(0)}%`;
+    $('status').textContent = `${s.stage}${s.detail ? ' — ' + s.detail : ''}`;
+    if (s.stage === 'done') {
+      const m = s.result || {};
+      $('status').innerHTML =
+        `done — ${m.size_px?.join(' × ')} px, heights ${(+m.height_min_m).toFixed(1)}–` +
+        `${(+m.height_max_m).toFixed(1)} m, ${(m.frac_below_1m * 100).toFixed(0)} % below 1 m` +
+        `<br><a href="${job.view_url}">open the 3D flythrough →</a> · ` +
+        `<a href="/api/report/${s.id}">validation report</a> · ` +
+        `<a href="/api/result/${s.id}/ndsm_m.tif">GeoTIFF</a>`;
+      $('go').disabled = false;
+      return;
+    }
+    if (s.stage === 'error') {
+      $('status').innerHTML = `<span class="err">failed: ${s.error}</span>`;
+      $('go').disabled = false;
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 700));
+  }
+}
+
+fetch('/api/health').then((r) => r.json()).then((h) => {
+  $('health').innerHTML = h.ok
+    ? `runtime <code>${h.runtime}</code> on <code>${h.device}</code> · working GSD ` +
+      `<code>${h.preproc.canonical_gsd_m} m</code> · tile <code>${h.preproc.tile_size}</code> · ` +
+      `output <code>${h.preproc.target}</code>`
+    : '<span class="err">no model loaded — start the service with --ckpt or --onnx</span>';
+}).catch(() => { $('health').innerHTML = '<span class="err">service unreachable</span>'; });
+</script>
+</body>
+</html>

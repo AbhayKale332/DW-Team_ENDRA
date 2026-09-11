@@ -162,3 +162,60 @@ the full post-mortem. Headline changes:
 | Run | Datasets | Epochs | RMSE (m) | balanced | tall bias | flat bias | Notes |
 |---|---|---|---|---|---|---|---|
 | _pending_ | GAMUS + SynRS3D | 26 | — | — | — | — | 1× H100, ~5–6 h |
+
+---
+
+## v4 — `FineTunning/v4/`  _(built, tested, not yet trained)_
+
+Phase 2 + Phase 3 in one tree: v3's training core plus the geo half
+(ground-masked DTM fit, DEM fetch, GCP RANSAC, ONNX export) and the product half
+(FastAPI service, standalone Three.js viewer, auto-generated validation report).
+See `FineTunning/v4/README.md` §1 for the full rationale.
+
+**Model changes, each fixing something measured:**
+
+* `--dem` in v3 **double-counted every building** — GLO-30 and SRTM are surface
+  models, so `dem + ndsm` put a 30 m tower on 12 m terrain at ~165 m instead of
+  135 m. `geo/calibrate.py` now fits the bare-earth DTM through ground pixels
+  only (Head C's ground classes **and** a low predicted nDSM, both required) and
+  adds the nDSM to that. Measured on a synthetic scene: 134.4 m against a true
+  135.0 m, DTM recovered to 0.4 m mean error.
+* Head B kept a **hard** nearest-bin target in v3 — nearly free to predict when
+  65 % of the mass is one bin, which is why it collapsed in v2. Now a
+  Gaussian-smoothed target (`bin_soft_sigma 1.5`) plus an entropy floor on the
+  marginal bin distribution (`w_bin_entropy`).
+* Head B also emits `b_std` (bin-distribution sigma, in metres) — a free
+  per-pixel uncertainty that gates the unlabeled branch.
+* **Per-landscape metrics** (urban / sparse / hilly / forested), derived per tile
+  from the GT height field, so the rubric's own stability axis is finally
+  answerable. Nothing in v1–v3 measured it.
+
+**Indian data — what we found.** No open dataset pairs Indian RGB with per-pixel
+heights. DFC2023 Track 2 *does* include a New Delhi city (2 m nDSM from Gaofen-7
+/ WorldView stereo) but is behind an IEEE DataPort login with no API; Open
+Buildings 2.5D and UT-GLOBUS give building heights only, with no paired RGB;
+Bhoonidhi/CartoDEM is 10–30 m, too coarse for structure height but right for the
+terrain term. SAC's own reference repo has a README and no data.
+
+So v4 ships two ingest paths and is explicit that neither is an Indian benchmark:
+`india_labeled` (a local directory of paired rasters — DFC2023 New Delhi once
+downloaded by hand, or any product the team obtains) and `india_unlabeled`
+(RGB-only tiles feeding a **mean-teacher** branch: EMA teacher on a weak view,
+student on a strong one, pixels gated by the teacher's `b_std`). 14 Indian AOIs
+spanning all four landscape types are defined; no basemap URL is defaulted,
+because that licence call belongs to the team.
+
+**Deliverables the run now produces itself:** figures, a self-contained HTML
+validation report, `terrain.glb`/`.obj`, and an ONNX graph verified against the
+checkpoint (max |torch − onnx| < 0.05 m).
+
+**Verified locally without a GPU:** 113 tests pass; a real GeoTIFF round trip
+keeps its CRS and transform pixel-identically; the FastAPI service survives
+path-traversal probes; the viewer was driven in headless Chrome against a real
+`infer.predict` output directory and read back the correct GSD, shape, product
+and live metrics.
+
+| Run | Datasets | Epochs | RMSE (m) | balanced | tall bias | flat bias | landscape spread | Notes |
+|---|---|---|---|---|---|---|---|---|
+| _pending_ | GAMUS + SynRS3D (+ india_unlabeled) | 26 | — | — | — | — | — | 1× H100, ~5–6 h |
+
