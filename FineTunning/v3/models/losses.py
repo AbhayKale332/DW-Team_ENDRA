@@ -191,8 +191,7 @@ def regression_terms(pred, target, valid, cfg, w, gsd):
     sil = silog_loss(pred, target, valid, cfg.silog_lambda, cfg.silog_shift)
     grad = gradient_loss(pred, target, valid)
     total = cfg.w_l1 * l1 + cfg.w_silog * sil + cfg.w_grad * grad
-    return total, {"l1": float(l1.detach()), "silog": float(sil.detach()),
-                   "grad": float(grad.detach())}
+    return total, {"l1": l1.detach(), "silog": sil.detach(), "grad": grad.detach()}
 
 
 def compute_losses(out: dict, batch: dict, cfg, balancer: StratumBalancer):
@@ -213,11 +212,16 @@ def compute_losses(out: dict, batch: dict, cfg, balancer: StratumBalancer):
              + cfg.w_normal * l_norm + cfg.w_flat * l_flat
              + cfg.w_bin_ce * l_bin + cfg.w_seg * l_seg)
 
+    # Detached 0-d *tensors*, not floats: `float(t)` on a CUDA tensor is a full
+    # device sync, and there were nine of them between the forward and the
+    # backward of every step — enough to stop the CPU ever running ahead of the
+    # GPU, which is most of what "low utilisation" looked like.  The trainer
+    # materialises these only on the steps it actually prints.
     stats = {
-        "loss": float(total.detach()),
+        "loss": total.detach(),
         "l1": sf["l1"], "silog": sf["silog"], "grad": sf["grad"],
-        "normal": float(l_norm.detach()), "flat": float(l_flat.detach()),
-        "bin": float(l_bin.detach()), "seg": float(l_seg.detach()),
-        "alpha": float(out["alpha"].detach().mean()),
+        "normal": l_norm.detach(), "flat": l_flat.detach(),
+        "bin": l_bin.detach(), "seg": l_seg.detach(),
+        "alpha": out["alpha"].detach().mean(),
     }
     return total, stats

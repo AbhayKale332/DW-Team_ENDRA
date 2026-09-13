@@ -1,0 +1,203 @@
+<meta charset="utf-8">
+<style>body{max-width:42em;margin:3em auto;padding:0 1.5em;font:17px/1.6 Georgia,serif;color:#222}
+img{max-width:100%}h1{line-height:1.2}blockquote{border-left:3px solid #ddd;margin:0;padding-left:1em;color:#555}
+em{color:#666}code{font:0.9em ui-monospace,monospace;background:#f4f4f4;padding:1px 4px}</style>
+<h1
+id="guessing-how-tall-a-building-is-from-one-photo--and-the-four-rewrites-it-took">Guessing
+how tall a building is from one photo — and the four rewrites it
+took</h1>
+<p><em>Building DepthWizard for Smart India Hackathon 2026. This post is
+a living log — I'll keep adding to it as the project moves toward the
+December finals.</em></p>
+<hr />
+<p>You are handed one aerial photograph. No stereo pair, no LiDAR sweep,
+no radar. A flat RGB image, taken straight down. The question is:
+<strong>how tall is everything in it?</strong></p>
+<p>That question is worth answering because the usual ways of answering
+it are expensive. Digital Surface Models — the height-per-pixel rasters
+urban planners and disaster response teams work from — normally come
+from stereo imaging, airborne LiDAR or interferometric radar, all of
+which need specific sensors, repeat passes and budgets. A single optical
+image is the cheapest thing a satellite produces.</p>
+<p>This is Smart India Hackathon 2026 problem statement 26175, posed by
+ISRO's Space Applications Centre. It is scored 50% on elevation accuracy
+and 50% on the rendering and user experience of a 3D flythrough built
+from that elevation — two halves, equally weighted, which most teams
+will answer by spending 90% of their effort on the first one.</p>
+<p>What follows is the actual development arc: four versions in about
+two weeks, three of them rewrites caused by something we measured rather
+than something we imagined.</p>
+<h2 id="the-decision-that-set-everything-else">The decision that set
+everything else</h2>
+<p>The problem statement suggests an approach in its own framing: take a
+foundation monocular depth model, get <em>relative</em> depth out of it,
+then rescale that to metres using a coarse public elevation source like
+SRTM.</p>
+<p>We argued that this framing is wrong, and building against it would
+have cost us the accuracy half of the score.</p>
+<p>In a nadir remote-sensing image, the ground sample distance — how
+many metres one pixel covers — is <strong>known</strong>. There is no
+scale ambiguity to resolve. Height in metres is directly learnable. Any
+team that regresses metric height end-to-end beats a team that regresses
+relative depth and then fits a global scale factor to it.</p>
+<p>Two decisions followed from that. First, decompose the output
+honestly:</p>
+<blockquote>
+<p>absolute elevation = coarse terrain from a public DEM + structure
+height predicted from RGB</p>
+</blockquote>
+<p>Terrain comes from geometry and public data. Structure height —
+buildings, canopy, bridges — is where the machine learning lives. The
+"convert relative depth to metres" step simply disappears.</p>
+<p>Second, the problem statement complains that foundation depth models
+are trained on natural, eye-level imagery and therefore suffer a domain
+gap on top-down satellite views. Rather than fine-tune our way around
+that gap, we removed it at the root: <strong>DINOv3 ViT-L/16, pretrained
+on 493 million satellite images</strong> — a satellite-native encoder,
+frozen, with a light decoder on top. If the gap is between the
+pretraining data and the task, change the pretraining data.</p>
+<h2 id="v1-a-28-minute-spike">v1: a 28-minute spike</h2>
+<p>The first version did the simplest measurable thing: frozen DINOv3
+encoder, a DPT decoder, one head regressing height in metres. Eleven
+million trainable parameters out of three hundred million, on two Tesla
+T4s in a free Kaggle session. Twelve epochs, twenty-eight minutes wall
+clock, <strong>3.32 m validation RMSE</strong> on the GAMUS dataset.</p>
+<p>That number wasn't good. It was <em>real</em>, which mattered more —
+every later decision got measured against it instead of against an
+intuition.</p>
+<h2 id="v2-the-run-that-looked-like-progress">v2: the run that looked
+like progress</h2>
+<p>v2 was the ambitious one: three prediction heads instead of one, a
+synthetic-data pretraining stage, multiple datasets, resolution
+canonicalisation, test-time augmentation, and a plan to unfreeze the
+last blocks of the encoder late in training. A much bigger GPU.</p>
+<p>Best validation RMSE hit <strong>3.07 m at epoch 18</strong> — a 7.6%
+improvement — and was still dropping.</p>
+<p>Then it crashed at epoch 21 of 30, with this:</p>
+<pre><code>AttributeError: cannot locate transformer blocks on the encoder</code></pre>
+<p>The unfreezing code looked for the transformer blocks at
+<code>model.layers</code> or <code>model.blocks</code>. The actual
+layout in the library was <code>model.model.layer</code>. So the encoder
+had <strong>never unfrozen at any point in the run</strong>. Thirty
+epochs of an architecture that, functionally, was v1's.</p>
+<p>And because the process died before the final evaluation stage, none
+of the final metrics were ever written to disk. The test-time
+augmentation our pitch deck described as "free accuracy" had, at that
+moment, never once been measured.</p>
+<p><img src="assets/v1-v2-rmse.png"
+alt="Validation RMSE per epoch for v1 and v2. v2 reaches 3.07 m at epoch 18 and then crashes at epoch 21." />
+<em>v1 and v2 validation RMSE. The improvement was real; the run that
+produced it never finished.</em></p>
+<p>That crash is the turning point of this project — not because of the
+bug, but because of what we did next.</p>
+<h2 id="the-week-of-measuring-instead-of-building">The week of measuring
+instead of building</h2>
+<p>Instead of writing v3, we spent the time working out what v2's 3.07 m
+actually meant. Three findings, none of which we would have guessed:</p>
+<p><strong>41% of every training pixel was a lie.</strong> The scale
+augmentation resampled each tile to a random resolution and
+<em>then</em> cropped it to 512 pixels — which, for tiles that couldn't
+fill the crop, meant padding with black. That padding was labelled 0
+metres and marked as valid data. We measured it: 76.5% of augmented
+samples contained padding, and 49% were more than half padding. The loss
+function had been actively teaching the network that <em>black means
+ground level</em>.</p>
+<p><strong>The global average hid the error that mattered.</strong>
+Split the validation set by height and the 3.07 m dissolves: flat ground
+and roads were accurate to <strong>0.48 m</strong>, while structures
+above 15 m were under-predicted by <strong>5.3 m</strong> on average.
+Balanced across height strata, the real error was 4.19 m. A single
+global RMSE is a summary statistic that can hide exactly the failure a
+judge will look for.</p>
+<p><strong>The model did not survive a change of sensor.</strong> Run it
+on imagery from a different satellite at nearly identical resolution and
+28% of pixels came out below 1 m, against 56% in-domain. It put roughly
+four metres of height onto flat ground. The flythrough render was a
+crumpled mountain range where there should have been flat ground and
+discrete buildings. v2 had no photometric augmentation and no
+radiometric normalisation at all — and the final evaluation will use
+ISRO's own Cartosat imagery, with its own radiometry.</p>
+<p>There was one more finding, and it was about us. A per-land-cover
+accuracy table had been in our slide deck since v1. Counting the pixels
+showed the class ids it assumed were impossible: it implied bridges were
+16% of an aerial scene and bare ground was 0.1%. The table wasn't wrong
+by a little. It had never been checked. We stopped quoting it, and later
+versions report neutral class labels plus a measured histogram, so the
+mapping gets fixed from evidence rather than from an assumption someone
+copied forward three times.</p>
+<h2 id="v3-and-v4-every-change-cites-a-measurement">v3 and v4: every
+change cites a measurement</h2>
+<p>v3 was a rewrite where each change points at one of the numbers
+above. Crop in source pixels <em>before</em> resampling, so padding
+cannot exist. Find the transformer blocks structurally — the module list
+whose length equals the layer count — so the encoder genuinely
+unfreezes. Per-scene contrast stretching and photometric jitter, for the
+cross-sensor failure. Inverse-frequency loss weighting by height
+stratum, for the tall-structure bias.</p>
+<p>v4 turned that pipeline into a deliverable — and caught one more bug
+of the same family, the best one in the project.</p>
+<p>Adding a public DEM to the predicted structure height was
+<strong>double-counting every building</strong>. Copernicus GLO-30 and
+SRTM are <em>surface</em> models: they already include the buildings. So
+a 30 m tower on 12 m of terrain came out at about 165 m instead of 135
+m. The dangerous part is that it still looked like a perfectly plausible
+elevation raster. Nothing about the output said it was wrong.</p>
+<p>The fix is to estimate the bare-earth terrain first, fitting a smooth
+surface only through pixels that are ground — required to be
+<em>both</em> semantically ground <em>and</em> low in the predicted
+height map, so that the unverified class ids can't poison the fit — and
+then add structure height to that. On a synthetic scene with known
+geometry: 134.4 m recovered against a true 135.0 m, terrain to within
+0.4 m.</p>
+<h2 id="making-it-a-product-not-a-notebook">Making it a product, not a
+notebook</h2>
+<p>Half the score is rendering and user experience, so half the work had
+to be.</p>
+<p>The viewer is plain JavaScript and Three.js with no build step — you
+open the HTML file, and that is the entire install. Dual pane: a map
+with colormap, hillshade, contours and signed-error overlays, and a
+flythrough with orbit, first-person WASD and a cinematic drone path,
+with adjustable sun angle and vertical exaggeration. You can click to
+probe a height, pick two points for a slope, draw an elevation profile,
+and compute RMSE against a reference raster <em>in the browser</em> — so
+a number in the report is a number the demo reproduces live.</p>
+<p><img src="assets/viewer-sample-scene.png"
+alt="The DepthWizard viewer: a height map on the left, a shaded 3D flythrough of eight blocks on the right." />
+<em>The viewer running on its synthetic test scene — blocks of exactly
+known height, so probing a rooftop must read back the number that was
+put there. No trained model is involved in this image.</em></p>
+<p>Behind it, a FastAPI service that writes plain directories in the
+layout the viewer already reads: no database, no queue, nothing to lose
+when a process dies mid-demo. An ONNX export verified against the
+PyTorch checkpoint to within 0.05 m, so it runs with no GPU and no model
+download. And over a hundred offline tests needing neither GPU nor
+network — including one that pins both the original unfreezing failure
+and its fix.</p>
+<h2 id="what-id-tell-someone-starting-this">What I'd tell someone
+starting this</h2>
+<ul>
+<li><strong>Ship a measurable baseline before designing
+anything.</strong> v1 took 28 minutes and anchored every argument that
+followed.</li>
+<li><strong>Write metrics continuously, not at the end.</strong> A crash
+at epoch 21 cost an entire run's worth of conclusions, not nine
+epochs.</li>
+<li><strong>A global average is where errors hide.</strong> Split by the
+axis you'll be judged on before you believe a headline number.</li>
+<li><strong>If you can't reproduce it, don't put it on a slide.</strong>
+That per-class table survived three versions because nobody did the
+arithmetic, and a panel that catches one overclaim discounts everything
+else you said.</li>
+</ul>
+<h2 id="status">Status</h2>
+<p><em>Last updated: 13 September 2026.</em></p>
+<p>v4 is built, tested and verified end-to-end on CPU — a real GeoTIFF
+round trip that preserves its coordinate system pixel-identically, the
+service probed for path traversal, the viewer driven in a headless
+browser against a real prediction directory. <strong>It has not been
+trained yet.</strong> The accuracy numbers above are v1's and v2's; v4's
+are still to be earned. The finals are in December, and I'll add each
+run's results here as they land.</p>
+<hr />
+<p><em>DepthWizard is a team project for SIH 2026. Code: <a
+href="https://github.com/AbhayKale332/DepthWizard">github.com/AbhayKale332/DepthWizard</a></em></p>

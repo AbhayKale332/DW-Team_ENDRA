@@ -23,7 +23,9 @@ from .augment import (
     photometric_jitter, sample_window,
 )
 from .packed import NO_LABEL, PackedStore
-from .preprocess import PreprocSpec, apply_stretch, scene_stretch_bounds
+from .preprocess import (
+    PreprocSpec, apply_stretch, apply_stretch_lut, scene_stretch_bounds,
+)
 
 
 class TileDataset(Dataset):
@@ -54,16 +56,13 @@ class TileDataset(Dataset):
             rng = np.random.default_rng(cfg.seed * 2_654_435_761 + i)
             ti = i % len(self.store)
 
-        rgb, hgt, cls, valid = self.store.get(ti)
         src_gsd = self.store.gsd_m
-        H, W = hgt.shape
-
-        # -- step 2: scene-level radiometric stretch (same op as inference) --
-        if spec.radiometric_stretch:
-            lo, hi = scene_stretch_bounds(rgb, spec.stretch_lo_pct, spec.stretch_hi_pct)
-            rgb = apply_stretch(rgb, lo, hi)
+        H = W = self.store.tile_px
 
         # -- step 3/4: pick the window in SOURCE pixels, then resample --------
+        # Window selection moved *ahead* of the read and the stretch: both used
+        # to run over the whole tile and then have ~90 % of the result cropped
+        # away.  The stretch is pointwise, so cropping first is identical.
         if self.train and rng.random() < cfg.gsd_jitter_p:
             lo_g, hi_g = achievable_gsd_range(
                 H, W, src_gsd, self.s, cfg.gsd_jitter_lo_m, cfg.gsd_jitter_hi_m)
@@ -75,8 +74,18 @@ class TileDataset(Dataset):
             top, left, win, eff = sample_window(H, W, src_gsd, self.s, dst_gsd, rng)
         else:
             top, left, win, eff = center_window(H, W, src_gsd, self.s, dst_gsd)
+
+        rgb, hgt, cls, valid = self.store.get_window(ti, top, left, win)
+
+        # -- step 2: scene-level radiometric stretch (same op as inference) --
+        # Bounds still come from the whole scene (cached per tile); only the
+        # window is mapped through the resulting LUT.
+        if spec.radiometric_stretch:
+            rgb = apply_stretch_lut(
+                rgb, self.store.stretch_lut(ti, spec.stretch_lo_pct, spec.stretch_hi_pct))
+
         rgb, hgt, cls, valid = crop_and_scale(rgb, hgt, cls, valid,
-                                              top, left, win, self.s)
+                                              0, 0, win, self.s)
 
         # -- geometric + photometric augmentation ---------------------------
         if self.train:

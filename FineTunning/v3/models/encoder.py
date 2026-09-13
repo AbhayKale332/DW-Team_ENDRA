@@ -54,9 +54,9 @@ class DINOv3Encoder(nn.Module):
         self.idx = idx
 
         self.blocks = self._find_blocks()
+        self._ckpt = bool(cfg.grad_checkpoint_encoder)
         self.frozen = True
         self.set_frozen(True)
-        self._ckpt = bool(cfg.grad_checkpoint_encoder)
         print(f"[model] encoder={cfg.encoder_model_id} hidden={self.hidden} "
               f"patch={self.patch} blocks={len(self.blocks) if self.blocks else '?'} "
               f"taps={self.idx}")
@@ -84,9 +84,30 @@ class DINOv3Encoder(nn.Module):
             p.requires_grad_(not self.frozen)
         if self.frozen:
             self.model.eval()
+        else:
+            # Toggled here, once, instead of inside forward(): HF's
+            # `gradient_checkpointing_enable` walks every submodule of the ViT
+            # and rebuilds its forwards, and it was being called on every
+            # training step.  It is also off by default on a big card — see
+            # `grad_checkpoint_encoder`, which trades ~35 % throughput for VRAM
+            # there is no shortage of on an 80 GB H100.
+            self._set_grad_checkpointing(self._ckpt)
         n = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
         print(f"[model] encoder {'FROZEN' if frozen else 'TRAINABLE'} "
               f"({n / 1e6:.1f}M grad params)")
+
+    def _set_grad_checkpointing(self, on: bool) -> None:
+        fn = ("gradient_checkpointing_enable" if on
+              else "gradient_checkpointing_disable")
+        try:
+            if on:
+                self.model.gradient_checkpointing_enable(
+                    gradient_checkpointing_kwargs={"use_reentrant": False})
+            else:
+                self.model.gradient_checkpointing_disable()
+            print(f"[model] encoder gradient checkpointing {'ON' if on else 'OFF'}")
+        except Exception as e:  # noqa: BLE001
+            print(f"[model] {fn} unavailable: {e}")
 
     def train(self, mode: bool = True):
         super().train(mode)
@@ -165,11 +186,5 @@ class DINOv3Encoder(nn.Module):
                         for h in self._hidden_states(pixel_values)]
             return [o.detach() for o in outs]
 
-        if self._ckpt and self.training:
-            # HF exposes gradient checkpointing on the module itself; enabling it
-            # here (rather than hand-rolling `checkpoint()` around blocks) keeps
-            # hidden_states plumbing intact.
-            self.model.gradient_checkpointing_enable(
-                gradient_checkpointing_kwargs={"use_reentrant": False})
         return [self._tokens_to_map(h, hp, wp).float()
                 for h in self._hidden_states(pixel_values)]

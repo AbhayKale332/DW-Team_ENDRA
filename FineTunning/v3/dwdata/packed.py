@@ -123,6 +123,10 @@ class PackedStore:
         # memmaps are opened lazily and per-process, so DataLoader workers each
         # get their own handles instead of inheriting a half-consumed one.
         self._mm: dict[tuple[int, str], np.ndarray] = {}
+        # Per-tile stretch LUTs, memoised per process.  The bounds depend only on
+        # the tile, never on the crop, so recomputing them every __getitem__ was
+        # pure waste (~45 ms of a ~180 ms sample).
+        self._lut: dict[int, np.ndarray] = {}
 
     def __len__(self) -> int:
         return len(self._map)
@@ -143,9 +147,49 @@ class PackedStore:
         val = np.asarray(self._arr(si, "val")[r])
         return rgb, hgt, cls, val
 
+    def rgb_view(self, i: int) -> np.ndarray:
+        """Read-only memmap view of one tile's RGB — no copy, no float cast.
+
+        Used for the per-scene stretch bounds, which need the whole tile even
+        though the crop that follows needs only a window of it.
+        """
+        si, r = self._map[i]
+        return self._arr(si, "rgb")[r]
+
+    def get_window(self, i: int, top: int, left: int, win: int):
+        """Just the `win` x `win` window of one tile.
+
+        `get()` materialises all four full-tile planes (~9 MB for a 1024 px
+        GAMUS tile) to then throw most of it away one crop later; at 12 000
+        crops an epoch that dominated the DataLoader.  Slicing the memmap first
+        touches only the pages the crop actually needs.
+        """
+        si, r = self._map[i]
+        sl = (slice(top, top + win), slice(left, left + win))
+        rgb = np.asarray(self._arr(si, "rgb")[r][sl])
+        hgt = np.asarray(self._arr(si, "hgt")[r][sl], dtype=np.float32)
+        cls = np.asarray(self._arr(si, "cls")[r][sl])
+        val = np.asarray(self._arr(si, "val")[r][sl])
+        return rgb, hgt, cls, val
+
+    def stretch_lut(self, i: int, lo_pct: float, hi_pct: float) -> np.ndarray:
+        """Cached (256, 3) uint8 stretch table for tile `i`.
+
+        Bounds are a property of the scene, so they are computed once per tile
+        per process and reused for every crop drawn from it afterwards.
+        """
+        lut = self._lut.get(i)
+        if lut is None:
+            from .preprocess import scene_stretch_bounds, stretch_lut as _mk
+
+            lo, hi = scene_stretch_bounds(self.rgb_view(i), lo_pct, hi_pct)
+            lut = self._lut[i] = _mk(lo, hi)
+        return lut
+
     def __getstate__(self):
         d = dict(self.__dict__)
         d["_mm"] = {}                # never pickle memmaps into a worker
+        d["_lut"] = {}               # nor a cache built in the parent
         return d
 
 
