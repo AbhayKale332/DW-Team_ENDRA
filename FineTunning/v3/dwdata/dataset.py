@@ -30,12 +30,19 @@ from .preprocess import (
 
 class TileDataset(Dataset):
     def __init__(self, cfg, store: PackedStore, spec: PreprocSpec, src: str,
-                 train: bool, length: int | None = None):
+                 train: bool, length: int | None = None,
+                 gpu_augment: bool = False):
         self.cfg = cfg
         self.store = store
         self.spec = spec
         self.src = src
         self.train = train
+        # When the trainer does the jitter + normalisation on the card, the
+        # worker hands over raw uint8 HWC (`image_u8`) and skips both.  That
+        # removes ~22 ms of the ~65 ms this method costs and cuts the
+        # host-to-device payload from 3.1 MB to 0.79 MB per sample.  Default
+        # off so a bare `TileDataset(...)` (tests, notebooks) is unchanged.
+        self.gpu_augment = bool(gpu_augment)
         self.s = int(cfg.tile_size)
         # A train "epoch" is a fixed number of random crops; a val epoch is one
         # deterministic centre crop per tile.
@@ -51,7 +58,13 @@ class TileDataset(Dataset):
             # epoch (v2 seeded off the tile index, which froze one augmented
             # copy of the dataset for the whole run).
             rng = np.random.default_rng()
-            ti = int(rng.integers(0, len(self.store)))
+            # …but the *tile* comes from the index the sampler drew, not from a
+            # second throw of the dice.  Same distribution (the weights are
+            # uniform within a store), and it is the only version that lets the
+            # page cache and the per-tile LUT cache do anything: re-rolling the
+            # tile made every crop an independent random read into 27 GB of
+            # shards, which on network-backed storage is the whole ballgame.
+            ti = i % len(self.store)
         else:
             rng = np.random.default_rng(cfg.seed * 2_654_435_761 + i)
             ti = i % len(self.store)
@@ -91,18 +104,23 @@ class TileDataset(Dataset):
         if self.train:
             k, flip = int(rng.integers(0, 4)), bool(rng.random() < 0.5)
             rgb, hgt, cls, valid = (dihedral(a, k, flip) for a in (rgb, hgt, cls, valid))
-            if rng.random() < cfg.photo_p:
+            # The photometric half runs on the GPU in `gpu_augment` mode — see
+            # dwdata/gpu_aug.py.  It is the single most expensive thing in this
+            # method and it is pure pointwise arithmetic, so it has no business
+            # on a CPU core that could be fetching the next crop instead.
+            if not self.gpu_augment and rng.random() < cfg.photo_p:
                 rgb = photometric_jitter(rgb, cfg, rng)
 
         # -- targets ---------------------------------------------------------
         valid = valid & np.isfinite(hgt) & (hgt >= 0.0) & (hgt <= cfg.max_valid_height_m)
         hgt = np.where(valid, hgt, 0.0).astype(np.float32)
-        seg = np.where(cls == NO_LABEL, SEG_IGNORE_INDEX, cls).astype(np.int64)
+        # `cls` travels as uint8 and is widened to int64 on the device.  At
+        # 512 px an int64 label map is 2 MB — more wire than the image itself,
+        # for eight distinct values.
+        seg = np.where(cls == NO_LABEL, SEG_IGNORE_INDEX, cls).astype(np.uint8)
         seg = np.clip(seg, 0, SEG_IGNORE_INDEX)
 
-        return {
-            "image": torch.from_numpy(spec.normalise(rgb)),
-            "rgb_u8": torch.from_numpy(np.ascontiguousarray(rgb)),
+        out = {
             "target": torch.from_numpy(hgt).unsqueeze(0),
             "valid": torch.from_numpy(np.ascontiguousarray(valid)).unsqueeze(0),
             "cls": torch.from_numpy(np.ascontiguousarray(seg)),
@@ -110,6 +128,17 @@ class TileDataset(Dataset):
             "src": self.src,
             "stem": self.store.stems[ti] if ti < len(self.store.stems) else str(ti),
         }
+        if self.gpu_augment:
+            # HWC uint8: permuting this to NCHW on the device lands directly in
+            # `channels_last`, which is the layout the model wants anyway.
+            out["image_u8"] = torch.from_numpy(np.ascontiguousarray(rgb))
+        else:
+            out["image"] = torch.from_numpy(spec.normalise(rgb))
+            out["cls"] = out["cls"].long()
+            # Only the CPU path carries the export copy; the trainer never sent
+            # it to the device, and in gpu_augment mode `image_u8` *is* it.
+            out["rgb_u8"] = torch.from_numpy(np.ascontiguousarray(rgb))
+        return out
 
 
 class FullTileDataset(Dataset):

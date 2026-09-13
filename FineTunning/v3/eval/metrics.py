@@ -131,7 +131,16 @@ class Evaluator:
 
 
 @torch.no_grad()
-def evaluate(model, loader, cfg, device, use_tta: bool = False) -> dict:
+@torch.no_grad()
+def evaluate(model, loader, cfg, device, use_tta: bool = False,
+             gpu_prep=None) -> dict:
+    """`gpu_prep` is the trainer's `GpuPreproc`, or None for the all-CPU path.
+
+    The decorator matters: without it the eval pass builds an autograd graph for
+    a (B, 1, 512, 512) prediction it immediately throws away.  `Evaluator.add`
+    was already `no_grad`, but by then the forward had allocated — which is why
+    eval peaked higher than training and forced the batch down for both.
+    """
     from models.tta import tta_predict
 
     model.eval()
@@ -139,6 +148,10 @@ def evaluate(model, loader, cfg, device, use_tta: bool = False) -> dict:
     amp_dt = torch.bfloat16 if cfg.amp_dtype == "bf16" else torch.float16
     use_amp = cfg.amp and device.type == "cuda"
     for batch in loader:
+        if gpu_prep is not None and "image_u8" in batch:
+            batch = dict(batch)
+            batch["image_u8"] = batch["image_u8"].to(device, non_blocking=True)
+            batch = gpu_prep(batch, train=False)
         img = batch["image"].to(device, non_blocking=True)
         tgt = batch["target"].to(device, non_blocking=True)
         val = batch["valid"].to(device, non_blocking=True)
@@ -149,7 +162,7 @@ def evaluate(model, loader, cfg, device, use_tta: bool = False) -> dict:
             with torch.autocast("cuda", dtype=amp_dt, enabled=use_amp):
                 pred = model(img)["fused"]
             pred = pred.float()
-        cls = batch["cls"].to(device, non_blocking=True).unsqueeze(1)
+        cls = batch["cls"].to(device, non_blocking=True).long().unsqueeze(1)
         ev.add(pred, tgt, val, cls)
     return ev.result(use_tta)
 

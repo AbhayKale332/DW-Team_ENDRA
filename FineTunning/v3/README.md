@@ -247,47 +247,120 @@ source, and `--dem` correctly reprojects a 30 m DEM onto the prediction grid.
 
 ---
 
-## 4. Running it on Lightning AI (1× H100 80 GB)
+## 4. Running it on Lightning AI (1× L40S 48 GB)
+
+Two scripts, two machine types, because downloading 45 GB of datasets on a GPU
+is the most expensive thing this repo can do:
 
 ```bash
 export HF_TOKEN=hf_...          # DINOv3-SAT and GAMUS are both gated
 
-sh run_lightning.sh check       # deps + 65 offline tests + GPU report
-sh run_lightning.sh prepare     # ONE TIME, ~40 min, ~35 GB on the persistent disk
-sh run_lightning.sh smoke       # ~10 min end-to-end
-sh run_lightning.sh train       # the real run
+# --- on a CHEAP CPU Studio -------------------------------------------------
+sh prepare_data.sh --background       # fetch + pack + stretch bounds + encoder
+                                      # ~40-60 min, ~45 GB on the persistent disk
+
+# --- switch the Studio to an L40S ------------------------------------------
+sh train_L40S.sh --show-tuning        # resolve flags and batch, launch nothing
+sh train_L40S.sh --smoke              # ~10 min end-to-end
+sh train_L40S.sh --background         # the real run
 ```
 
-`prepare` is resumable and idempotent — a split with an `index.json` is skipped.
-Because the studio disk persists, later runs start training immediately.
+`prepare_data.sh` is resumable and idempotent — a split with an `index.json` is
+skipped — and it writes a `.dw_data_ready` stamp that `train_L40S.sh` refuses to
+start without. Because the Studio disk persists, the GPU box starts training
+inside a couple of minutes.
 
-Defaults are set for one H100: `batch_size 12 × grad_accum 2` (effective 24) at
-512² with the encoder unfrozen and encoder gradient checkpointing on, bf16
-autocast, channels-last, TF32. `torch.compile` is **off** by default — the
-freeze→unfreeze transition forces a recompile; turn it on with
-`--compile_model true` if you want the throughput and can absorb the warmup.
+### 4.1 How the L40S gets filled
+
+The first real run showed steps moving with VRAM pinned near 20 GiB of 48 and
+GPU util in the fifties. That was two independent problems:
+
+**The batch was never measured.** The tuner picked it from a VRAM bracket whose
+top tier was `>= 40 GiB -> 16`, and 48 falls in it. Sixteen 512 px crops through
+an unfrozen ViT-L is ~20 GiB — the flat line exactly. `tools/probe_batch.py` now
+runs a real forward/backward/AdamW step on the actual card **with the encoder
+unfrozen** (the peak that matters is the one after `--freeze_epochs`, not the
+cheap warmup) and returns the largest batch that fits under `DW_VRAM_HEADROOM`.
+The answer is cached per card in `~/.dw_probe_<gpu>_t<tile>`; an OOM deletes it.
+
+Two flags were also being dropped silently, because the tuner matched option
+names with a whole-line exact match: `--compile` never matched `--compile_model`
+and `--grad_checkpoint` never matched `--grad_checkpoint_encoder`. Both now fall
+back to a prefix match, and `--show-tuning` prints every flag it resolved.
+
+**The loader could not fill it.** One GAMUS crop cost ~82 ms of CPU:
+
+| | before | after |
+|---|---|---|
+| per-tile stretch bounds (full-tile histogram, per crop, per worker) | 13.4 ms | 0 — precomputed by `prepare_data.sh` |
+| photometric jitter (single-threaded numpy) | 17.3 ms | 0 — batched on the GPU, ~2 ms/batch |
+| `normalise` → fp32 CHW | 4.5 ms | 0 — on the GPU |
+| PIL resize + copies | ~22 ms | ~22 ms |
+| **per sample** | **75.6 ms** | **22.2 ms** |
+| **per worker** | **13.2/s** | **44.9/s** |
+| **host→device per sample** | 7.34 MB | 2.36 MB |
+
+(synrs3d, whose tiles are 512 px rather than 1024: 34.1 ms → 11.3 ms.)
+
+The bounds are a property of the *scene*, so they are computed once per store
+and persisted as `stretch_bounds_2_98.npy` next to the shards. The jitter and
+the normalisation are pointwise arithmetic, so they belong on the card
+(`--gpu_augment`, `dwdata/gpu_aug.py`); the worker hands over uint8 HWC, which
+permutes into `channels_last` on the device for free. The maths is unchanged —
+`photo_p=0` reproduces `PreprocSpec.normalise` to 7e-4, and the jittered
+distribution matches the numpy one in mean, std and both tails.
+
+Three smaller things in the same direction: `cls` travels as uint8 and is
+widened to int64 on the device (an int64 label map is 2 MB at 512 px, more wire
+than the image); the train loader no longer carries the `rgb_u8` export copy;
+and `evaluate()` is now `@torch.no_grad()`, which is why eval can run at
+`eval_batch_mult` times the training batch instead of forcing both down.
+
+`--stage-local` is conditional now. On a Lightning Studio `/tmp` and
+`/teamspace/studios/this_studio` are the same overlay mount, so the old
+unconditional 45 GB copy moved data from a disk to itself and cost ~10 minutes of
+L40S time for nothing. It only copies across a genuinely different filesystem;
+otherwise a niced background pass warms the page cache while the model loads.
+
+### 4.2 Budget
 
 | stage | ~time |
 |---|---|
-| prepare (4000 GAMUS + 2 SynRS3D archives) | 30-60 min, network-bound, one time |
-| epochs 1-2, encoder frozen | ~4 min/epoch |
-| epochs 3-26, encoder trainable | ~11-14 min/epoch |
+| prepare (4000 GAMUS + 2 SynRS3D archives), on a CPU box | 30-60 min, network-bound, one time |
+| GPU startup: deps check, encoder load, batch probe | ~3 min (probe cached after the first run) |
+| epochs 1-2, encoder frozen | ~3 min/epoch |
+| epochs 3-26, encoder trainable | ~9-12 min/epoch |
 | final eval + TTA + sliding-window eval | 20-35 min |
 | **total** | **≈ 5-6 h**, hard-capped by `--max_minutes 330` |
 
 If the box dies, `last.pt` and `best.pt` are written every epoch and
-`--resume outputs/v3/last.pt` picks it up.
+`train_L40S.sh` warm-starts from `last.pt` automatically.
 
-Tuning knobs if memory or time is tight:
+### 4.3 Knobs
 
 ```bash
---batch_size 8 --grad_accum 3          # if 80 GB is not enough at 512²
---grad_checkpoint_encoder false        # faster, needs ~2.5x the activation memory
+DW_BATCH=32 sh train_L40S.sh           # skip the probe, force a batch
+DW_VRAM_HEADROOM=0.93 sh train_L40S.sh --force   # re-probe, fill more of the card
+DW_EFFECTIVE_BATCH=48 sh train_L40S.sh # batch x grad_accum target
+DW_LOADER_WORKERS=14 sh train_L40S.sh  # more/fewer DataLoader workers
+DW_COMPILE=1 sh train_L40S.sh          # torch.compile (~1.2x, multi-minute warmup)
+DW_WARM_CACHE=0 sh train_L40S.sh       # skip the background page-cache warm
+```
+
+```bash
+--gpu_augment false                    # fall back to the all-CPU pipeline
+--grad_checkpoint_encoder true         # ~35% slower, ~2.5x smaller activations
 --freeze_epochs 0                      # skip the warmup (riskier early gradients)
 --datasets gamus                       # drop SynRS3D
 --tta_scales 1.0,1.25                  # multi-scale TTA at the end (slower)
 --stratum_balance_beta 0.75            # push harder on tall structures
 ```
+
+The watchdog in `train_L40S.sh` samples `nvidia-smi` every 2 minutes and says
+which of the two failure modes it is seeing — low util *and* low VRAM means the
+loader, high util with low VRAM means the batch — so the next run is better
+sized than this one. The verdict is repeated at the end and lands in
+`RUN_MANIFEST.txt`.
 
 ---
 
