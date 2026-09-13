@@ -74,12 +74,17 @@ def build_loaders(cfg, spec):
         print(f"[data] no dedicated val split; using a slice of {val_name}/train")
 
     n_val = min(cfg.val_tiles, len(val_store))
+    # Val runs every `eval_every` epochs, so it does not need — and must not
+    # hold — a second full set of persistent workers: with num_workers sized for
+    # the GPU (20+) that doubled the process count and had the two pools
+    # fighting for the same cores through every training epoch.
+    n_val_workers = min(4, cfg.num_workers)
     dl_va = DataLoader(
         TileDataset(cfg, val_store, spec, val_name, train=False, length=n_val),
         batch_size=max(1, cfg.batch_size), shuffle=False,
-        num_workers=cfg.num_workers, pin_memory=True,
-        persistent_workers=cfg.num_workers > 0,
-        prefetch_factor=cfg.prefetch_factor if cfg.num_workers else None,
+        num_workers=n_val_workers, pin_memory=True,
+        persistent_workers=False,
+        prefetch_factor=cfg.prefetch_factor if n_val_workers else None,
     )
     print(f"[data] val: {n_val} tiles from {val_name}  "
           f"({len(dl_tr)} train steps/epoch)")
