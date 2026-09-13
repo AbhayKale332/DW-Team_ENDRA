@@ -37,6 +37,23 @@ def main() -> None:
 
     if args.help:
         print(__doc__)
+        # Then the *real* option list.  `--help` used to print only the
+        # docstring, so anything parsing it (shell_scripts/train_h100.sh's
+        # autotuner) saw six option names in prose and could not tell which of
+        # them take a value — it silently dropped every flag it tried to set and
+        # the run kept config.py's 16 GB-card defaults on an 80 GB card.
+        try:
+            from config import Config
+            from dataclasses import fields
+            print("training options (config.py):\n")
+            for f in fields(Config()):
+                cur = getattr(Config(), f.name)
+                if isinstance(cur, tuple):
+                    continue
+                meta = "BOOL" if isinstance(cur, bool) else type(cur).__name__.upper()
+                print(f"  --{f.name} {meta}    (default: {cur!r})")
+        except Exception as e:  # noqa: BLE001
+            print(f"  (could not introspect config.py: {e})")
         return
     if not args.skip_install:
         install()

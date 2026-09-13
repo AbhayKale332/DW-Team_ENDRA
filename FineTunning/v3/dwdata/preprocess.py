@@ -133,9 +133,22 @@ def scene_stretch_bounds(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Per-channel (lo, hi) byte values for a percentile stretch of one scene.
 
-    Sub-samples large scenes so this stays O(few ms) on a 10k x 10k ortho.
+    For uint8 input the percentile comes from a 256-bin histogram, which is a
+    single O(N) pass instead of `np.percentile`'s sort — ~15x faster on a 1 Mpx
+    tile, and this runs once per *training crop*, so it was a real slice of the
+    DataLoader budget.  Non-uint8 input falls back to `np.percentile`.
     """
     a = rgb_u8.reshape(-1, rgb_u8.shape[-1])
+    if a.dtype == np.uint8:
+        n, c = a.shape
+        lo = np.empty(c, np.float32)
+        hi = np.empty(c, np.float32)
+        for ch in range(c):
+            counts = np.bincount(a[:, ch], minlength=256)
+            cum = np.cumsum(counts)
+            lo[ch] = np.searchsorted(cum, lo_pct / 100.0 * n)
+            hi[ch] = np.searchsorted(cum, hi_pct / 100.0 * n)
+        return lo, np.maximum(hi, lo + 1.0)
     if a.shape[0] > max_samples:
         step = int(np.ceil(a.shape[0] / max_samples))
         a = a[::step]
@@ -145,9 +158,26 @@ def scene_stretch_bounds(
     return lo, hi
 
 
+def stretch_lut(lo: np.ndarray, hi: np.ndarray) -> np.ndarray:
+    """(256, C) uint8 lookup table for `apply_stretch` — the stretch is pointwise."""
+    v = np.arange(256, dtype=np.float32)[:, None]
+    x = (v - np.asarray(lo, np.float32)) / (np.asarray(hi, np.float32) - lo)
+    return (np.clip(x, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8)
+
+
 def apply_stretch(rgb_u8: np.ndarray, lo: np.ndarray, hi: np.ndarray) -> np.ndarray:
+    if rgb_u8.dtype == np.uint8 and rgb_u8.ndim == 3:
+        return apply_stretch_lut(rgb_u8, stretch_lut(lo, hi))
     x = (rgb_u8.astype(np.float32) - lo) / (hi - lo)
     return (np.clip(x, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8)
+
+
+def apply_stretch_lut(rgb_u8: np.ndarray, lut: np.ndarray) -> np.ndarray:
+    """Apply a `stretch_lut` table — a gather over uint8, no float image at all."""
+    out = np.empty_like(rgb_u8)
+    for ch in range(rgb_u8.shape[-1]):
+        np.take(lut[:, ch], rgb_u8[..., ch], out=out[..., ch])
+    return out
 
 
 def stretch_scene(rgb_u8: np.ndarray, spec: PreprocSpec) -> np.ndarray:

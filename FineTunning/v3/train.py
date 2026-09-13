@@ -142,8 +142,15 @@ def build_optimizer(cfg: Config, model: DepthWizardNetV3, with_encoder: bool):
     return opt, base
 
 
-def _to_device(batch: dict, device) -> dict:
-    return {k: (v.to(device, non_blocking=True) if torch.is_tensor(v) else v)
+# `rgb_u8` is carried for the qualitative export, which runs off the val
+# datasets, never off a training batch — shipping it to the GPU every step was
+# ~25 MB/step of pure H2D traffic.
+_HOST_ONLY = ("rgb_u8",)
+
+
+def _to_device(batch: dict, device, skip: tuple = _HOST_ONLY) -> dict:
+    return {k: (v.to(device, non_blocking=True)
+                if (torch.is_tensor(v) and k not in skip) else v)
             for k, v in batch.items()}
 
 
@@ -224,6 +231,9 @@ def main() -> None:
         model.train()
         core.encoder.train()
         opt.zero_grad(set_to_none=True)
+        # Built once per epoch: the old inline comprehension walked every
+        # parameter of a 300 M-param ViT-L on every optimiser step.
+        trainable = [p for p in model.parameters() if p.requires_grad]
         run_loss, nb = 0.0, 0
         n_steps = max(1, len(dl_tr))
 
@@ -242,19 +252,24 @@ def main() -> None:
             with ctx:
                 out = model(batch["image"])
             loss, stats = compute_losses(out, batch, cfg, balancer)
-            if not math.isfinite(stats["loss"]):
-                print(f"  [e{epoch} s{step}] non-finite loss — skipping batch")
-                opt.zero_grad(set_to_none=True)
-                continue
 
             (scaler.scale(loss / cfg.grad_accum) if scaler.is_enabled()
              else loss / cfg.grad_accum).backward()
 
+            # The non-finite guard needs one device sync, so it runs *after* the
+            # backward is queued rather than between forward and backward: by
+            # then the GPU has a full step's work in flight and the stall costs
+            # nothing.  Grads from a bad batch are dropped by the zero_grad.
+            loss_v = float(stats["loss"])
+            if not math.isfinite(loss_v):
+                print(f"  [e{epoch} s{step}] non-finite loss — skipping batch")
+                opt.zero_grad(set_to_none=True)
+                continue
+
             if (step + 1) % cfg.grad_accum == 0:
                 if scaler.is_enabled():
                     scaler.unscale_(opt)
-                nn.utils.clip_grad_norm_(
-                    [p for p in model.parameters() if p.requires_grad], cfg.grad_clip)
+                nn.utils.clip_grad_norm_(trainable, cfg.grad_clip)
                 if scaler.is_enabled():
                     scaler.step(opt)
                     scaler.update()
@@ -264,15 +279,17 @@ def main() -> None:
                 if ema is not None:
                     ema.update(core)
 
-            run_loss += stats["loss"]
+            run_loss += loss_v
             nb += 1
             if step % 25 == 0:
+                # Only here do the remaining stats get pulled off the device.
+                st = {k: float(v) for k, v in stats.items()}
                 el = (time.time() - t0) / 60
-                print(f"  e{epoch} s{step}/{n_steps} loss={stats['loss']:.3f} "
-                      f"(l1={stats['l1']:.2f} sil={stats['silog']:.2f} "
-                      f"nrm={stats['normal']:.3f} flat={stats['flat']:.3f} "
-                      f"bin={stats['bin']:.2f} seg={stats['seg']:.2f} "
-                      f"a={stats['alpha']:.2f}) lr={opt.param_groups[0]['lr']:.2e} "
+                print(f"  e{epoch} s{step}/{n_steps} loss={st['loss']:.3f} "
+                      f"(l1={st['l1']:.2f} sil={st['silog']:.2f} "
+                      f"nrm={st['normal']:.3f} flat={st['flat']:.3f} "
+                      f"bin={st['bin']:.2f} seg={st['seg']:.2f} "
+                      f"a={st['alpha']:.2f}) lr={opt.param_groups[0]['lr']:.2e} "
                       f"{el:.0f}min", flush=True)
             if (time.time() - t0) / 60 > cfg.max_minutes:
                 print(f"  wall-clock cap {cfg.max_minutes:.0f} min hit")

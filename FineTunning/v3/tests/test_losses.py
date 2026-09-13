@@ -109,8 +109,11 @@ def test_compute_losses_is_finite_and_backprops():
     assert torch.isfinite(loss)
     loss.backward()
     assert feat.grad is not None and torch.isfinite(feat.grad).all()
+    # stats are detached 0-d tensors, not floats: the trainer syncs them only on
+    # the steps it logs.
     for k in ("l1", "silog", "grad", "normal", "flat", "bin", "seg"):
-        assert np.isfinite(stats[k])
+        assert torch.is_tensor(stats[k]) and not stats[k].requires_grad
+        assert np.isfinite(float(stats[k]))
 
 
 def test_all_invalid_batch_is_zero_not_nan():
