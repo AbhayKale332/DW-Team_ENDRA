@@ -99,9 +99,11 @@ function buildMesh() {
   loader.load(store.height, hTex => {
     // read the 16-bit-ish PNG back to a Float32 displacement grid
     const img = hTex.image;
-    // meta.size_px may be a scalar or an [w, h] array
-    const sp = Array.isArray(meta.size_px) ? meta.size_px[0] : meta.size_px;
-    const world = (typeof sp === 'number' && isFinite(sp)) ? sp : img.width;
+    // 1 world unit == 1 pixel of the prediction grid, which is what the
+    // metres -> pixel conversion below assumes, so take the extents straight
+    // from the height PNG.  meta.size_px is only a sanity check (and its [w, h]
+    // vs [h, w] order differs between v2 and v3 exports).
+    const worldX = img.width, worldZ = img.height;
     const c = document.createElement('canvas');
     c.width = img.width; c.height = img.height;
     const ctx = c.getContext('2d');
@@ -117,7 +119,7 @@ function buildMesh() {
     const MAX_SEG = 2000;
     const segX = Math.min(img.width - 1, MAX_SEG);
     const segY = Math.min(img.height - 1, MAX_SEG);
-    const geo = new THREE.PlaneGeometry(world, world, segX, segY);
+    const geo = new THREE.PlaneGeometry(worldX, worldZ, segX, segY);
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position;
     const vertsX = segX + 1;
