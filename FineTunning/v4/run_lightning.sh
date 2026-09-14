@@ -3,6 +3,7 @@
 #
 #   bash run_lightning.sh check            # deps + offline tests + GPU report
 #   bash run_lightning.sh prepare          # one-time data pack (persistent disk)
+#   bash run_lightning.sh stage            # copy the packed shards to local NVMe
 #   bash run_lightning.sh india            # optional: Indian imagery for the
 #                                        #   mean-teacher branch (see README §2)
 #   bash run_lightning.sh smoke            # ~10 min end-to-end sanity run
@@ -31,6 +32,14 @@ cd "$(dirname "$0")"
 CMD="${1:-train}"
 if [ $# -gt 0 ]; then shift; fi   # `shift || true` is fatal in dash
 OUT="${DW_OUTPUT_DIR:-outputs/v4}"
+# Where prepare_data.py wrote the shards, and where training should read them
+# from.  On a Lightning Studio $DW_DATA_ROOT is network-backed persistent storage
+# and $DW_LOCAL_DATA is the box's own NVMe; the v3 run that produced the good
+# checkpoint read from /tmp, and the earlier attempts that read straight off the
+# network share are the ones whose guard log says "STARVED".  `stage` makes that
+# copy explicit instead of leaving it to whoever set the run up.
+DATA="${DW_DATA_ROOT:-data}"
+LOCAL_DATA="${DW_LOCAL_DATA:-/tmp/DepthWizard-data}"
 
 # Some images ship only `python3`; a venv ships only `python`.  Pick whichever
 # exists rather than assuming, because getting this wrong fails at the last line
@@ -73,12 +82,49 @@ PY
     $PY prepare_data.py --datasets india_unlabeled "$@"
     ;;
 
+  stage)
+    # Random 512 px crops out of 27 GB of shards are small random reads.  On
+    # local NVMe the page cache absorbs them; on a network mount they are the
+    # whole ballgame, and no number of workers fixes it.
+    if [ ! -d "$DATA" ]; then
+      echo "no packed data at $DATA — run 'bash run_lightning.sh prepare' first"; exit 1
+    fi
+    mkdir -p "$LOCAL_DATA"
+    echo "staging $DATA -> $LOCAL_DATA (resumable)"
+    if command -v rsync >/dev/null 2>&1; then
+      rsync -a --info=progress2 "$DATA"/ "$LOCAL_DATA"/
+    else
+      cp -au "$DATA"/. "$LOCAL_DATA"/
+    fi
+    df -h "$LOCAL_DATA" | tail -1
+    echo "now: bash run_lightning.sh train --data_root $LOCAL_DATA"
+    ;;
+
   smoke)
     $PY train.py --smoke --datasets gamus "$@"
     ;;
 
   train)
-    # Defaults are tuned for 1x H100 80 GB / ~24 vCPU. See README §5.
+    # Defaults are tuned for 1x H100 80 GB / ~24 vCPU — batch 24 with no gradient
+    # checkpointing (~58 GB), 16 loader workers handing over uint8, bf16 + TF32 +
+    # flash SDPA.  See README §5 for where each number came from.
+    #
+    # expandable_segments is what the v3 OOM traceback asked for by name: that
+    # run drifted from 70 GB to 78 GB over four epochs and died on a 768 MB
+    # allocation with 2.36 GB reserved-but-unallocated.  train.py sets it too;
+    # exporting it here covers anything that imports torch before train.py does.
+    export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
+    # Only auto-use the local copy if it actually holds a packed store — an
+    # empty or half-deleted /tmp/DepthWizard-data must not silently become
+    # "no datasets found".  DW_NO_AUTOSTAGE=1 opts out entirely.
+    if [ -z "${DW_NO_AUTOSTAGE:-}" ] && \
+       [ -n "$(find "$LOCAL_DATA" -name index.json -print -quit 2>/dev/null)" ]; then
+      case " $* " in
+        *" --data_root "*) ;;
+        *) echo "[run] using locally staged shards at $LOCAL_DATA"
+           set -- --data_root "$LOCAL_DATA" "$@" ;;
+      esac
+    fi
     $PY train.py "$@"
     ;;
 
@@ -103,6 +149,6 @@ PY
     ;;
 
   *)
-    echo "usage: bash run_lightning.sh {check|prepare|india|smoke|train|predict|onnx|serve|report} [flags]"
+    echo "usage: bash run_lightning.sh {check|prepare|stage|india|smoke|train|predict|onnx|serve|report} [flags]"
     exit 1;;
 esac

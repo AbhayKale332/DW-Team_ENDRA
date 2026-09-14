@@ -1,0 +1,21 @@
+{
+  "encoder_model_id": "facebook/dinov3-vitl16-pretrain-sat493m",
+  "mean": [
+    0.43,
+    0.411,
+    0.296
+  ],
+  "std": [
+    0.213,
+    0.156,
+    0.143
+  ],
+  "canonical_gsd_m": 0.5,
+  "tile_size": 512,
+  "patch": 16,
+  "radiometric_stretch": true,
+  "stretch_lo_pct": 2.0,
+  "stretch_hi_pct": 98.0,
+  "target": "nDSM_agl_metres",
+  "version": "v3"
+}

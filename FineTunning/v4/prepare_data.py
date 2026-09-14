@@ -81,6 +81,44 @@ def _token(explicit: str = "") -> str | None:
 # ---------------------------------------------------------------------
 # GAMUS
 # ---------------------------------------------------------------------
+def _gamus_file_list(repo: str, token, staged: Path, pre: str, suf: str) -> list[str]:
+    """Repo file listing, from the Hub or — failing that — from the staged copy.
+
+    `list_repo_files` is an API call, so with `HF_HUB_OFFLINE=1` it raises and
+    takes the whole offline pack down with it.  That matters because offline is
+    the *point* of the two-stage runbook: staging every tile with one bulk
+    `snapshot_download` and then packing without touching the network is what
+    avoids ~13 000 individual requests, the 429s they earn partway through, and
+    the "skip: No such file" lines that let v3 write a gamus/val store holding
+    129 of 400 tiles and still call it done.
+
+    So when the Hub is unreachable — offline, rate-limited, or simply down — fall
+    back to listing what the staging directory actually holds.  A pack built
+    from that is a pack of exactly the tiles on disk, which is the honest answer
+    to "what do we have", and `prepare_data.sh` gates the READY stamp on the
+    resulting yield.
+    """
+    from huggingface_hub import HfApi
+
+    def from_disk() -> list[str]:
+        rels = (str(q.relative_to(staged)) for q in staged.rglob(f"*{suf}"))
+        return sorted(r for r in rels if r.startswith(pre))
+
+    try:
+        return list(HfApi(token=token).list_repo_files(repo, repo_type="dataset"))
+    except Exception as e:  # noqa: BLE001
+        local = from_disk()
+        if not local:
+            raise RuntimeError(
+                f"cannot list {repo} ({type(e).__name__}: {e}) and nothing is staged "
+                f"under {staged}. Run the fetch stage first, or unset "
+                f"HF_HUB_OFFLINE to list the repo online."
+            ) from e
+        print(f"[gamus] hub listing unavailable ({type(e).__name__}) — using the "
+              f"{len(local)} tiles staged under {staged}")
+        return local
+
+
 def prepare_gamus(root: Path, split: str, n_tiles: int, token, force: bool,
                   repo: str, workers: int = 12) -> None:
     from huggingface_hub import HfApi, hf_hub_download
@@ -92,9 +130,11 @@ def prepare_gamus(root: Path, split: str, n_tiles: int, token, force: bool,
 
     import h5py
 
-    api = HfApi(token=token)
-    files = api.list_repo_files(repo, repo_type="dataset")
+    tmp = root / "_dl" / f"gamus_{split}"
+    tmp.mkdir(parents=True, exist_ok=True)
+
     pre, suf = f"images/{split}/", "_RGB.h5"
+    files = _gamus_file_list(repo, token, tmp, pre, suf)
     stems = sorted(f[len(pre):-len(suf)] for f in files
                    if f.startswith(pre) and f.endswith(suf))
     if not stems:
@@ -103,9 +143,6 @@ def prepare_gamus(root: Path, split: str, n_tiles: int, token, force: bool,
         rng = np.random.default_rng(0)
         stems = sorted(np.asarray(stems)[rng.permutation(len(stems))[:n_tiles]].tolist())
     print(f"[gamus/{split}] packing {len(stems)} tiles -> {out}")
-
-    tmp = root / "_dl" / f"gamus_{split}"
-    tmp.mkdir(parents=True, exist_ok=True)
 
     def fetch(stem: str):
         paths = {}

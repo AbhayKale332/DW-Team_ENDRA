@@ -1,7 +1,0 @@
-[submodule ".claude/skills/literature-review"]
-	path = .claude/skills/literature-review
-	url = https://github.com/chenlu-hung/literature-review.git
-
-[submodule "SingleViewHeigthEstimationFrontend"]
-	path = SingleViewHeigthEstimationFrontend
-	url = https://huggingface.co/spaces/akashch1512/SingleViewHeigthEstimation

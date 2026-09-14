@@ -84,7 +84,14 @@ class Evaluator:
 
     @torch.no_grad()
     def add_tiles(self, pred, target, valid, gsd_m=1.0):
-        """Per-tile landscape breakdown.  `pred/target/valid` are (B, [1,] H, W)."""
+        """Per-tile landscape breakdown.  `pred/target/valid` are (B, [1,] H, W).
+
+        `classify` is numpy, so the GT and its mask have to come back to the
+        host — but they come back **once per batch**, not twice per tile plus an
+        `.any()` sync per tile.  At 400 val tiles and an eval every other epoch
+        that was ~24 000 device syncs a run for a breakdown that is pure
+        bookkeeping.
+        """
         if not getattr(self.cfg, "per_landscape_metrics", False):
             return
         from eval.landscape import classify
@@ -92,13 +99,18 @@ class Evaluator:
         p = pred if pred.dim() == 3 else pred[:, 0]
         t = target if target.dim() == 3 else target[:, 0]
         v = valid if valid.dim() == 3 else valid[:, 0]
-        g = float(gsd_m if not torch.is_tensor(gsd_m) else gsd_m.reshape(-1)[0])
-        for i in range(t.shape[0]):
-            vi = v[i].bool()
-            if not vi.any():
+        t_np = t.detach().to("cpu", torch.float32).numpy()
+        v_np = v.detach().to("cpu", torch.bool).numpy()
+        if torch.is_tensor(gsd_m):
+            g_np = gsd_m.detach().to("cpu", torch.float32).reshape(-1).numpy()
+        else:
+            g_np = None
+        for i in range(t_np.shape[0]):
+            if not v_np[i].any():                       # host-side, free
                 continue
-            name, desc = classify(t[i].detach().cpu().numpy(),
-                                  vi.detach().cpu().numpy(), g)
+            g = float(g_np[i % len(g_np)]) if g_np is not None else float(gsd_m)
+            name, desc = classify(t_np[i], v_np[i], g)
+            vi = v[i].bool()
             self.land[name].update(p[i][vi], t[i][vi])
             self.land_tiles[name] += 1
             if len(self.land_desc) < 64:
@@ -171,7 +183,15 @@ class Evaluator:
 
 
 @torch.no_grad()
-def evaluate(model, loader, cfg, device, use_tta: bool = False) -> dict:
+def evaluate(model, loader, cfg, device, use_tta: bool = False,
+             gpu_prep=None) -> dict:
+    """`gpu_prep` is the trainer's `GpuPreproc`, or None for the all-CPU path.
+
+    The decorator matters: without it the eval pass builds an autograd graph for
+    a (B, 1, 512, 512) prediction it immediately throws away.  `Evaluator.add`
+    was already `no_grad`, but by then the forward had allocated — which is why
+    eval peaked higher than training and forced the batch down for both.
+    """
     from models.tta import tta_predict
 
     model.eval()
@@ -179,6 +199,10 @@ def evaluate(model, loader, cfg, device, use_tta: bool = False) -> dict:
     amp_dt = torch.bfloat16 if cfg.amp_dtype == "bf16" else torch.float16
     use_amp = cfg.amp and device.type == "cuda"
     for batch in loader:
+        if gpu_prep is not None and "image_u8" in batch:
+            batch = dict(batch)
+            batch["image_u8"] = batch["image_u8"].to(device, non_blocking=True)
+            batch = gpu_prep(batch, train=False)
         img = batch["image"].to(device, non_blocking=True)
         tgt = batch["target"].to(device, non_blocking=True)
         val = batch["valid"].to(device, non_blocking=True)
@@ -189,7 +213,7 @@ def evaluate(model, loader, cfg, device, use_tta: bool = False) -> dict:
             with torch.autocast("cuda", dtype=amp_dt, enabled=use_amp):
                 pred = model(img)["fused"]
             pred = pred.float()
-        cls = batch["cls"].to(device, non_blocking=True).unsqueeze(1)
+        cls = batch["cls"].to(device, non_blocking=True).long().unsqueeze(1)
         ev.add(pred, tgt, val, cls)
         ev.add_tiles(pred, tgt, val, batch.get("gsd_m", 1.0))
     return ev.result(use_tta)

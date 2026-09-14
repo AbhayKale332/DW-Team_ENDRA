@@ -59,8 +59,13 @@ class StratumBalancer:
         self.freq: torch.Tensor | None = None
 
     @torch.no_grad()
-    def _update(self, idx: torch.Tensor, n_strata: int) -> torch.Tensor:
-        counts = torch.bincount(idx.reshape(-1), minlength=n_strata).float()
+    def _update(self, idx: torch.Tensor, n_strata: int,
+                mask: torch.Tensor | None = None) -> torch.Tensor:
+        # Weighted bincount rather than `idx[mask]`: the boolean gather has a
+        # data-dependent output shape and syncs the device, and this runs on
+        # every training step.
+        w = None if mask is None else mask.reshape(-1).to(torch.float32)
+        counts = torch.bincount(idx.reshape(-1), weights=w, minlength=n_strata).float()
         p = counts / counts.sum().clamp_min(1.0)
         if self.freq is None or self.freq.shape != p.shape:
             self.freq = p
@@ -75,7 +80,8 @@ class StratumBalancer:
         edges = _STRATA.to(target.device)
         idx = torch.bucketize(target.detach(), edges)          # 0..len(edges)
         n = edges.numel() + 1
-        freq = self._update(idx[valid] if valid.any() else idx, n)
+        vf = valid.to(torch.float32)
+        freq = self._update(idx, n, vf)
         w = (1.0 / freq.clamp_min(1e-4)) ** self.beta
         # Normalise by the *frequency-weighted* mean, not the plain mean over
         # strata: a stratum with no pixels in this batch has an enormous raw
@@ -84,13 +90,30 @@ class StratumBalancer:
         # back to uniform and quietly turned the tail re-weighting off.
         w = (w / (freq * w).sum().clamp_min(1e-6)).clamp(1.0 / self.clip, self.clip)
         out = w.to(target.dtype)[idx]
-        m = out[valid].mean() if valid.any() else out.mean()
+        m = (out * vf.to(out.dtype)).sum() / vf.sum().clamp_min(1.0)
         return out / m.clamp_min(1e-6)
 
 
 # ---------------------------------------------------------------------
 def _masked_mean(x: torch.Tensor, m: torch.Tensor) -> torch.Tensor:
-    return x[m].mean() if m.any() else x.sum() * 0.0
+    """Mean of `x` over the True entries of `m`, without a device sync.
+
+    `x[m].mean()` is the obvious spelling and it is the wrong one here: boolean
+    indexing has a data-dependent output shape, so it forces a device-to-host
+    sync before the kernel can even be launched.  There are eight of these
+    between the forward and the backward of one step, and every one of them
+    stops the host running ahead of the card — which is most of what "the loader
+    is starving the GPU" looked like in the v3 logs.
+
+    `torch.where` is NaN-safe in the masked-out region (a plain `x * m` turns an
+    inf there into a NaN that survives the sum) and its gradient is zero there,
+    so this is numerically the same loss, one fused kernel, and no sync.
+    """
+    mf = m.to(x.dtype)
+    if mf.shape != x.shape:
+        mf = mf.expand_as(x)
+    zero = torch.zeros((), dtype=x.dtype, device=x.device)
+    return torch.where(mf > 0, x, zero).sum() / mf.sum().clamp_min(1.0)
 
 
 def l1_loss(pred, target, valid, w=None):
@@ -101,10 +124,13 @@ def l1_loss(pred, target, valid, w=None):
 
 
 def silog_loss(pred, target, valid, lam: float, shift: float):
-    if not valid.any():
-        return pred.sum() * 0.0
-    g = torch.log(pred[valid].clamp_min(0) + shift) - torch.log(target[valid] + shift)
-    return torch.sqrt((g ** 2).mean() - lam * (g.mean() ** 2) + 1e-7)
+    """Scale-invariant log loss, masked without the three syncs `pred[valid]` costs."""
+    m = valid.to(pred.dtype)
+    n = m.sum().clamp_min(1.0)
+    g = torch.log(pred.clamp_min(0) + shift) - torch.log(target.clamp_min(0) + shift)
+    g = torch.where(m > 0, g, torch.zeros((), dtype=g.dtype, device=g.device))
+    mu = g.sum() / n
+    return torch.sqrt((g ** 2).sum() / n - lam * (mu ** 2) + 1e-7)
 
 
 def gradient_loss(pred, target, valid, scales: int = 4):
@@ -169,9 +195,11 @@ def flatness_loss(pred, target, valid, cls=None, flat_ids=(0, 3, 4), tol_m: floa
         sem = torch.zeros_like(m)
         for i in flat_ids:
             sem |= (c == i)
-        # only tighten where we actually have labels
-        if sem.any():
-            m = m & sem
+        # Tighten to the flat classes unconditionally.  The old `if sem.any()`
+        # guard was a per-step device sync bought to handle a batch with no
+        # flat-class pixels at all — in which case `m & sem` is empty and
+        # `_masked_mean` already returns a clean zero.
+        m = m & sem
     return _masked_mean(lp.abs(), m)
 
 
@@ -205,8 +233,6 @@ def bin_ce_loss(logits, centres, target, valid, w=None, soft_sigma: float = 0.0)
     b, k = logits.shape[:2]
     h, w_ = logits.shape[-2:]
     val = F.interpolate(valid.float(), size=(h, w_), mode="nearest") > 0.5
-    if not val.any():
-        return logits.sum() * 0.0
     idx = bin_target_index(centres, target, h, w_)
     if soft_sigma > 0:
         ar = torch.arange(k, device=logits.device, dtype=torch.float32)
@@ -244,9 +270,9 @@ def consistency_loss(student, teacher_pred, teacher_unc, conf_m: float = 1.5):
     Returns (loss, kept_fraction).
     """
     keep = teacher_unc <= conf_m
-    frac = float(keep.float().mean())
-    if not keep.any():
-        return student.sum() * 0.0, frac
+    # A detached 0-d tensor, not a float: `float(t)` here is a device sync in the
+    # middle of the step, and the trainer only ever prints this every 25 steps.
+    frac = keep.to(student.dtype).mean().detach()
     return _masked_mean((student - teacher_pred).abs(), keep), frac
 
 
@@ -265,8 +291,7 @@ def regression_terms(pred, target, valid, cfg, w, gsd):
     sil = silog_loss(pred, target, valid, cfg.silog_lambda, cfg.silog_shift)
     grad = gradient_loss(pred, target, valid)
     total = cfg.w_l1 * l1 + cfg.w_silog * sil + cfg.w_grad * grad
-    return total, {"l1": float(l1.detach()), "silog": float(sil.detach()),
-                   "grad": float(grad.detach())}
+    return total, {"l1": l1.detach(), "silog": sil.detach(), "grad": grad.detach()}
 
 
 def compute_losses(out: dict, batch: dict, cfg, balancer: StratumBalancer):
@@ -290,12 +315,17 @@ def compute_losses(out: dict, batch: dict, cfg, balancer: StratumBalancer):
              + cfg.w_bin_ce * l_bin + getattr(cfg, "w_bin_entropy", 0.0) * l_ent
              + cfg.w_seg * l_seg)
 
+    # Detached 0-d *tensors*, not floats: `float(t)` on a CUDA tensor is a full
+    # device sync, and there were ten of them between the forward and the
+    # backward of every step — enough to stop the CPU ever running ahead of the
+    # GPU, which is most of what "low utilisation" looked like.  The trainer
+    # materialises these only on the steps it actually prints.
     stats = {
-        "loss": float(total.detach()),
+        "loss": total.detach(),
         "l1": sf["l1"], "silog": sf["silog"], "grad": sf["grad"],
-        "normal": float(l_norm.detach()), "flat": float(l_flat.detach()),
-        "bin": float(l_bin.detach()), "bin_ent": float(-l_ent.detach()),
-        "seg": float(l_seg.detach()),
-        "alpha": float(out["alpha"].detach().mean()),
+        "normal": l_norm.detach(), "flat": l_flat.detach(),
+        "bin": l_bin.detach(), "bin_ent": -l_ent.detach(),
+        "seg": l_seg.detach(),
+        "alpha": out["alpha"].detach().mean(),
     }
     return total, stats

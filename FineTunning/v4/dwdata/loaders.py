@@ -32,6 +32,28 @@ def _open(root: Path, name: str, split: str) -> PackedStore | None:
     return PackedStore(d) if store_exists(d) else None
 
 
+def _prime(store, spec, cfg, label: str) -> None:
+    """Persist the per-tile stretch bounds before any worker forks.
+
+    One pass over the store on the parent (threaded, I/O bound) replaces a
+    full-tile histogram inside every crop in every worker for the rest of the
+    run.  It writes `stretch_bounds_*.npy` next to the shards, so the second
+    run of a Studio pays nothing at all.
+    """
+    if not spec.radiometric_stretch:
+        return
+    import time
+
+    t0 = time.time()
+    fresh = not store._bounds_path(spec.stretch_lo_pct, spec.stretch_hi_pct).is_file()
+    ok = store.prime_stretch_bounds(
+        spec.stretch_lo_pct, spec.stretch_hi_pct,
+        workers=max(4, int(getattr(cfg, "num_workers", 8)) or 8))
+    if ok and fresh:
+        print(f"[data] {label}: stretch bounds computed for {len(store)} tiles "
+              f"in {time.time() - t0:.0f}s (cached on disk from now on)")
+
+
 def build_unlabeled_loader(cfg, spec):
     """The mean-teacher branch's input, or None when no such store was prepared.
 
@@ -50,14 +72,20 @@ def build_unlabeled_loader(cfg, spec):
                   f"See `python prepare_data.py --datasets india --help`")
         return None
     bs = max(1, int(round(cfg.batch_size * cfg.unlabeled_batch_frac)))
-    ds = UnlabeledTileDataset(cfg, st, spec, cfg.unlabeled_source, length=len(st))
-    print(f"[data] {cfg.unlabeled_source}/unlabeled: {len(st)} tiles @ "
-          f"{st.tile_px}px / {st.gsd_m} m -> mean-teacher batch {bs}")
+    _prime(st, spec, cfg, f"{cfg.unlabeled_source}/train")
+    ds = UnlabeledTileDataset(cfg, st, spec, cfg.unlabeled_source, length=len(st),
+                              gpu_augment=bool(getattr(cfg, "gpu_augment", False)))
+    # This pool runs *alongside* the labeled one for the whole run, so it gets a
+    # slice of the worker budget rather than a second full set: v3 measured two
+    # full persistent pools fighting over the same cores (and tripping the
+    # "24/28/35 worker processes" warning straight into a shared-memory Bus
+    # error) as a bigger loss than the branch was worth.
+    nw = max(0, min(4, cfg.num_workers // 3))
     return DataLoader(
-        ds, batch_size=bs, shuffle=True, num_workers=max(0, cfg.num_workers // 2),
-        pin_memory=torch.cuda.is_available(), drop_last=True,
-        persistent_workers=cfg.num_workers > 1,
-        prefetch_factor=cfg.prefetch_factor if cfg.num_workers > 1 else None,
+        ds, batch_size=bs, shuffle=True, num_workers=nw,
+        pin_memory=_cuda(), pin_memory_device="cuda" if _cuda() else "",
+        drop_last=True, persistent_workers=nw > 0,
+        prefetch_factor=cfg.prefetch_factor if nw else None,
     )
 
 
@@ -80,6 +108,7 @@ def build_loaders(cfg, spec):
     root = Path(cfg.data_root)
     names = cfg.labeled_sources()
     weights = cfg.sampler_weight_map()
+    gpu_aug = bool(getattr(cfg, "gpu_augment", False))
 
     train_sets, train_w, missing = [], [], []
     for name in names:
@@ -87,7 +116,9 @@ def build_loaders(cfg, spec):
         if st is None:
             missing.append(name)
             continue
-        train_sets.append(TileDataset(cfg, st, spec, name, train=True, length=len(st)))
+        _prime(st, spec, cfg, f"{name}/train")
+        train_sets.append(TileDataset(cfg, st, spec, name, train=True,
+                                      length=len(st), gpu_augment=gpu_aug))
         train_w.append(float(weights.get(name, 1.0)))
         print(f"[data] {name}/train: {len(st)} tiles @ {st.tile_px}px / {st.gsd_m} m")
     if missing:
@@ -108,9 +139,14 @@ def build_loaders(cfg, spec):
 
     dl_tr = DataLoader(
         concat, batch_size=cfg.batch_size, sampler=sampler,
-        num_workers=cfg.num_workers, pin_memory=torch.cuda.is_available(), drop_last=True,
+        num_workers=cfg.num_workers, pin_memory=_cuda(), drop_last=True,
         persistent_workers=cfg.num_workers > 0,
         prefetch_factor=cfg.prefetch_factor if cfg.num_workers else None,
+        # Workers are forked once and then live for the whole run, so paying a
+        # few hundred ms each to warm their memmaps and import numpy's SIMD
+        # paths is free; what is not free is the first batch of every epoch
+        # stalling behind a fresh fork.
+        pin_memory_device="cuda" if _cuda() else "",
     )
 
     # -- validation ------------------------------------------------------
@@ -126,14 +162,29 @@ def build_loaders(cfg, spec):
         print(f"[data] no dedicated val split; using a slice of {val_name}/train")
 
     n_val = min(cfg.val_tiles, len(val_store))
+    # Val runs every `eval_every` epochs, so it does not need — and must not
+    # hold — a second full set of persistent workers: with num_workers sized for
+    # the GPU (16+) that doubled the process count and had the two pools
+    # fighting for the same cores through every training epoch.
+    n_val_workers = min(4, cfg.num_workers)
+    _prime(val_store, spec, cfg, f"{val_name}/val")
     dl_va = DataLoader(
-        TileDataset(cfg, val_store, spec, val_name, train=False, length=n_val),
-        batch_size=max(1, cfg.batch_size), shuffle=False,
-        num_workers=cfg.num_workers, pin_memory=torch.cuda.is_available(),
-        persistent_workers=cfg.num_workers > 0,
-        prefetch_factor=cfg.prefetch_factor if cfg.num_workers else None,
+        TileDataset(cfg, val_store, spec, val_name, train=False, length=n_val,
+                    gpu_augment=gpu_aug),
+        # Eval is inference-only: no activations are kept, so it fits a much
+        # bigger batch than training and there is no reason to make the card
+        # run it at the training batch.
+        batch_size=max(1, int(cfg.batch_size * max(1, cfg.eval_batch_mult))),
+        shuffle=False,
+        num_workers=n_val_workers, pin_memory=_cuda(),
+        persistent_workers=False,
+        prefetch_factor=cfg.prefetch_factor if n_val_workers else None,
     )
     print(f"[data] val: {n_val} tiles from {val_name}  "
           f"({len(dl_tr)} train steps/epoch)")
     full = FullTileDataset(cfg, val_store, spec, val_name, length=n_val)
     return dl_tr, dl_va, full
+
+
+def _cuda() -> bool:
+    return torch.cuda.is_available()

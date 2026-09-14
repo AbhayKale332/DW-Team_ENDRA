@@ -179,20 +179,42 @@ class MeanTeacher:
             prm.requires_grad_(False)
         self.decay = float(decay)
         self.n = 0
+        self._pairs: list | None = None      # (teacher, live) lists, built lazily
+
+    def _build_pairs(self, model: nn.Module):
+        """Pair teacher and live tensors once, for the same reason `ModelEMA`
+        does: the per-key Python loop launched ~800 kernels per optimiser step
+        on a ViT-L.  `_foreach_*` is two calls and no temporaries.
+
+        Integer buffers are copied outright rather than averaged, so they are
+        kept in a separate list and handled on their own.
+        """
+        sd = model.state_dict()
+        tsd = self.model.state_dict()
+        tf, lf, ti, li = [], [], [], []
+        for k, t in tsd.items():
+            v = sd.get(k)
+            if v is None or v.shape != t.shape:
+                continue
+            if t.dtype.is_floating_point and v.dtype == t.dtype:
+                tf.append(t)
+                lf.append(v)
+            else:
+                ti.append(t)
+                li.append(v)
+        self._pairs = [tf, lf, ti, li]
+        return self._pairs
 
     @torch.no_grad()
     def update(self, model: nn.Module) -> None:
         self.n += 1
         d = min(self.decay, (1 + self.n) / (10 + self.n))
-        tsd = self.model.state_dict()
-        for k, v in model.state_dict().items():
-            t = tsd.get(k)
-            if t is None or t.shape != v.shape:
-                continue
-            if t.dtype.is_floating_point:
-                t.mul_(d).add_(v.detach().to(t.dtype), alpha=1.0 - d)
-            else:
-                t.copy_(v)
+        tf, lf, ti, li = self._pairs or self._build_pairs(model)
+        if tf:
+            torch._foreach_mul_(tf, d)
+            torch._foreach_add_(tf, lf, alpha=1.0 - d)
+        for t, v in zip(ti, li):
+            t.copy_(v)
 
     @torch.no_grad()
     def pseudo_label(self, image):
@@ -204,10 +226,19 @@ class MeanTeacher:
         self.model = copy.deepcopy(model).eval()
         for prm in self.model.parameters():
             prm.requires_grad_(False)
+        self._pairs = None          # the old pairs point at freed tensors
 
 
-def _to_device(batch: dict, device) -> dict:
-    return {k: (v.to(device, non_blocking=True) if torch.is_tensor(v) else v)
+# `rgb_u8` is carried for the qualitative export, which runs off the val
+# datasets, never off a training batch — shipping it to the GPU every step was
+# ~25 MB/step of pure H2D traffic.  In `gpu_augment` mode the train loader does
+# not produce it at all.
+_HOST_ONLY = ("rgb_u8",)
+
+
+def _to_device(batch: dict, device, skip: tuple = _HOST_ONLY) -> dict:
+    return {k: (v.to(device, non_blocking=True)
+                if (torch.is_tensor(v) and k not in skip) else v)
             for k, v in batch.items()}
 
 
@@ -224,6 +255,15 @@ def main() -> None:
     torch.backends.cudnn.allow_tf32 = cfg.tf32
     with contextlib.suppress(Exception):
         torch.set_float32_matmul_precision(cfg.matmul_precision)
+    if cfg.sdp_flash:
+        # ViT-L at 512 px is 1024 tokens of pure attention; without this torch
+        # can silently pick the math kernel and materialise a
+        # (B, heads, 1024, 1024) score matrix — 2.7 GB a layer at batch 24, and
+        # roughly half the step time.
+        with contextlib.suppress(Exception):
+            torch.backends.cuda.enable_flash_sdp(True)
+            torch.backends.cuda.enable_mem_efficient_sdp(True)
+            torch.backends.cuda.enable_math_sdp(True)
 
     n_gpu = torch.cuda.device_count()
     device = torch.device("cuda" if n_gpu else "cpu")
@@ -246,6 +286,19 @@ def main() -> None:
     dl_tr, dl_va, full_ds = build_loaders(cfg, spec)
     dl_un = build_unlabeled_loader(cfg, spec)
     un_iter = CyclicLoader(dl_un) if dl_un is not None else None
+
+    # Jitter + normalisation for whole batches, on the card.  `gpu_prep` is a
+    # no-op on a batch that already carries a normalised `image`, so the eval
+    # and export paths work either way.
+    gpu_prep = None
+    if cfg.gpu_augment:
+        from dwdata.gpu_aug import GpuPreproc
+
+        gpu_prep = GpuPreproc(spec, cfg, device)
+        print(f"[perf] GPU augmentation on — workers hand over uint8 "
+              f"({cfg.tile_size}x{cfg.tile_size}x3 = "
+              f"{cfg.tile_size ** 2 * 3 / 1e6:.1f} MB/sample instead of "
+              f"{cfg.tile_size ** 2 * 3 * 4 / 1e6:.1f} MB)")
 
     model = DepthWizardNet(cfg).to(device)
     if cfg.channels_last and n_gpu:
@@ -298,81 +351,139 @@ def main() -> None:
         model.train()
         core.encoder.train()
         opt.zero_grad(set_to_none=True)
-        run_loss, nb = 0.0, 0
+        # Built once per epoch: the old inline comprehension walked every
+        # parameter of a 300 M-param ViT-L on every optimiser step.
+        trainable = [p for p in model.parameters() if p.requires_grad]
+        nb = 0
         n_steps = max(1, len(dl_tr))
+        # Throughput, measured between log lines rather than from the epoch
+        # start, so the number reacts to a loader that falls behind instead of
+        # being averaged flat by a fast first few steps.  This is the one line
+        # that says whether the card is actually being fed.
+        t_win = time.time()
+        s_win = 0
+        # Losses accumulate on the device and are read once, at the end of the
+        # epoch, for the same reason.
+        run_loss_t = torch.zeros((), device=device, dtype=torch.float64)
+        n_bad = 0
 
         for step, batch in enumerate(dl_tr):
             progress = max(
                 (epoch - 1 + step / n_steps) / max(1, cfg.epochs),
                 ((time.time() - t0) / 60.0) / max(1e-8, cfg.max_minutes),
             )
-            s = lr_scale(progress, cfg.warmup_frac)
+            sc = lr_scale(progress, cfg.warmup_frac)
             for g, b in zip(opt.param_groups, base_lrs):
-                g["lr"] = b * s
+                g["lr"] = b * sc
 
             batch = _to_device(batch, device)
+            if gpu_prep is not None:
+                batch = gpu_prep(batch, train=True)
             ctx = (torch.autocast("cuda", dtype=amp_dt)
                    if (cfg.amp and n_gpu) else contextlib.nullcontext())
             with ctx:
                 out = model(batch["image"])
             loss, stats = compute_losses(out, batch, cfg, balancer)
 
+            # The non-finite guard used to read `float(stats["loss"])` here,
+            # which is a device sync on EVERY micro-step.  The comment said the
+            # stall was free because the backward was already queued — it is
+            # not: the sync stops the host from running ahead, so the next
+            # batch's H2D copy, GPU augmentation and kernel launches cannot
+            # overlap the current step's compute.  On a card that is otherwise
+            # kept fed that is several percent of the run.
+            #
+            # The check now happens once per *optimiser* step, on the gradient
+            # norm `clip_grad_norm_` already computes.  That is also the more
+            # correct place: a non-finite micro-batch poisons the whole
+            # accumulated gradient anyway, and the old code responded by
+            # zeroing every accumulated micro-batch, good ones included.
+            # `stats["loss"]` is already a detached 0-d tensor.  nan_to_num
+            # keeps one poisoned batch from turning the whole epoch's reported
+            # train_loss into NaN — the count of skipped steps is reported
+            # separately, so nothing is hidden.
+            run_loss_t += torch.nan_to_num(stats["loss"].double(), 0.0, 0.0, 0.0)
+            nb += 1
+
+            (scaler.scale(loss / cfg.grad_accum) if scaler.is_enabled()
+             else loss / cfg.grad_accum).backward()
+
             # ---- unlabeled branch: pull the student towards the EMA teacher --
+            # Backwarded *separately*, after the labeled graph has been freed.
+            # Summing the two losses and backwarding once is the same gradient,
+            # but it holds both sets of activations live at the same time —
+            # (batch + unlabeled_batch) images of a ViT-L at 512 px — and that
+            # is what turns a comfortable 58 GB step into an OOM.  Two backwards
+            # into the same accumulated .grad cost one extra graph traversal and
+            # peak at max(labeled, unlabeled) instead of their sum.
             if teacher is not None and step % max(1, cfg.consistency_every) == 0:
                 ramp = min(1.0, epoch / max(1, cfg.consistency_rampup_epochs))
                 ub = _to_device(un_iter.next(), device)
+                if gpu_prep is not None:
+                    ub = gpu_prep.two_view(ub)
                 with torch.no_grad(), ctx:
                     t_pred, t_std = teacher.pseudo_label(ub["image_weak"])
                 with ctx:
                     s_pred = model(ub["image_strong"])["fused"]
                 l_con, kept = consistency_loss(
                     s_pred.float(), t_pred, t_std, cfg.consistency_conf_m)
-                loss = loss + cfg.w_consistency * ramp * l_con
-                stats["loss"] = float(loss.detach())
-                stats["con"] = float(l_con.detach())
+                l_con = cfg.w_consistency * ramp * l_con
+                (scaler.scale(l_con / cfg.grad_accum) if scaler.is_enabled()
+                 else l_con / cfg.grad_accum).backward()
+                run_loss_t += torch.nan_to_num(l_con.detach().double(), 0.0, 0.0, 0.0)
+                # Device-side adds, so the logged `loss=` is the total the
+                # optimiser actually saw without costing a sync to say so.
+                stats["loss"] = stats["loss"] + l_con.detach()
+                stats["con"] = l_con.detach()
                 stats["con_keep"] = kept
-
-            if not math.isfinite(stats["loss"]):
-                print(f"  [e{epoch} s{step}] non-finite loss — skipping batch")
-                opt.zero_grad(set_to_none=True)
-                continue
-
-            (scaler.scale(loss / cfg.grad_accum) if scaler.is_enabled()
-             else loss / cfg.grad_accum).backward()
 
             if (step + 1) % cfg.grad_accum == 0:
                 if scaler.is_enabled():
                     scaler.unscale_(opt)
-                nn.utils.clip_grad_norm_(
-                    [p for p in model.parameters() if p.requires_grad], cfg.grad_clip)
-                if scaler.is_enabled():
-                    scaler.step(opt)
-                    scaler.update()
+                gn = nn.utils.clip_grad_norm_(trainable, cfg.grad_clip)
+                if torch.isfinite(gn):                 # the one sync per step
+                    if scaler.is_enabled():
+                        scaler.step(opt)
+                        scaler.update()
+                    else:
+                        opt.step()
+                    if ema is not None:
+                        ema.update(core)
+                    if teacher is not None:
+                        teacher.update(core)
                 else:
-                    opt.step()
+                    n_bad += 1
+                    if n_bad <= 5 or n_bad % 50 == 0:
+                        print(f"  [e{epoch} s{step}] non-finite gradient "
+                              f"(#{n_bad}) — step skipped", flush=True)
                 opt.zero_grad(set_to_none=True)
-                if ema is not None:
-                    ema.update(core)
-                if teacher is not None:
-                    teacher.update(core)
-
-            run_loss += stats["loss"]
-            nb += 1
+            s_win += batch["target"].shape[0]
             if step % 25 == 0:
+                # Only here do the remaining stats get pulled off the device.
+                st = {k: float(v) for k, v in stats.items()}
                 el = (time.time() - t0) / 60
-                con = (f" con={stats['con']:.3f}/{stats['con_keep']:.0%}"
-                       if "con" in stats else "")
-                print(f"  e{epoch} s{step}/{n_steps} loss={stats['loss']:.3f} "
-                      f"(l1={stats['l1']:.2f} sil={stats['silog']:.2f} "
-                      f"nrm={stats['normal']:.3f} flat={stats['flat']:.3f} "
-                      f"bin={stats['bin']:.2f} ent={stats['bin_ent']:.2f} "
-                      f"seg={stats['seg']:.2f} a={stats['alpha']:.2f}{con}) "
-                      f"lr={opt.param_groups[0]['lr']:.2e} {el:.0f}min", flush=True)
+                dt = max(1e-6, time.time() - t_win)
+                ips, t_win, s_win = s_win / dt, time.time(), 0
+                vram = (f" vram={torch.cuda.max_memory_allocated() / 1024 ** 3:.0f}G"
+                        if n_gpu else "")
+                con = (f" con={st['con']:.3f}/{st['con_keep']:.0%}"
+                       if "con" in st else "")
+                print(f"  e{epoch} s{step}/{n_steps} loss={st['loss']:.3f} "
+                      f"(l1={st['l1']:.2f} sil={st['silog']:.2f} "
+                      f"nrm={st['normal']:.3f} flat={st['flat']:.3f} "
+                      f"bin={st['bin']:.2f} ent={st['bin_ent']:.2f} "
+                      f"seg={st['seg']:.2f} a={st['alpha']:.2f}{con}) "
+                      f"lr={opt.param_groups[0]['lr']:.2e} "
+                      f"{ips:.1f} img/s{vram} {el:.0f}min", flush=True)
             if (time.time() - t0) / 60 > cfg.max_minutes:
                 print(f"  wall-clock cap {cfg.max_minutes:.0f} min hit")
                 stop = True
                 break
 
+        run_loss = float(run_loss_t)
+        if n_bad:
+            print(f"  e{epoch}: {n_bad} optimiser step(s) skipped on non-finite "
+                  f"gradients")
         rec = {"epoch": epoch, "train_loss": run_loss / max(1, nb),
                "encoder_frozen": core.encoder.frozen,
                "minutes": (time.time() - t0) / 60}
@@ -382,7 +493,8 @@ def main() -> None:
                 torch.cuda.empty_cache()
             swap = ema.swapped(ema, core) if ema is not None else contextlib.nullcontext()
             with swap:
-                m = evaluate(model, dl_va, cfg, device, use_tta=False)
+                m = evaluate(model, dl_va, cfg, device, use_tta=False,
+                             gpu_prep=gpu_prep)
                 rec["val"] = m
                 print(f"  eval e{epoch}  {format_line(m)}")
                 if m["global"]["rmse_m"] < best:
@@ -405,8 +517,10 @@ def main() -> None:
         print(f"[final] evaluating best.pt (epoch {ck.get('epoch')})")
 
     for name, fn in (
-        ("final_plain", lambda: evaluate(model, dl_va, cfg, device, use_tta=False)),
-        ("final_tta", (lambda: evaluate(model, dl_va, cfg, device, use_tta=True))
+        ("final_plain", lambda: evaluate(model, dl_va, cfg, device, use_tta=False,
+                                         gpu_prep=gpu_prep)),
+        ("final_tta", (lambda: evaluate(model, dl_va, cfg, device, use_tta=True,
+                                        gpu_prep=gpu_prep))
          if cfg.tta else None),
     ):
         if fn is None:

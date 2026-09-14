@@ -1,0 +1,14 @@
+ready_at    : 2026-09-13T08:50:24+00:00
+run_id      : 20260913_081446
+datasets    : gamus,synrs3d
+data_root   : /teamspace/studios/this_studio/DepthWizard-data
+hf_home     : /teamspace/studios/this_studio/.cache/huggingface
+commit      : f40bf5d9ba34c80f8ce68ee3dddefc5fe667e917
+sizing      : gamus_train=4000 gamus_val=400 synrs3d_archives=2 geonrw_max=2500
+fetch       : bulk snapshot (dw_fetch.py) rc=0
+host        : vm-1789286311288437422
+
+--- stores ---
+/teamspace/studios/this_studio/DepthWizard-data/gamus/train
+/teamspace/studios/this_studio/DepthWizard-data/gamus/val
+/teamspace/studios/this_studio/DepthWizard-data/synrs3d/train

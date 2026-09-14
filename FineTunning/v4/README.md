@@ -122,6 +122,124 @@ reason for it not to collapse.
 
 ---
 
+### 1.6 The v3 run's own logs (`Logs/v3/`) — and why most of v4's perf work is undo
+
+This is the largest single change in v4 and it is almost entirely *restoration*.
+The v4 draft was branched from v3 **before** v3's performance work landed, so it
+silently reverted every fix v3 had made to the data pipeline and the training
+step. Side by side against `Logs/v3/run.log`, the v4 draft would have been
+roughly 2.5x slower per image than the run that produced the good checkpoint.
+What came back:
+
+| what the v4 draft did | what v3 does | cost of the draft |
+|---|---|---|
+| `PackedStore.get()` — materialise all four full-tile planes per crop | `get_window()` — slice the memmap first | ~9 MB read per crop, ~90 % discarded |
+| full-tile histogram per crop for the 2/98 stretch | bounds computed once per tile and persisted next to the shards (`prime_stretch_bounds`) | 13.4 ms of an 82 ms `__getitem__`, in every worker, forever |
+| `np.percentile` on uint8 | 256-bin histogram | ~15x on a 1 Mpx tile |
+| float stretch image | 256-entry LUT gather | no float image at all |
+| PIL resize (scalar C) | OpenCV `INTER_AREA`/`INTER_LINEAR` | ~40 % of what was left of the crop budget |
+| CPU photometric jitter, float32 CHW on the wire | `dwdata/gpu_aug.py`, uint8 HWC on the wire | 3.1 MB → 0.79 MB per sample, ~22 ms per crop |
+| `rgb_u8` shipped to the GPU every step | kept host-side (`_HOST_ONLY`) | ~25 MB/step of pure H2D |
+| `gradient_checkpointing_enable()` **inside `forward()`** | toggled once in `set_frozen` | walks every ViT-L submodule, every step |
+| `.float()` on every encoder tap | taps stay bf16 under autocast | ~540 MB allocated and re-read per step |
+| `transpose(1,2).reshape(...)` on the taps | a real view + permute into channels-last | a full copy of every tap |
+| ten `float(tensor)` calls between forward and backward | detached 0-d tensors, read only on logged steps | ten device syncs per step — the host can never run ahead |
+| `ModelEMA` per-key Python loop | `torch._foreach_*` | ~800 kernel launches per step |
+| rebuilding the trainable-parameter list each optimiser step | hoisted per epoch | walks 324 M params per step |
+| a second full persistent worker pool for val | val capped at 4 workers | v3's log shows the 24/28/35-worker warning and then a shared-memory `Bus error` |
+
+v4 goes a little further than v3 in three places, for the same reason:
+
+* **`_masked_mean` no longer uses boolean indexing.** `x[m].mean()` has a
+  data-dependent output shape, so it syncs the device before the kernel can
+  launch; `torch.where(m, x, 0).sum() / m.sum()` is the same number, one fused
+  kernel, no sync, and NaN-safe in the masked-out region (`x * m` is not — `inf *
+  0` is `NaN`). Same treatment for `silog_loss`, `StratumBalancer` (weighted
+  `bincount` instead of `idx[valid]`) and `flatness_loss`.
+* **`MeanTeacher` got `ModelEMA`'s fused update.** It is a second 324 M-param
+  EMA running inside the training step; the per-key loop it shipped with would
+  have cost more than the branch it serves.
+* **The landscape breakdown transfers once per batch, not twice per tile.** At
+  400 val tiles and an eval every other epoch that was ~24 000 syncs a run.
+
+#### The three failures in `run.log`
+
+1. **Two OOMs, both at micro-batch 32.** The L40S attempt died at epoch 4
+   (44 GB); the H100 attempt reached epoch 7 and died on a 768 MB allocation
+   with 78.4 GB in use and 2.36 GB reserved-but-unallocated — VRAM had drifted
+   from 70 GB at epoch 3 to 76 GB at epoch 7. Both tracebacks asked for
+   `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` by name; v4 sets it in
+   `train.py` and exports it from `run_lightning.sh`.
+2. **A shared-memory `Bus error`** when an autotuner walked the worker count up
+   to 35 on a 16-vCPU box. v4 sets the worker budget statically (16 train + 4
+   val) and, because the workers now hand over uint8, each sample on the wire is
+   a quarter of the size.
+3. **`STARVED` in `gpu_disk_guard.log`** on the runs that read shards straight
+   off network-backed storage. The run that finished read from `/tmp`;
+   `run_lightning.sh stage` now makes that copy a first-class step.
+
+Once those were out of the way the guard log is unambiguous: **median GPU
+utilisation 99 %, median VRAM 47 GB of 80 GB.** The loader was not the limit;
+the card was compute-bound with a third of its memory idle.
+
+#### Why the batch is 24 and not 32
+
+From v3's own log, encoder unfrozen, no checkpointing:
+
+| micro-batch | VRAM | throughput |
+|---|---|---|
+| 16 | 42 GB | 44.7 img/s |
+| 32 | 74 GB (→76 GB, then OOM) | 48.0 img/s |
+
+Doubling the batch bought **7 %** and cost 32 GB, because the card was already
+at 99-100 % utilisation either way. So the spare 33 GB does not belong in the
+batch. v4 uses 24 (~58 GB, ~20 GB of headroom for the eval spike and allocator
+drift) with `grad_accum` dropped to **1**, which buys the kernel efficiency
+without the OOM and gives 500 optimiser steps an epoch instead of v3's 375.
+What the VRAM headroom actually buys is `grad_checkpoint_encoder false` — the v4
+draft defaulted it to `true` with the comment *"required to fit ViT-L unfrozen
+@512"*, which v3's log disproves directly: 42 GB at batch 16, no checkpointing,
+on an 80 GB card. Recomputing every block to save memory that is sitting idle
+cost ~35 % of the step for nothing.
+
+#### Two accuracy findings the metrics hand you
+
+* **v3 never converged.** It finished 26 epochs in 121 minutes of a 330-minute
+  budget, and val RMSE was still falling monotonically at the last eval
+  (2.760 → 2.732 → 2.723 → 2.715). ~3 hours of paid-for compute went unused.
+  v4 runs 40 epochs. The LR schedule is driven by `max(epoch fraction, wall-clock
+  fraction)`, so a slower card still completes the cosine instead of being
+  chopped off with the LR high.
+* **The tail bias was frozen, not converging.** `tall_bias` sat at −2.39, −2.13,
+  −2.14, −2.12, −2.06, −2.13, −2.08, −2.06, −2.08 m from epoch 6 to epoch 26
+  while global RMSE kept improving — twenty epochs that never once touched the
+  tail. Final per stratum: 20 m+ bias **−2.46 m**, 10–20 m −1.35 m, 0–2 m
+  **+0.43 m**. That is textbook regression to the mean, and it says
+  `stratum_balance_beta=0.5` equilibrated at a biased optimum rather than
+  travelling towards an unbiased one. v4 raises it to **0.7** with the clip at
+  **8.0**. Replayed over v3's own measured val height distribution (61 % 0-2 m,
+  10 % 2-5 m, 16 % 5-10 m, 9 % 10-20 m, 4 % 20 m+) that moves the per-pixel loss
+  weights like this:
+
+  | | 0-2 m | 2-5 m | 5-10 m | 10-20 m | 20 m+ | tall : ground |
+  |---|---|---|---|---|---|---|
+  | v3 `0.5 / 5.0` | 0.641 | 1.574 | 1.249 | 1.669 | 2.504 | 3.90x |
+  | v4 `0.7 / 8.0` | 0.504 | 1.771 | 1.282 | 1.923 | 3.393 | 6.73x |
+
+  `balanced_rmse_m` and the per-stratum `bias_m` column are the check on whether
+  that went too far — if the tall bias crosses into positive territory while
+  `balanced_rmse_m` rises, back it off with `--stratum_balance_beta 0.5`.
+
+Kept unchanged, because v3's numbers say they worked: the DINOv3-SAT ViT-L
+encoder and its (6, 12, 18, 24) taps, the DPT decoder at half resolution, the
+three-head + gated-fusion design, the adaptive bin widths, every loss weight
+except the stratum knobs, the 2-epoch freeze warmup, LLRD 0.8, lr 3e-4 / 6e-5,
+the cosine-with-warmup schedule, EMA 0.9995, the GSD-jitter and photometric
+augmentation ranges, the 2/98 stretch contract, and dihedral TTA (which took the
+final RMSE from 2.715 to **2.605** and is the reason `--tta` stays on).
+
+---
+
 ## 2. Indian data — what exists, what does not, and what v4 does about it
 
 **Every labelled source available is foreign.** GAMUS is five US cities, GeoNRW
@@ -334,8 +452,9 @@ establish.
 ```bash
 export HF_TOKEN=hf_...          # DINOv3-SAT and GAMUS are both gated
 
-bash run_lightning.sh check     # deps + 113 offline tests + GPU report
+bash run_lightning.sh check     # deps + offline tests + GPU report
 bash run_lightning.sh prepare   # ONE TIME, ~40 min, ~35 GB on the persistent disk
+bash run_lightning.sh stage     # copy the shards to local NVMe  <-- do not skip
 bash run_lightning.sh india --datasets india_unlabeled --india_dir ~/tiles   # optional
 bash run_lightning.sh smoke     # ~10 min end-to-end
 bash run_lightning.sh train     # the real run
@@ -344,35 +463,64 @@ bash run_lightning.sh train     # the real run
 `prepare` is resumable and idempotent — a split with an `index.json` is skipped.
 Because the studio disk persists, later runs start training immediately.
 
-Defaults target one H100: `batch_size 12 × grad_accum 2` (effective 24) at 512²
-with the encoder unfrozen and encoder gradient checkpointing on, bf16 autocast,
-channels-last, TF32. `torch.compile` is **off** by default — the freeze→unfreeze
-transition forces a recompile; enable with `--compile_model true` if you want the
-throughput and can absorb the warmup.
+**`stage` matters.** Training does ~12 000 random 512 px crops an epoch out of
+~27 GB of shards: small random reads. On the box's own NVMe the page cache
+absorbs them; off a network mount they are the entire bottleneck, and no worker
+count fixes it — `Logs/v3/gpu_disk_guard.log` prints `STARVED` for exactly the
+attempts that skipped this, and the run that finished read from `/tmp`. `train`
+picks the local copy up automatically when it holds a packed store
+(`DW_NO_AUTOSTAGE=1` to opt out).
+
+### The defaults, and where each number came from
+
+Everything here is read off `Logs/v3/` — see §1.6 for the measurements.
+
+| knob | v4 | why |
+|---|---|---|
+| `batch_size 24`, `grad_accum 1` | ~58 GB | micro-32 was 74 GB for +7 % and OOMed twice; micro-16 left 38 GB idle |
+| `grad_checkpoint_encoder false` | +~35 % step | v3 ran ViT-L unfrozen @512 in 42 GB; the memory it saves is memory nothing wants |
+| `eval_batch_mult 2` | eval at 48 | eval keeps no activations |
+| `num_workers 16`, `prefetch_factor 6` | 99-100 % GPU util in v3 | plus 4 capped val workers, not a second full pool |
+| `gpu_augment true` | 0.79 MB/sample on the wire | jitter + normalisation are pointwise; they belong on the card |
+| `amp_dtype bf16`, `tf32`, `channels_last`, `sdp_flash` | Hopper defaults | flash SDPA matters most: 1024 tokens of attention at 512 px |
+| `epochs 40`, `max_minutes 280` | v3 used 121 min of 330 and was still improving | the cap covers training only; the final eval + exports add ~30 min |
+| `stratum_balance_beta 0.7`, clip `8.0` | tall bias frozen at −2.1 m for 20 epochs | the one deliberate accuracy change |
+
+`torch.compile` is **off** by default — the freeze→unfreeze transition forces a
+recompile mid-run, and a five-hour run should not discover a Dynamo bug at epoch
+3. Enable with `--compile_model true` if you have warmed it in a smoke run first.
 
 | stage | ~time |
 |---|---|
 | prepare (4000 GAMUS + 2 SynRS3D archives) | 30–60 min, network-bound, one time |
-| epochs 1–2, encoder frozen | ~4 min/epoch |
-| epochs 3–26, encoder trainable | ~11–14 min/epoch (+~25 % with the unlabeled branch at `consistency_every 2`) |
+| stage to local NVMe | 3–8 min, one time per box |
+| epochs 1–2, encoder frozen | ~3 min/epoch (~70 img/s) |
+| epochs 3–40, encoder trainable | ~4–5 min/epoch (~48 img/s; +~25 % with the unlabeled branch at `consistency_every 2`) |
+| eval every 2 epochs | ~0.5 min each |
 | final eval + TTA + sliding-window eval | 20–35 min |
 | figures + report + ONNX | 3–6 min |
-| **total** | **≈ 5–6 h**, hard-capped by `--max_minutes 330` |
+| **total** | **≈ 4–5 h**, training hard-capped by `--max_minutes 280` |
 
 `last.pt` and `best.pt` are written every epoch; `--resume outputs/v4/last.pt`
 picks up a killed box. The final evaluation, the figures, the report and the ONNX
 export are each guarded separately — a five-hour run must not lose its report
 because matplotlib choked, or its ONNX because the report did.
 
+Watch the `img/s` and `vram=` fields in the train log: they are there so the two
+failure modes are visible while the run is happening rather than afterwards.
+`img/s` far below ~48 with the encoder trainable means the loader is behind;
+`vram=` climbing epoch over epoch is the drift that killed v3's batch-32 attempt.
+
 Knobs if memory or time is tight:
 
 ```bash
---batch_size 8 --grad_accum 3          # if 80 GB is not enough at 512²
---grad_checkpoint_encoder false        # faster, needs ~2.5x the activation memory
+--batch_size 16 --grad_accum 2         # back to exactly v3's effective batch, ~42 GB
+--grad_checkpoint_encoder true         # only on a genuinely smaller card; ~35 % slower
 --freeze_epochs 0                      # skip the warmup (riskier early gradients)
 --datasets gamus                       # drop SynRS3D
+--epochs 26                            # exactly v3's schedule
 --tta_scales 1.0,1.25                  # multi-scale TTA at the end (slower)
---stratum_balance_beta 0.75            # push harder on tall structures
+--stratum_balance_beta 0.5             # back to v3's tail weighting
 --w_consistency 0                      # disable the unlabeled branch outright
 --consistency_every 4                  # ...or just run it less often
 ```
@@ -384,6 +532,15 @@ Knobs if memory or time is tight:
 `metrics.json` carries `final_plain`, `final_tta` **and** `final_sliding_tta`.
 Quote the last one: it scores every pixel of every val tile at native GSD through
 the same code the demo runs.
+
+One thing to know before you read those three against each other — on v3 they
+came out **2.715 / 2.605 / 2.723 m**, so the sliding number was the *worst* of
+the three. That is not a regression in the sliding path: it scores 415 M pixels
+of whole tiles against the centre crop's 104 M, and whole tiles include the tile
+edges and the low-texture margins a centre crop never sees. It is the harder and
+more honest number, which is why it is the one to quote — but do not present the
+gap as "TTA stopped working". Dihedral TTA is worth ~4 % (2.715 → 2.605) on a
+like-for-like comparison and that is why `--tta` stays on.
 
 Watch six numbers, not one:
 

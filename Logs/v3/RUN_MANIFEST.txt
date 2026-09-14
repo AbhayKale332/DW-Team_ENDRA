@@ -1,0 +1,50 @@
+run_id      : 20260913_145928
+finished_at : 2026-09-13T17:35:38+00:00
+exit_code   : 0
+elapsed_min : 153
+commit      : 0c63ce02748debbd84d485c816184a044916fd57
+host        : vm-1789311347344942552  NVIDIA H100 80GB HBM3
+datasets    : gamus,synrs3d
+data_root   : /tmp/DepthWizard-data   (shards prepared beforehand)
+staged_local: 1
+offline     : 1
+autotune    : --num_workers 16 --prefetch_factor 6 --gpu_augment true --channels_last true --sdp_flash true --grad_checkpoint_encoder false --grad_checkpoint_decoder false --amp_dtype bf16 --amp true --tf32 true --batch_size 16 --grad_accum 2 --eval_batch_mult 2
+args        : --skip-install --data_root /tmp/DepthWizard-data --output_dir /teamspace/studios/this_studio/DepthWizard-results/v3 --datasets gamus,synrs3d --make_zip true --num_workers 16 --prefetch_factor 6 --gpu_augment true --channels_last true --sdp_flash true --grad_checkpoint_encoder false --grad_checkpoint_decoder false --amp_dtype bf16 --amp true --tf32 true --batch_size 16 --grad_accum 2 --eval_batch_mult 2 --resume /teamspace/studios/this_studio/DepthWizard-results/v3/last.pt 
+peak_vram   : 80345 MiB
+
+--- packed stores ---
+/tmp/DepthWizard-data/gamus/train
+/tmp/DepthWizard-data/gamus/val
+/tmp/DepthWizard-data/synrs3d/train
+
+--- artifacts ---
+      1269  ./RUN_MANIFEST.txt
+2506819130  ./best.pt
+      2313  ./config.json
+       147  ./env.txt
+2506819130  ./last.pt
+     87080  ./metrics.json
+      4127  ./pip_freeze.txt
+       356  ./preproc.json
+   5172819  ./qualitative/gamus_DC_04_27.png
+   4536089  ./qualitative/gamus_DC_10_30.png
+   5351786  ./qualitative/gamus_DC_11_34.png
+   5907529  ./qualitative/gamus_DC_13_15.png
+   5490853  ./qualitative/gamus_DC_13_17.png
+   5501016  ./qualitative/gamus_DC_13_34.png
+   5409730  ./qualitative/gamus_DC_14_24.png
+   5291379  ./qualitative/gamus_DC_14_32.png
+   4372052  ./qualitative/gamus_DC_14_35.png
+   6049613  ./qualitative/gamus_DC_15_13.png
+   5350457  ./qualitative/gamus_DC_15_20.png
+   4851469  ./qualitative/gamus_DC_15_39.png
+    152141  ./run.log
+   4194432  ./viewer_sample/gt_ndsm_m.npy
+   1489820  ./viewer_sample/height16.png
+       257  ./viewer_sample/meta.json
+   4194432  ./viewer_sample/pred_ndsm_m.npy
+   2449977  ./viewer_sample/rgb.png
+
+--- checkpoint sha256 ---
+71deda4c53cd4c25b777dc2e6989256b02380e75833e865cb9e43786e8d51dda  ./best.pt
+01a6d3069133d8aa4bed119215282db099986ba8a722312641ce7205cf05c961  ./last.pt
