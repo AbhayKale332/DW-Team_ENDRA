@@ -126,8 +126,10 @@ function buildMesh() {
     for (let i = 0; i < pos.count; i++) {
       const gx = i % vertsX, gy = Math.floor(i / vertsX);
       const px = Math.min(img.width  - 1, Math.round(gx / segX * (img.width  - 1)));
-      const pyTop = Math.min(img.height - 1, Math.round(gy / segY * (img.height - 1)));
-      const py = (img.height - 1) - pyTop;
+      // PlaneGeometry row gy carries uv.v = 1 - gy/segY, and textures upload with
+      // flipY, so gy == 0 drapes image row 0.  Sample the height grid in the same
+      // top-down order or the relief ends up mirrored against the RGB.
+      const py = Math.min(img.height - 1, Math.round(gy / segY * (img.height - 1)));
       const g = data[(py * img.width + px) * 4] / 255;     // 8-bit read is enough for a spike
       const h_m = hmin + g * span;
       pos.setY(i, h_m / gsd);                              // metres -> pixel units, matches XZ scale
