@@ -363,14 +363,18 @@ REQ="$V4_DIR/requirements.txt"
 [ -f "$REQ" ] || die "missing $REQ"
 REQ_HASH="$(md5sum "$REQ" | cut -d' ' -f1)"
 
-deps_present() {
-    "$PY" - >/dev/null 2>&1 <<'PYDEPS'
-import importlib.util, sys
+# Names what is missing rather than just failing: "runtime is incomplete" sends
+# you looking at pip when the answer is usually a checkout older than a
+# requirements change (opencv and matplotlib both arrived with v4).
+missing_mods() {
+    "$PY" - 2>/dev/null <<'PYDEPS'
+import importlib.util
 mods = ("torch", "transformers", "huggingface_hub", "h5py", "tifffile",
         "rasterio", "safetensors", "scipy", "numpy", "PIL", "cv2", "matplotlib")
-sys.exit(1 if [m for m in mods if not importlib.util.find_spec(m)] else 0)
+print(" ".join(m for m in mods if not importlib.util.find_spec(m)))
 PYDEPS
 }
+deps_present() { [ -z "$(missing_mods)" ]; }
 
 if [ "$DO_INSTALL" = "1" ]; then
     if [ "$REINSTALL" = "0" ] && [ -f "$DEPS_STAMP" ] \

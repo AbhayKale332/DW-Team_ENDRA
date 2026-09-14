@@ -278,14 +278,19 @@ REQ="$V4_DIR/requirements.txt"
 [ -f "$REQ" ] || die "missing $REQ"
 REQ_HASH="$(md5sum "$REQ" | cut -d' ' -f1)"
 
-deps_present() {
-    "$PY" - >/dev/null 2>&1 <<'PYDEPS'
-import importlib.util, sys
+# Prints the missing module names on stdout and returns 1, so the caller can
+# say *what* is missing. "runtime is incomplete" on its own sends you looking at
+# pip when the answer is usually that the checkout predates a requirements
+# change — opencv, for one, only arrived with v4.
+missing_mods() {
+    "$PY" - 2>/dev/null <<'PYDEPS'
+import importlib.util
 mods = ("torch", "transformers", "huggingface_hub", "h5py", "tifffile",
         "rasterio", "safetensors", "scipy", "numpy", "PIL", "cv2")
-sys.exit(1 if [m for m in mods if not importlib.util.find_spec(m)] else 0)
+print(" ".join(m for m in mods if not importlib.util.find_spec(m)))
 PYDEPS
 }
+deps_present() { [ -z "$(missing_mods)" ]; }
 
 install_deps() {
     log "installing dependencies…"
@@ -318,7 +323,20 @@ else
 fi
 
 if [ "$VERIFY_ONLY" = "0" ]; then
-    deps_present || die "runtime is incomplete — re-run with --reinstall"
+    MISS="$(missing_mods)"
+    if [ -n "$MISS" ]; then
+        warn "still missing after the install:$( printf ' %s' $MISS )"
+        # cv2 is the tell-tale: it entered requirements.txt with v4, so a
+        # checkout that predates that push installs everything else and leaves
+        # this one behind.
+        case " $MISS " in
+            *" cv2 "*) warn "opencv is in FineTunning/v4/requirements.txt. If it is not in
+       $REQ, this checkout is older than the v4 changes — push them, or:
+         $PY -m pip install opencv-python-headless
+       then re-run with --skip-install." ;;
+        esac
+        die "runtime is incomplete — re-run with --reinstall, or install the above"
+    fi
     "$PY" - <<'PYCHECK'
 import huggingface_hub, torch, transformers
 print(f"[dw]   torch {torch.__version__}  cuda={torch.cuda.is_available()}")
