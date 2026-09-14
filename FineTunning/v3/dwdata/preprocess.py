@@ -190,13 +190,50 @@ def stretch_scene(rgb_u8: np.ndarray, spec: PreprocSpec) -> np.ndarray:
 # ---------------------------------------------------------------------
 # step 3 — geometry
 # ---------------------------------------------------------------------
-def resize(arr: np.ndarray, out_hw: tuple[int, int], order: str) -> np.ndarray:
-    """order: 'bilinear' | 'nearest'.  Handles uint8 RGB, float32 and int labels."""
-    from PIL import Image
+try:                                        # SIMD resize when it is installed
+    import cv2                              # noqa: F401
 
+    cv2.setNumThreads(0)                    # one DataLoader worker == one thread
+    _CV2 = True
+except Exception:                           # noqa: BLE001
+    _CV2 = False
+
+
+def resize(arr: np.ndarray, out_hw: tuple[int, int], order: str) -> np.ndarray:
+    """order: 'bilinear' | 'nearest'.  Handles uint8 RGB, float32 and int labels.
+
+    Prefers OpenCV, which is vectorised; PIL's resampler is scalar C and was
+    ~40 % of what was left of the per-crop DataLoader budget.  PIL remains the
+    fallback so the module still imports without opencv.
+    """
     h, w = int(out_hw[0]), int(out_hw[1])
     if arr.shape[:2] == (h, w):
         return arr
+
+    if _CV2:
+        # INTER_LINEAR does not antialias: at the ~1.8x downscales the GSD
+        # jitter asks for it aliases hard (measured std 82 vs PIL's 59 on a
+        # high-frequency target).  INTER_AREA is the antialiasing kernel and
+        # tracks PIL's filtered BILINEAR closely, so shrink with AREA and only
+        # enlarge with LINEAR.
+        if order == "bilinear":
+            interp = (cv2.INTER_AREA if (h < arr.shape[0] or w < arr.shape[1])
+                      else cv2.INTER_LINEAR)
+        else:
+            interp = cv2.INTER_NEAREST
+        if arr.ndim == 3:
+            return cv2.resize(np.ascontiguousarray(arr, np.uint8), (w, h),
+                              interpolation=interp)
+        if np.issubdtype(arr.dtype, np.integer):
+            # cv2 has no int64 kernel; label maps round-trip through int32.
+            out = cv2.resize(np.ascontiguousarray(arr, np.int32), (w, h),
+                             interpolation=cv2.INTER_NEAREST)
+            return out.astype(arr.dtype, copy=False)
+        return cv2.resize(np.ascontiguousarray(arr, np.float32), (w, h),
+                          interpolation=interp)
+
+    from PIL import Image
+
     resample = Image.BILINEAR if order == "bilinear" else Image.NEAREST
     if arr.ndim == 3:
         return np.asarray(Image.fromarray(arr.astype(np.uint8)).resize((w, h), resample))

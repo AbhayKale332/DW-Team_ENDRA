@@ -615,7 +615,16 @@ if [ "$AUTOTUNE" = "1" ]; then
     tune false 'grad_checkpoint_encoder' 'grad_checkpoint' 'gradient_checkpointing'
     tune false 'grad_checkpoint_decoder'
     tune true  'channels_last' 'memory_format'
-    tune "${DW_COMPILE:-false}" 'compile_model' 'compile' 'torch_compile'
+    # torch.compile fuses the DPT trunk's Conv->GroupNorm->ReLU->add chains,
+    # which are memory-bound and are where the decoder's time goes. It costs one
+    # warmup compile, plus one more at encoder unfreeze (the forward branches on
+    # `frozen`, so the guard fails once). Worth it over a 26-epoch run.
+    # NOTE: --smoke forces compile_model off (config.apply_smoke), so a smoke
+    # run does NOT exercise this — judge it on the first epoch of the real run:
+    # a few minutes of silence at step 0 is the compile, repeated
+    # "[model] torch.compile" churn is not. DW_COMPILE=false turns it off, and
+    # train.py already falls back silently if compile raises.
+    tune "${DW_COMPILE:-true}" 'compile_model' 'compile' 'torch_compile'
     tune bf16  'amp_dtype' 'precision' 'dtype' 'mixed_precision'
     tune true  'amp' 'use_amp'
     tune true  'tf32' 'allow_tf32'
