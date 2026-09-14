@@ -55,6 +55,7 @@ class DINOv3Encoder(nn.Module):
 
         self.blocks = self._find_blocks()
         self._ckpt = bool(cfg.grad_checkpoint_encoder)
+        self._cl = bool(cfg.channels_last)
         self.frozen = True
         self.set_frozen(True)
         print(f"[model] encoder={cfg.encoder_model_id} hidden={self.hidden} "
@@ -153,10 +154,19 @@ class DINOv3Encoder(nn.Module):
 
     # -- forward --------------------------------------------------------
     def _tokens_to_map(self, tok: torch.Tensor, hp: int, wp: int) -> torch.Tensor:
+        """(B, N, C) tokens -> (B, C, hp, wp) feature map.
+
+        `transpose(1, 2).reshape(...)` cannot be a view, so it materialised a
+        full copy of every tap.  Reshaping to (B, hp, wp, C) *is* a view, and the
+        permute that follows leaves a tensor already laid out as channels_last —
+        which is the format the DPT convs want, so the copy and the cudnn
+        permute both disappear.
+        """
         # Drop CLS + register/prefix tokens: the patch tokens are always the last
         # hp*wp entries regardless of how many prefix tokens the config uses.
         patches = tok[:, -(hp * wp):, :]
-        return patches.transpose(1, 2).reshape(tok.shape[0], -1, hp, wp)
+        m = patches.reshape(tok.shape[0], hp, wp, -1).permute(0, 3, 1, 2)
+        return m if self._cl else m.contiguous()
 
     def _hidden_states(self, pixel_values: torch.Tensor) -> list[torch.Tensor]:
         """The tapped hidden states, robust to how the backbone is configured.
@@ -179,12 +189,17 @@ class DINOv3Encoder(nn.Module):
     def forward(self, pixel_values: torch.Tensor) -> list[torch.Tensor]:
         hp = pixel_values.shape[-2] // self.patch
         wp = pixel_values.shape[-1] // self.patch
+        # No `.float()` here any more.  Under autocast the taps come out in
+        # bf16 and the trunk's first op is a Conv2d that autocast casts back to
+        # bf16 anyway — so the upcast was a pure round-trip, ~540 MB of fp32
+        # allocated and re-read per step at batch 32.  Without autocast the taps
+        # are already fp32 and nothing changes.
         if self.frozen:
             self.model.eval()
             with torch.no_grad():
-                outs = [self._tokens_to_map(h, hp, wp).float()
+                outs = [self._tokens_to_map(h, hp, wp)
                         for h in self._hidden_states(pixel_values)]
             return [o.detach() for o in outs]
 
-        return [self._tokens_to_map(h, hp, wp).float()
+        return [self._tokens_to_map(h, hp, wp)
                 for h in self._hidden_states(pixel_values)]
