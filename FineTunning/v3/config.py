@@ -98,19 +98,32 @@ class Config:
     weight_decay: float = 0.05
     warmup_frac: float = 0.05
     grad_clip: float = 1.0
-    batch_size: int = 12
-    grad_accum: int = 2                     # effective batch 24
+    # Sized for a 48 GB L40S running ViT-L/16 at 512 px with the encoder
+    # UNFROZEN and no gradient checkpointing: ~1.05 GB of activations per
+    # sample plus ~5 GB of weights/grads/AdamW state.  `train_L40S.sh` probes
+    # the real number on the real card at startup and overrides this; the
+    # default is the conservative value that is known to fit.
+    batch_size: int = 24
+    grad_accum: int = 2                     # effective batch 48
+    eval_batch_mult: int = 2                # eval keeps no activations -> 2x batch
     num_workers: int = 12
-    prefetch_factor: int = 4
+    prefetch_factor: int = 6
     ema_decay: float = 0.9995               # 0 -> disable weight EMA
 
     # ----- precision / perf -----------------------------------------
     amp: bool = True
     amp_dtype: str = "bf16"                 # bf16 on Hopper
     channels_last: bool = True
-    grad_checkpoint_encoder: bool = True    # required to fit ViT-L unfrozen @512
+    grad_checkpoint_encoder: bool = False    # trades ~35% throughput for VRAM
     grad_checkpoint_decoder: bool = False
     compile_model: bool = False             # recompiles on unfreeze; opt-in
+    # Photometric jitter + encoder normalisation run on the GPU over the whole
+    # batch instead of per crop in a DataLoader worker, and the worker hands
+    # over uint8 HWC.  ~3x the loader throughput and 4x less H2D traffic; see
+    # dwdata/gpu_aug.py for the measurements.  Turn it off to fall back to the
+    # all-CPU path (identical maths, much slower).
+    gpu_augment: bool = True
+    sdp_flash: bool = True                  # prefer the fused SDPA kernels
     cudnn_benchmark: bool = True
     tf32: bool = True
     matmul_precision: str = "high"
@@ -160,6 +173,7 @@ class Config:
         self.max_minutes = 20.0
         self.batch_size = 2
         self.grad_accum = 1
+        self.eval_batch_mult = 1
         self.num_workers = 0
         self.compile_model = False
         self.cudnn_benchmark = False

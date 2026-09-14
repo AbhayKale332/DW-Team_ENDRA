@@ -127,6 +127,8 @@ class PackedStore:
         # the tile, never on the crop, so recomputing them every __getitem__ was
         # pure waste (~45 ms of a ~180 ms sample).
         self._lut: dict[int, np.ndarray] = {}
+        # Per-store stretch-bound tables, keyed by (lo_pct, hi_pct).
+        self._bounds_cache: dict[tuple[float, float], np.ndarray | None] = {}
 
     def __len__(self) -> int:
         return len(self._map)
@@ -172,17 +174,89 @@ class PackedStore:
         val = np.asarray(self._arr(si, "val")[r][sl])
         return rgb, hgt, cls, val
 
-    def stretch_lut(self, i: int, lo_pct: float, hi_pct: float) -> np.ndarray:
-        """Cached (256, 3) uint8 stretch table for tile `i`.
+    # -- per-tile stretch bounds ----------------------------------------
+    # These are a property of the *scene*, so they do not belong in the crop
+    # path at all.  Measured on gamus/train they were 13.4 ms of an 82 ms
+    # __getitem__ — a full-tile 3 MB read plus a 3-channel histogram, done to
+    # produce six numbers, once per crop, in every worker independently.
+    # `prime_stretch_bounds` computes them once for the whole store and writes
+    # them next to the shards, so every later run and every worker starts with
+    # them already on disk and the crop path costs a 256x3 table build.
 
-        Bounds are a property of the scene, so they are computed once per tile
-        per process and reused for every crop drawn from it afterwards.
+    def _bounds_path(self, lo_pct: float, hi_pct: float) -> Path:
+        return self.dir / f"stretch_bounds_{lo_pct:g}_{hi_pct:g}.npy"
+
+    def _bounds(self, lo_pct: float, hi_pct: float) -> np.ndarray | None:
+        """(n, 2, C) float32 of per-tile (lo, hi), memmapped if it exists."""
+        key = (lo_pct, hi_pct)
+        if key in self._bounds_cache:
+            return self._bounds_cache[key]
+        p = self._bounds_path(lo_pct, hi_pct)
+        arr = None
+        if p.is_file():
+            try:
+                a = np.load(p, mmap_mode="r")
+                if a.shape[0] == len(self):
+                    arr = a
+            except (OSError, ValueError):
+                arr = None
+        self._bounds_cache[key] = arr
+        return arr
+
+    def prime_stretch_bounds(self, lo_pct: float, hi_pct: float,
+                             workers: int = 0, verbose: bool = True) -> bool:
+        """Compute and persist every tile's stretch bounds. Idempotent.
+
+        Returns True if the table is on disk afterwards.  Called once from
+        `build_loaders`, before the workers fork, so the cost is paid at
+        startup on the parent and never inside a training step.
         """
+        p = self._bounds_path(lo_pct, hi_pct)
+        if self._bounds(lo_pct, hi_pct) is not None:
+            return True
+        from concurrent.futures import ThreadPoolExecutor
+
+        from .preprocess import scene_stretch_bounds
+
+        n = len(self)
+        out = np.empty((n, 2, 3), np.float32)
+
+        def one(i: int) -> None:
+            lo, hi = scene_stretch_bounds(self.rgb_view(i), lo_pct, hi_pct)
+            out[i, 0], out[i, 1] = lo[:3], hi[:3]
+
+        # The histogram releases the GIL inside numpy and the read is I/O, so
+        # threads are the right tool and they share one set of memmaps.
+        try:
+            if workers and workers > 1:
+                with ThreadPoolExecutor(max_workers=workers) as ex:
+                    list(ex.map(one, range(n)))
+            else:
+                for i in range(n):
+                    one(i)
+            tmp = p.with_suffix(".tmp.npy")
+            np.save(tmp, out)
+            tmp.replace(p)
+        except (OSError, ValueError) as e:
+            if verbose:
+                print(f"[data] could not persist stretch bounds for {self.dir}: {e}")
+            # Still usable for this process even if the store is read-only.
+            self._bounds_cache[(lo_pct, hi_pct)] = out
+            return True
+        self._bounds_cache.pop((lo_pct, hi_pct), None)
+        return self._bounds(lo_pct, hi_pct) is not None
+
+    def stretch_lut(self, i: int, lo_pct: float, hi_pct: float) -> np.ndarray:
+        """Cached (256, 3) uint8 stretch table for tile `i`."""
         lut = self._lut.get(i)
         if lut is None:
             from .preprocess import scene_stretch_bounds, stretch_lut as _mk
 
-            lo, hi = scene_stretch_bounds(self.rgb_view(i), lo_pct, hi_pct)
+            b = self._bounds(lo_pct, hi_pct)
+            if b is not None:
+                lo, hi = np.asarray(b[i, 0]), np.asarray(b[i, 1])
+            else:
+                lo, hi = scene_stretch_bounds(self.rgb_view(i), lo_pct, hi_pct)
             lut = self._lut[i] = _mk(lo, hi)
         return lut
 
@@ -190,6 +264,11 @@ class PackedStore:
         d = dict(self.__dict__)
         d["_mm"] = {}                # never pickle memmaps into a worker
         d["_lut"] = {}               # nor a cache built in the parent
+        # The bound tables are memmaps too; a worker re-opens its own. An
+        # in-memory fallback (read-only store) is small enough to inherit.
+        d["_bounds_cache"] = {k: v for k, v in self._bounds_cache.items()
+                              if isinstance(v, np.ndarray)
+                              and not isinstance(v, np.memmap)}
         return d
 
 

@@ -551,6 +551,39 @@ PYPULL
 fi
 
 # ===========================================================================
+# 11b. PRECOMPUTE the per-tile radiometric stretch bounds
+# ===========================================================================
+# The 2/98 percentile bounds are a property of the scene, not of the crop, but
+# the training loader used to recompute them inside every __getitem__: a 3 MB
+# full-tile read plus a 3-channel histogram, ~13 ms of an ~82 ms sample, in
+# every worker independently. Doing it here writes one small
+# `stretch_bounds_2_98.npy` next to each store's shards, which the GPU run just
+# memory-maps. ~90 s of CPU time here buys back that 13 ms forever.
+if [ "$DO_PREPARE" = "1" ] || [ "$VERIFY_ONLY" = "1" ]; then
+    log "precomputing per-tile stretch bounds (so the GPU run never does)…"
+    "$PY" - "$DATA_ROOT" "${DW_PREP_WORKERS:-12}" <<'PYBOUNDS' || warn "stretch-bound
+       precompute failed — training still works, it just recomputes them per crop"
+import sys, time
+from pathlib import Path
+
+sys.path.insert(0, str(Path.cwd()))
+from dwdata.packed import PackedStore, store_exists
+
+root, workers = Path(sys.argv[1]), int(sys.argv[2])
+for idx in sorted(root.glob("*/*/index.json")):
+    d = idx.parent
+    if not store_exists(d):
+        continue
+    st = PackedStore(d)
+    t0 = time.time()
+    ok = st.prime_stretch_bounds(2.0, 98.0, workers=workers)
+    key = f"{d.parent.name}/{d.name}"
+    print(f"[dw]   {key:<16} {len(st):>6} tiles  "
+          f"{'ok' if ok else 'FAILED'}  {time.time() - t0:.0f}s")
+PYBOUNDS
+fi
+
+# ===========================================================================
 # 12. VERIFY — tile yield, not just "index.json exists"
 # ===========================================================================
 # The previous run packed gamus/val with 129 of 400 tiles and still wrote a
@@ -636,8 +669,8 @@ log "  shards : $DATA_ROOT  ($(du -sh "$DATA_ROOT" 2>/dev/null | cut -f1))"
 log "  encoder: $HF_HOME_DIR ($(du -sh "$HF_HOME_DIR" 2>/dev/null | cut -f1))"
 log "  stamp  : $READY_STAMP"
 log ""
-log "Next: switch the Studio to H100 and run"
-log "  sh train_h100.sh --background"
+log "Next: switch the Studio to an L40S and run"
+log "  sh train_L40S.sh --background"
 disk_report
 log "prepare log: $BOOT_LOG"
 log "=============================================================="

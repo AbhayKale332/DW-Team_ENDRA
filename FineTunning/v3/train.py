@@ -144,7 +144,8 @@ def build_optimizer(cfg: Config, model: DepthWizardNetV3, with_encoder: bool):
 
 # `rgb_u8` is carried for the qualitative export, which runs off the val
 # datasets, never off a training batch — shipping it to the GPU every step was
-# ~25 MB/step of pure H2D traffic.
+# ~25 MB/step of pure H2D traffic.  In `gpu_augment` mode the train loader does
+# not produce it at all.
 _HOST_ONLY = ("rgb_u8",)
 
 
@@ -167,6 +168,15 @@ def main() -> None:
     torch.backends.cudnn.allow_tf32 = cfg.tf32
     with contextlib.suppress(Exception):
         torch.set_float32_matmul_precision(cfg.matmul_precision)
+    if cfg.sdp_flash:
+        # ViT-L at 512 px is 1024 tokens of pure attention; without this torch
+        # can silently pick the math kernel and materialise a
+        # (B, heads, 1024, 1024) score matrix — 2.7 GB a layer at batch 24, and
+        # roughly half the step time.
+        with contextlib.suppress(Exception):
+            torch.backends.cuda.enable_flash_sdp(True)
+            torch.backends.cuda.enable_mem_efficient_sdp(True)
+            torch.backends.cuda.enable_math_sdp(True)
 
     n_gpu = torch.cuda.device_count()
     device = torch.device("cuda" if n_gpu else "cpu")
@@ -187,6 +197,19 @@ def main() -> None:
     from dwdata.loaders import build_loaders
 
     dl_tr, dl_va, full_ds = build_loaders(cfg, spec)
+
+    # Jitter + normalisation for whole batches, on the card.  `gpu_prep` is a
+    # no-op on a batch that already carries a normalised `image`, so the eval
+    # and export paths work either way.
+    gpu_prep = None
+    if cfg.gpu_augment:
+        from dwdata.gpu_aug import GpuPreproc
+
+        gpu_prep = GpuPreproc(spec, cfg, device)
+        print(f"[perf] GPU augmentation on — workers hand over uint8 "
+              f"({cfg.tile_size}x{cfg.tile_size}x3 = "
+              f"{cfg.tile_size ** 2 * 3 / 1e6:.1f} MB/sample instead of "
+              f"{cfg.tile_size ** 2 * 3 * 4 / 1e6:.1f} MB)")
 
     model = DepthWizardNetV3(cfg).to(device)
     if cfg.channels_last and n_gpu:
@@ -234,8 +257,18 @@ def main() -> None:
         # Built once per epoch: the old inline comprehension walked every
         # parameter of a 300 M-param ViT-L on every optimiser step.
         trainable = [p for p in model.parameters() if p.requires_grad]
-        run_loss, nb = 0.0, 0
+        nb = 0
         n_steps = max(1, len(dl_tr))
+        # Throughput, measured between log lines rather than from the epoch
+        # start, so the number reacts to a loader that falls behind instead of
+        # being averaged flat by a fast first few steps.  This is the one line
+        # that says whether the card is actually being fed.
+        t_win = time.time()
+        s_win = 0
+        # Losses accumulate on the device and are read once, at the end of the
+        # epoch, for the same reason.
+        run_loss_t = torch.zeros((), device=device, dtype=torch.float64)
+        n_bad = 0
 
         for step, batch in enumerate(dl_tr):
             progress = max(
@@ -247,6 +280,8 @@ def main() -> None:
                 g["lr"] = b * s
 
             batch = _to_device(batch, device)
+            if gpu_prep is not None:
+                batch = gpu_prep(batch, train=True)
             ctx = (torch.autocast("cuda", dtype=amp_dt)
                    if (cfg.amp and n_gpu) else contextlib.nullcontext())
             with ctx:
@@ -256,46 +291,68 @@ def main() -> None:
             (scaler.scale(loss / cfg.grad_accum) if scaler.is_enabled()
              else loss / cfg.grad_accum).backward()
 
-            # The non-finite guard needs one device sync, so it runs *after* the
-            # backward is queued rather than between forward and backward: by
-            # then the GPU has a full step's work in flight and the stall costs
-            # nothing.  Grads from a bad batch are dropped by the zero_grad.
-            loss_v = float(stats["loss"])
-            if not math.isfinite(loss_v):
-                print(f"  [e{epoch} s{step}] non-finite loss — skipping batch")
-                opt.zero_grad(set_to_none=True)
-                continue
+            # The non-finite guard used to read `float(stats["loss"])` here,
+            # which is a device sync on EVERY micro-step.  The comment said the
+            # stall was free because the backward was already queued — it is
+            # not: the sync stops the host from running ahead, so the next
+            # batch's H2D copy, GPU augmentation and kernel launches cannot
+            # overlap the current step's compute.  On a card that is otherwise
+            # kept fed that is several percent of the run.
+            #
+            # The check now happens once per *optimiser* step, on the gradient
+            # norm `clip_grad_norm_` already computes.  That is also the more
+            # correct place: a non-finite micro-batch poisons the whole
+            # accumulated gradient anyway, and the old code responded by
+            # zeroing every accumulated micro-batch, good ones included.
+            # `stats["loss"]` is already a detached 0-d tensor.  nan_to_num
+            # keeps one poisoned batch from turning the whole epoch's reported
+            # train_loss into NaN — the count of skipped steps is reported
+            # separately, so nothing is hidden.
+            run_loss_t += torch.nan_to_num(stats["loss"].double(), 0.0, 0.0, 0.0)
+            nb += 1
 
             if (step + 1) % cfg.grad_accum == 0:
                 if scaler.is_enabled():
                     scaler.unscale_(opt)
-                nn.utils.clip_grad_norm_(trainable, cfg.grad_clip)
-                if scaler.is_enabled():
-                    scaler.step(opt)
-                    scaler.update()
+                gn = nn.utils.clip_grad_norm_(trainable, cfg.grad_clip)
+                if torch.isfinite(gn):                 # the one sync per step
+                    if scaler.is_enabled():
+                        scaler.step(opt)
+                        scaler.update()
+                    else:
+                        opt.step()
+                    if ema is not None:
+                        ema.update(core)
                 else:
-                    opt.step()
+                    n_bad += 1
+                    if n_bad <= 5 or n_bad % 50 == 0:
+                        print(f"  [e{epoch} s{step}] non-finite gradient "
+                              f"(#{n_bad}) — step skipped", flush=True)
                 opt.zero_grad(set_to_none=True)
-                if ema is not None:
-                    ema.update(core)
-
-            run_loss += loss_v
-            nb += 1
+            s_win += batch["target"].shape[0]
             if step % 25 == 0:
                 # Only here do the remaining stats get pulled off the device.
                 st = {k: float(v) for k, v in stats.items()}
                 el = (time.time() - t0) / 60
+                dt = max(1e-6, time.time() - t_win)
+                ips, t_win, s_win = s_win / dt, time.time(), 0
+                vram = (f" vram={torch.cuda.max_memory_allocated() / 1024 ** 3:.0f}G"
+                        if n_gpu else "")
                 print(f"  e{epoch} s{step}/{n_steps} loss={st['loss']:.3f} "
                       f"(l1={st['l1']:.2f} sil={st['silog']:.2f} "
                       f"nrm={st['normal']:.3f} flat={st['flat']:.3f} "
                       f"bin={st['bin']:.2f} seg={st['seg']:.2f} "
                       f"a={st['alpha']:.2f}) lr={opt.param_groups[0]['lr']:.2e} "
-                      f"{el:.0f}min", flush=True)
+                      f"{ips:.1f} img/s{vram} {el:.0f}min", flush=True)
             if (time.time() - t0) / 60 > cfg.max_minutes:
                 print(f"  wall-clock cap {cfg.max_minutes:.0f} min hit")
                 stop = True
                 break
 
+        run_loss = float(run_loss_t)
+        if n_bad:
+            print(f"  e{epoch}: {n_bad} optimiser step(s) skipped on non-finite "
+                  f"gradients")
         rec = {"epoch": epoch, "train_loss": run_loss / max(1, nb),
                "encoder_frozen": core.encoder.frozen,
                "minutes": (time.time() - t0) / 60}
@@ -305,7 +362,8 @@ def main() -> None:
                 torch.cuda.empty_cache()
             swap = ema.swapped(ema, core) if ema is not None else contextlib.nullcontext()
             with swap:
-                m = evaluate(model, dl_va, cfg, device, use_tta=False)
+                m = evaluate(model, dl_va, cfg, device, use_tta=False,
+                             gpu_prep=gpu_prep)
                 rec["val"] = m
                 print(f"  eval e{epoch}  {format_line(m)}")
                 if m["global"]["rmse_m"] < best:
@@ -328,8 +386,10 @@ def main() -> None:
         print(f"[final] evaluating best.pt (epoch {ck.get('epoch')})")
 
     for name, fn in (
-        ("final_plain", lambda: evaluate(model, dl_va, cfg, device, use_tta=False)),
-        ("final_tta", (lambda: evaluate(model, dl_va, cfg, device, use_tta=True))
+        ("final_plain", lambda: evaluate(model, dl_va, cfg, device, use_tta=False,
+                                         gpu_prep=gpu_prep)),
+        ("final_tta", (lambda: evaluate(model, dl_va, cfg, device, use_tta=True,
+                                        gpu_prep=gpu_prep))
          if cfg.tta else None),
     ):
         if fn is None:
