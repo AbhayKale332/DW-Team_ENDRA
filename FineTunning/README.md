@@ -20,7 +20,18 @@ FineTunning/
 │   ├── requirements-kaggle.txt
 │   └── utils/install_dependency.py
 ├── v2/ ...                      # copy v1/ to start a new version
+├── v4/                          # the deliverable, tuned for 1x H100 (run_lightning.sh)
+└── V4_Kaggle/                   # v4 + DDP + full-state resume, for GPU T4 x2
+    ├── run_kaggle.sh            # check | prepare | link | smoke | train | finalize
+    └── kaggle_train.ipynb       # the four notebook cells
 ```
+
+**On Kaggle's free GPU T4 x2, use `V4_Kaggle/`, not `v4/`.** It is a full copy of
+`v4/` with three changes — DistributedDataParallel across the two cards,
+full-state multi-session resume (`last_full.pt`, so a dead 12 h session is
+recoverable), and a flag profile that fits 16 GB of Turing. Same data layout as
+`v4/`; only the paths differ. `v4/` is unchanged and remains the H100 runbook.
+See [`V4_Kaggle/README.md` §5](V4_Kaggle/README.md).
 
 ## Run on Kaggle
 
