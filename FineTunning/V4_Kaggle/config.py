@@ -117,7 +117,7 @@ class Config:
     encoder_model_id: str = "facebook/dinov3-vitl16-pretrain-sat493m"
     encoder_feature_indices: tuple = (6, 12, 18, 24)
     decoder_dim: int = 256
-    n_bins: int = 96
+    n_bins: int = 160
     bin_min_m: float = 0.0
     bin_max_m: float = 120.0
 
