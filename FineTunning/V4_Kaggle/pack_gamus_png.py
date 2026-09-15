@@ -67,26 +67,92 @@ def _square(a: np.ndarray, t: int) -> np.ndarray | None:
     return a[top:top + t, left:left + t]
 
 
+_IMG_DIRS = ("images", "image", "rgb", "img", "inputs", "optical")
+_DEP_DIRS = ("depth", "depths", "agl", "dsm", "height", "heights", "ndsm",
+             "labels", "label", "gt", "depth_annotations", "annotations")
+# Filename decorations the two sides of a pair may disagree on.
+_AFFIX = ("gamus", "img", "image", "rgb", "depth", "agl", "dsm", "ndsm",
+          "height", "label", "gt", "mask")
+
+
+def _files(d: Path) -> dict[str, Path]:
+    """Every readable raster under d, recursively — the mirror nests some splits."""
+    return {p.stem: p for p in sorted(d.rglob("*")) if p.suffix.lower() in _EXT}
+
+
+def _resolve_sub(split_dir: Path, want: str, candidates: tuple[str, ...],
+                 other: Path | None = None) -> Path:
+    """The real subdirectory name: <want> if it holds rasters, else a known alias.
+
+    Kaggle mirrors rename these freely (`depth` -> `agl`, `depths`, `labels`...),
+    and a wrong guess reads as "no pairs", so look before giving up.
+    """
+    d = split_dir / want
+    if d.is_dir() and _files(d):
+        return d
+    subs = [p for p in sorted(split_dir.iterdir()) if p.is_dir()]
+    for name in candidates:
+        for p in subs:
+            if p.name.lower() == name and _files(p):
+                return p
+    for p in subs:                                  # exactly one other populated dir
+        if p != other and _files(p):
+            return p
+    return d
+
+
+def _key(stem: str) -> str:
+    """Pairing key: the tile id, with prefixes/suffixes either side may carry."""
+    s = stem.lower()
+    changed = True
+    while changed:
+        changed = False
+        for a in _AFFIX:
+            for pre, suf in ((a + "_", None), (None, "_" + a)):
+                if pre and s.startswith(pre) and len(s) > len(pre):
+                    s, changed = s[len(pre):], True
+                elif suf and s.endswith(suf) and len(s) > len(suf):
+                    s, changed = s[:-len(suf)], True
+    return s
+
+
+def _explain(split_dir: Path, img_dir: Path, dep_dir: Path) -> str:
+    """What is actually on disk — the only way to fix a layout mismatch."""
+    def sample(d: Path) -> str:
+        if not d.is_dir():
+            return f"{d} : MISSING"
+        f = _files(d)
+        names = ", ".join(list(f)[:5]) or "(no " + "/".join(_EXT) + " files)"
+        return f"{d} : {len(f)} rasters  e.g. {names}"
+    subs = ", ".join(p.name for p in sorted(split_dir.iterdir()) if p.is_dir())
+    return (f"no image/depth pairs under {split_dir}\n"
+            f"  subdirs: {subs or '(none)'}\n"
+            f"  images -> {sample(img_dir)}\n"
+            f"  depth  -> {sample(dep_dir)}\n"
+            f"  pass --images_sub/--depth_sub with the real directory names")
+
+
 def _pairs(split_dir: Path, img_sub: str, dep_sub: str) -> list[tuple[str, Path, Path]]:
-    imgs = {p.stem: p for p in sorted((split_dir / img_sub).iterdir())
-            if p.suffix.lower() in _EXT}
-    deps = {p.stem: p for p in sorted((split_dir / dep_sub).iterdir())
-            if p.suffix.lower() in _EXT}
-    # The mirror pairs by identical stem, but tolerate a _depth/_agl/_dsm suffix
-    # on the label side rather than silently packing half the split.
+    img_dir = _resolve_sub(split_dir, img_sub, _IMG_DIRS)
+    dep_dir = _resolve_sub(split_dir, dep_sub, _DEP_DIRS, other=img_dir)
+    if not img_dir.is_dir() or not dep_dir.is_dir():
+        raise RuntimeError(_explain(split_dir, img_dir, dep_dir))
+    if img_dir != split_dir / img_sub or dep_dir != split_dir / dep_sub:
+        print(f"[{split_dir.name}] using {img_dir.name}/ + {dep_dir.name}/")
+    imgs, deps = _files(img_dir), _files(dep_dir)
+    by_key: dict[str, Path] = {}
+    for stem, dp in deps.items():
+        by_key.setdefault(_key(stem), dp)
     out = []
     for stem, ip in imgs.items():
-        dp = deps.get(stem)
-        if dp is None:
-            for suf in ("_depth", "_agl", "_dsm", "_AGL", "_DEPTH"):
-                if stem + suf in deps:
-                    dp = deps[stem + suf]
-                    break
-        if dp is None and stem.startswith("gamus_"):
-            dp = deps.get(stem[len("gamus_"):])
+        dp = deps.get(stem) or by_key.get(_key(stem))
         if dp is not None:
             out.append((stem, ip, dp))
-    return out
+    if not out:
+        raise RuntimeError(_explain(split_dir, img_dir, dep_dir))
+    if len(out) < len(imgs):
+        print(f"[{split_dir.name}] {len(imgs) - len(out)} images had no depth match")
+    return sorted(out)
 
 
 def _decode_scale(sample: np.ndarray, mode: str) -> float:
@@ -108,8 +174,6 @@ def pack_split(src: Path, out: Path, img_sub: str, dep_sub: str, n_tiles: int,
         return
 
     pairs = _pairs(src, img_sub, dep_sub)
-    if not pairs:
-        raise RuntimeError(f"no image/depth pairs under {src}")
     if n_tiles and n_tiles < len(pairs):
         rng = np.random.default_rng(0)
         keep = rng.permutation(len(pairs))[:n_tiles]
