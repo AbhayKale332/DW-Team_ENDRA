@@ -528,6 +528,11 @@ def main() -> None:
                           "diverge.  See README §5.3(a).")
             if n_gpu:
                 torch.cuda.empty_cache()
+                # `vram=` is a high-water mark that never resets, so after the
+                # unfreeze it would keep reporting the frozen-encoder peak and
+                # hide the only number that matters here: whether 303 M extra
+                # parameters, their gradients and AdamW's two moments still fit.
+                torch.cuda.reset_peak_memory_stats()
 
         model.train()
         core.encoder.train()

@@ -95,3 +95,36 @@ def test_prefix_tokens_are_dropped_correctly(small_dinov3):
     assert len(feats) == 4
     for f in feats:
         assert f.shape == (2, 64, 4, 4)      # 64/16 = 4 patches per side
+
+
+def test_no_trainable_param_is_unreachable_after_unfreeze(small_dinov3):
+    """The DDP precondition: everything that wants a gradient must get one.
+
+    With `find_unused_parameters=False` the reducer buckets every
+    `requires_grad` parameter at construction and then blocks until each one
+    reports a gradient.  Unfreezing the encoder used to register three tensors
+    that no gradient can reach — `embeddings.mask_token` (masked-image
+    modelling only) and the backbone's trailing LayerNorm, which is applied to
+    `last_hidden_state` while the taps read the pre-norm `hidden_states` — so
+    the reduction never finished and the next forward died in
+    `_rebuild_buckets`.  The 2xT4 run reported them as indices `1 413 414`, one
+    step after the unfreeze at epoch 3.
+    """
+    from models.heads import DepthWizardNet
+
+    net = DepthWizardNet(small_dinov3)
+    net.encoder.set_frozen(False)
+
+    enc = net.encoder.model
+    assert enc.embeddings.mask_token.requires_grad is False
+    assert enc.norm.weight.requires_grad is False
+    assert enc.norm.bias.requires_grad is False
+    # ...and the probe is not simply switching the whole backbone off
+    assert sum(p.numel() for p in enc.parameters() if p.requires_grad) > 0
+
+    out = net(torch.randn(1, 3, 64, 64))
+    total = sum(v.float().sum() for v in out.values() if torch.is_tensor(v))
+    total.backward()
+    starved = [n for n, p in net.named_parameters()
+               if p.requires_grad and p.grad is None]
+    assert not starved, f"DDP would hang waiting on: {starved}"

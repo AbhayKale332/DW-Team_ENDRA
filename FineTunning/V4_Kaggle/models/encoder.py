@@ -93,9 +93,126 @@ class DINOv3Encoder(nn.Module):
             # `grad_checkpoint_encoder`, which trades ~35 % throughput for VRAM
             # there is no shortage of on an 80 GB H100.
             self._set_grad_checkpointing(self._ckpt)
+            self._freeze_unreachable()
         n = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
         print(f"[model] encoder {'FROZEN' if frozen else 'TRAINABLE'} "
               f"({n / 1e6:.1f}M grad params)")
+
+    # -- parameters the tapped forward cannot reach ---------------------
+    def _freeze_unreachable(self) -> list[str]:
+        """Clear `requires_grad` on backbone parameters no gradient reaches.
+
+        Unfreezing hands DDP ~415 encoder parameter tensors and three of them
+        are not on any path from `pixel_values` to the four taps:
+
+          * `embeddings.mask_token` — masked-image-modelling only.  It is read
+            solely when `bool_masked_pos` is passed to the backbone, and
+            `_hidden_states` never passes it.
+          * `norm.weight` / `norm.bias` — `DINOv3ViTModel` applies its final
+            LayerNorm to `last_hidden_state` on the way out.  The taps come
+            from `hidden_states`, which are the *pre-norm* block outputs, so
+            that LayerNorm's result is thrown away.
+
+        On one GPU those are three tensors AdamW steps with a `None` gradient,
+        i.e. nothing.  Under DDP with `find_unused_parameters=False` they are a
+        deadlock: the reducer registers a bucket for every `requires_grad`
+        parameter at construction and then waits for gradients the graph never
+        produces, the reduction never finishes, and the *next* forward dies in
+        `_rebuild_buckets` with "Expected to have finished reduction in the
+        prior iteration".  That is how the 2xT4 run died one step after the
+        unfreeze, reporting "did not receive grad: 1 413 414" — which is
+        exactly `embeddings.mask_token`, `norm.weight`, `norm.bias` in
+        `named_parameters()` order (5 embedding tensors, then 24 blocks x 17,
+        then the final norm).  Same failure mode as `fuse[3].rcu1` (indices
+        60-65) one level down; see `models/dpt.py`.
+
+        Found by probing, not by name: one tiny forward/backward through this
+        very module, and whatever comes back with `grad is None` is by
+        definition unreachable.  That survives a backbone swap or an HF
+        refactor, which a hard-coded name list does not — the list is only the
+        fallback for when the probe itself cannot run.
+        """
+        dead = self._probe_unreachable()
+        if dead is None:
+            dead = self._named_unreachable()
+        by_name = dict(self.model.named_parameters())
+        got = []
+        for nm in dead:
+            p = by_name.get(nm)
+            if p is not None and p.requires_grad:
+                p.requires_grad_(False)
+                got.append(nm)
+        if got:
+            print(f"[model] {len(got)} unreachable encoder parameter(s) left "
+                  f"frozen (never receive gradients, would hang DDP): "
+                  f"{', '.join(got)}")
+        else:
+            print("[model] encoder probe: every trainable parameter reaches "
+                  "the taps")
+        return got
+
+    def _probe_unreachable(self) -> list[str] | None:
+        """Names of trainable backbone params that get no grad from `forward`.
+
+        `None` means the probe could not be run, not that nothing is dead.
+
+        The input is a deterministic ramp rather than `torch.randn`: it draws no
+        numbers from the global RNG, so a resumed run's RNG state stays exactly
+        where `_restore_rng` put it.  Values do not matter — only whether an
+        autograd edge exists — but a *constant* input would make every
+        LayerNorm see zero variance, so the ramp avoids the degenerate case.
+        The probe runs in train mode so it exercises the same graph training
+        will, gradient checkpointing included.
+        """
+        ref = next(self.model.parameters(), None)
+        if ref is None:
+            return []
+        s = max(self.patch * 4, self.patch)
+        n = 3 * s * s
+        x = (torch.arange(n, device=ref.device, dtype=torch.float32)
+             .reshape(1, 3, s, s) / n).to(ref.dtype)
+        was_training = self.model.training
+        stash = [(p, p.grad) for p in self.model.parameters()]
+        try:
+            for p, _ in stash:
+                p.grad = None
+            self.model.train()
+            with torch.enable_grad():
+                outs = self.forward(x)
+                total = outs[0].float().sum()
+                for o in outs[1:]:
+                    total = total + o.float().sum()
+                total.backward()
+            return [nm for nm, p in self.model.named_parameters()
+                    if p.requires_grad and p.grad is None]
+        except Exception as e:  # noqa: BLE001
+            print(f"[model] unreachable-parameter probe failed ({e}) — "
+                  "falling back to the known dead set")
+            return None
+        finally:
+            # The probe's gradients are not training signal; drop them and put
+            # back whatever was there (nothing, at every call site).
+            for p, g in stash:
+                p.grad = g
+            self.model.train(was_training)
+
+    def _named_unreachable(self) -> list[str]:
+        """The dead set for this backbone family, by name.
+
+        Only consulted when `_probe_unreachable` raised.  Each name is checked
+        against the live module, so a backbone without it is simply unaffected.
+        """
+        out = []
+        emb = getattr(self.model, "embeddings", None)
+        if isinstance(getattr(emb, "mask_token", None), nn.Parameter):
+            out.append("embeddings.mask_token")
+        # The ViT's own trailing LayerNorm, which sits after the last tapped
+        # hidden state.  Matched as a direct attribute of the backbone so the
+        # per-block `norm1` / `norm2` cannot be caught by accident.
+        final_norm = getattr(self.model, "norm", None)
+        if isinstance(final_norm, nn.Module):
+            out += [f"norm.{nm}" for nm, _ in final_norm.named_parameters()]
+        return out
 
     def _set_grad_checkpointing(self, on: bool) -> None:
         fn = ("gradient_checkpointing_enable" if on

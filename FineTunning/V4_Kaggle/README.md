@@ -496,7 +496,7 @@ against, and they are four different problems:
    fp32 copies of a 321 M-param network (live, the `ModelEMA` shadow, the
    `MeanTeacher` deepcopy).
 2. **Two GPUs**, which is only useful with real DDP — and this codebase has
-   three specific traps for it (§5.3).
+   four specific traps for it (§5.3).
 3. **~12 h per session**, against a full 40 × 12 000-crop schedule that is ~17 h
    even on both cards.
 4. **~19 GB of persistent `/kaggle/working`**, and `/kaggle/input` is a
@@ -553,9 +553,9 @@ sm_80+; the mem-efficient kernel is picked instead, and the enables are already
 wrapped in `contextlib.suppress`). Keep `channels_last` and `cudnn_benchmark`
 on — they still help the DPT trunk's convolutions.
 
-### 5.3 The three DDP traps, and what was done about them
+### 5.3 The four DDP traps, and what was done about them
 
-A generic "wrap it in `DistributedDataParallel`" port breaks here three ways,
+A generic "wrap it in `DistributedDataParallel`" port breaks here four ways,
 and only one of them is loud:
 
 **(a) The encoder unfreeze invalidates the wrapper.** `train.py` flips
@@ -605,6 +605,42 @@ sum.
 but the optimiser steps every `grad_accum` micro-steps, and the T4 profile needs
 a high `grad_accum`. Non-boundary micro-steps run under `model.no_sync()`: one
 all-reduce per optimiser step instead of `grad_accum` of them.
+
+**(d) A parameter that never receives a gradient hangs the reducer.** With
+`find_unused_parameters=False` the reducer buckets every `requires_grad`
+parameter at construction and then blocks until each one reports a gradient. One
+tensor that the forward cannot reach is enough: the reduction never completes,
+and the failure surfaces one step later, in the *next* forward, as
+`RuntimeError: Expected to have finished reduction in the prior iteration`. It
+has bitten twice, at two different levels:
+
+* `DPTTrunk.fuse[3]` is the deepest fusion block and runs with no skip
+  connection, so its `rcu1` never participated in the forward — six tensors,
+  reported as indices 60–65. Fixed structurally: `FeatureFusionBlock(use_skip=False)`
+  does not build an `rcu1` at all (`models/dpt.py`).
+* The **encoder unfreeze** registers ~415 more tensors, three of which are off
+  the path to the taps: `embeddings.mask_token` (masked-image modelling; it is
+  read only when `bool_masked_pos` is passed, which it never is) and the
+  backbone's trailing `norm.weight` / `norm.bias`, which `DINOv3ViTModel`
+  applies to `last_hidden_state` while the taps read the *pre-norm*
+  `hidden_states`. Reported as indices `1 413 414`, one step after the unfreeze.
+
+The second one is handled by `DINOv3Encoder._freeze_unreachable`, called from
+`set_frozen(False)` — so it covers the unfreeze block, `--freeze_epochs 0` and
+the resume path alike, and it runs before `build_optimizer` and `_wrap`, which
+both filter on `requires_grad`. It finds the dead set by **probing**: one tiny
+forward/backward through the encoder on a deterministic ramp (no `torch.randn`,
+so a resumed run's RNG state is untouched), and anything that comes back with
+`grad is None` is unreachable by definition. That survives a backbone swap or an
+HF refactor in a way a hard-coded name list would not; the name list exists only
+as the fallback for when the probe cannot run. Both ranks probe the same
+structure and freeze the same set, so the reduction sets stay identical. The
+result is logged either way — `[model] N unreachable encoder parameter(s) left
+frozen` or `[model] encoder probe: every trainable parameter reaches the taps`.
+
+Switching `find_unused_parameters=True` on instead would also clear the error,
+at the cost of an autograd-graph traversal on every iteration — for parameters
+that are dead in every iteration and can simply be turned off once.
 
 Two things that are deliberately *not* problems: there is no BatchNorm anywhere
 (GroupNorm in the DPT trunk and heads, LayerNorm in the encoder), so there are no
