@@ -664,6 +664,17 @@ def main() -> None:
                     if teacher is not None:
                         teacher.update(core)
                 else:
+                    # The scaler tracks per-optimiser state across the step, and
+                    # `unscale_` above already moved it out of READY.  Only
+                    # `update()` puts it back — skipping it leaves the scaler
+                    # stuck and the NEXT boundary dies with "unscale_() has
+                    # already been called on this optimizer since the last
+                    # update()".  Calling update() with no step() is the
+                    # documented way to drop a step: it sees the inf that
+                    # `unscale_` recorded and backs the scale off, which is
+                    # exactly what fp16 on Turing needs it to do.
+                    if scaler.is_enabled():
+                        scaler.update()
                     n_bad += 1
                     if n_bad <= 5 or n_bad % 50 == 0:
                         print(f"  [e{epoch} s{step}] non-finite gradient "
