@@ -35,13 +35,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from dwdata.packed import NO_LABEL, ShardWriter, store_exists  # noqa: E402
 
 GAMUS_GSD_M = 0.33
-_EXT = (".png", ".tif", ".tiff", ".jpg", ".jpeg")
+# This mirror ships depth as .npy arrays next to .png imagery.
+_EXT = (".png", ".tif", ".tiff", ".jpg", ".jpeg", ".npy")
 
 
 def _imread(path: Path) -> np.ndarray:
     """Unchanged read — 16-bit depth PNGs must not be truncated to uint8."""
     import cv2
 
+    if path.suffix.lower() == ".npy":              # depth as a raw float array
+        return np.load(path, allow_pickle=False)
     a = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
     if a is None:
         raise OSError(f"unreadable: {path}")
