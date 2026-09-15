@@ -30,14 +30,26 @@ class ResidualConvUnit(nn.Module):
 
 
 class FeatureFusionBlock(nn.Module):
-    def __init__(self, c: int):
+    """`use_skip=False` drops `rcu1` entirely.
+
+    The deepest block is called with no skip connection, so its `rcu1` never
+    takes part in the forward.  On one GPU that is only six wasted parameters;
+    under DDP with `find_unused_parameters=False` the reducer waits forever for
+    gradients that never arrive and the next forward dies with "Expected to have
+    finished reduction in the prior iteration" (indices 60-65 = `fuse[3].rcu1`).
+    """
+
+    def __init__(self, c: int, use_skip: bool = True):
         super().__init__()
-        self.rcu1 = ResidualConvUnit(c)
+        self.rcu1 = ResidualConvUnit(c) if use_skip else None
         self.rcu2 = ResidualConvUnit(c)
         self.out = nn.Conv2d(c, c, 1)
 
     def forward(self, x, skip=None):
         if skip is not None:
+            if self.rcu1 is None:
+                raise RuntimeError("this FeatureFusionBlock was built without a "
+                                   "skip path (use_skip=False)")
             x = x + self.rcu1(skip)
         x = self.rcu2(x)
         x = F.interpolate(x, scale_factor=2, mode="bilinear", align_corners=False)
@@ -58,7 +70,9 @@ class DPTTrunk(nn.Module):
             nn.Conv2d(proj[3], proj[3], 3, stride=2, padding=1),  # /16 -> /32
         ])
         self.to_dim = nn.ModuleList(nn.Conv2d(p, dim, 3, padding=1, bias=False) for p in proj)
-        self.fuse = nn.ModuleList(FeatureFusionBlock(dim) for _ in range(4))
+        # fuse[3] is the deepest block and runs without a skip — no rcu1.
+        self.fuse = nn.ModuleList(FeatureFusionBlock(dim, use_skip=i < 3)
+                                  for i in range(4))
 
     def forward(self, feats: list[torch.Tensor]) -> torch.Tensor:
         f = [self.to_dim[i](self.resample[i](self.proj[i](feats[i]))) for i in range(4)]
