@@ -145,13 +145,68 @@ PY
     ;;
 
   train)
+    # ---- what the 2025-09-15 run measured, and what changed because of it ----
+    # That run trained for 452 min and got 3.947 m.  Its log shows why that is
+    # not the number this profile is capable of:
+    #
+    #   e6:  281/500 optimiser steps skipped on non-finite gradients
+    #   e7 .. e11:  500/500 skipped.   e12: 330/330 skipped.
+    #
+    # fp16 gradients overflowed in epoch 6, GradScaler backed the loss scale off
+    # 281 times, and at backoff #166 the scale underflowed fp32 to *exactly*
+    # zero — after which `unscale_` divides every gradient by zero and no step
+    # can ever be finite again.  Epochs 7-12 ran ~240 min of forward and
+    # backward passes and applied ZERO updates; the eval lines for e6, e8, e10
+    # and e12 are byte-identical because the weights genuinely never moved, and
+    # best.pt is the epoch-6 checkpoint.  Half the wall-clock budget bought
+    # nothing.  Fixed in three places:
+    #
+    #   models/losses.py   every loss term now computes in fp32, which removes
+    #                      the overflow at source (normal_loss divides height
+    #                      differences by a 0.33 m GSD, so a tall edge reaches
+    #                      ~600 and the squared norm after it 3.6e5, against an
+    #                      fp16 ceiling of 65504 — hence `nrm=nan` in the log).
+    #   train.py           the loss scale has a floor (`--amp_min_scale`), so a
+    #                      run of skips is recoverable rather than terminal, and
+    #                      a dead epoch is reported as "500/500 (100 %)" and
+    #                      aborts the run after two rather than being logged as
+    #                      a bare count six times.
+    #   config.py          init_scale 2**13 not 2**16 (the old default skipped
+    #                      the first four boundaries of epoch 1 just backing
+    #                      down) and growth_interval 500 not 2000, which was
+    #                      longer than an entire epoch on this profile.
+    #
+    # --encoder_unfreeze_blocks 16 and --llrd 0.90 are the accuracy half.  The
+    # old run unfroze all 24 blocks at --llrd 0.80, which puts the bottom block
+    # at 0.8**24 = 0.5 % of --encoder_lr (the log prints the range as
+    # "2.83e-07..3.00e-04"): the lower half of a 303 M-parameter ViT-L paid full
+    # price in gradients, all-reduce traffic and AdamW state to move
+    # essentially not at all, and dropped throughput from 4.5 to 2.1 img/s.
+    # Freezing the bottom 8 and decaying at 0.90 gives every trainable block a
+    # usable LR, frees ~1.2 GB, and buys back enough step time for ~15 epochs in
+    # the same 480 min.  Use `--encoder_unfreeze_blocks 0` for the old
+    # whole-encoder behaviour.
+    #
+    # --epochs 16 replaces 40 because `progress = max(epoch fraction, wall-clock
+    # fraction)` and 40 was never reachable — the epoch half of that max was
+    # dead the whole run and the cosine was driven purely by the clock.  16 is
+    # the measured rate; if the card turns out slower the clock still governs.
+    #
+    # --eval_every 1 because 12 epochs at eval_every 2 gave best.pt only six
+    # selection points, and the run's own numbers show why that is too coarse:
+    # d1 went 0.493 -> 0.533 -> 0.482 across e2/e4/e6 while RMSE fell, so the
+    # chosen epoch is decided by which epochs happened to be sampled.  An eval
+    # is ~1.5 min here against ~32 min of training.
+    #
     # 2 ranks x micro-batch 2 x grad_accum 6 = global effective batch 24, exact
     # parity with the H100 profile.  Read `vram=NG` off the log line train.py
     # prints every 25 steps and move to --batch_size 4 --grad_accum 3 if there
-    # is headroom.  Static VRAM before activations is ~8.3 GB of ~15 usable
-    # (params 1.28 + grads 1.28 + AdamW 2.57 + EMA 1.28 + teacher 1.28 + casts),
-    # which is why grad_checkpoint_encoder — off by default on an H100 — has to
-    # be on here.  Turing has no bf16 tensor cores, so fp16 + GradScaler.
+    # is headroom (the partial unfreeze above should leave some; the old run sat
+    # at 14 of 15 GiB with all 24 blocks trainable).  Static VRAM before
+    # activations is ~8.3 GB of ~15 usable (params 1.28 + grads 1.28 + AdamW
+    # 2.57 + EMA 1.28 + teacher 1.28 + casts), which is why
+    # grad_checkpoint_encoder — off by default on an H100 — has to be on here.
+    # Turing has no bf16 tensor cores, so fp16 + GradScaler.
     #
     # --make_zip false is not optional: package_results.build_zip is
     # shutil.make_archive with no exclusions and no source cleanup, so it
@@ -163,7 +218,8 @@ PY
       --amp_dtype fp16 --grad_checkpoint_encoder true \
       --batch_size 2 --grad_accum 6 --eval_batch_mult 8 \
       --num_workers 2 --prefetch_factor 2 --compile_model false \
-      --epochs 40 --max_minutes 480 --session_minutes 480 \
+      --encoder_unfreeze_blocks 16 --llrd 0.90 \
+      --epochs 16 --eval_every 1 --max_minutes 480 --session_minutes 480 \
       --save_full_state true --make_zip false "$@"
     ;;
 

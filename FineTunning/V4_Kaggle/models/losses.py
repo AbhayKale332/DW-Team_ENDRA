@@ -124,13 +124,25 @@ def l1_loss(pred, target, valid, w=None):
 
 
 def silog_loss(pred, target, valid, lam: float, shift: float):
-    """Scale-invariant log loss, masked without the three syncs `pred[valid]` costs."""
+    """Scale-invariant log loss, masked without the three syncs `pred[valid]` costs.
+
+    The variance is floored with `clamp_min` rather than nudged with `+ 1e-7`.
+    `d/dx sqrt(x) = 1/(2 sqrt(x))`, so a batch where the prediction happens to
+    track the target closely — a tile of flat ground, which is most of GAMUS —
+    drives `x` towards zero and the gradient towards `1/(2 sqrt(1e-7)) ~ 1600`,
+    *and keeps it there*, because the additive epsilon never stops the flow.
+    `clamp_min` has exactly zero gradient below the floor, so the term stops
+    contributing instead of contributing an enormous amount.  The floor is small
+    enough (1e-8 -> a loss of 1e-4 at the optimum) that the reported value is
+    strictly closer to zero than the old `+ 1e-7` spelling gave.
+    """
     m = valid.to(pred.dtype)
     n = m.sum().clamp_min(1.0)
     g = torch.log(pred.clamp_min(0) + shift) - torch.log(target.clamp_min(0) + shift)
     g = torch.where(m > 0, g, torch.zeros((), dtype=g.dtype, device=g.device))
     mu = g.sum() / n
-    return torch.sqrt((g ** 2).sum() / n - lam * (mu ** 2) + 1e-7)
+    var = (g ** 2).sum() / n - lam * (mu ** 2)
+    return var.clamp_min(1e-8).sqrt()
 
 
 def gradient_loss(pred, target, valid, scales: int = 4):
@@ -192,7 +204,22 @@ def flatness_loss(pred, target, valid, cls=None, flat_ids=(0, 3, 4), tol_m: floa
     if cls is not None:
         c = cls.unsqueeze(1) if cls.dim() == pred.dim() - 1 else cls
         c = c[..., 1:-1, 1:-1]
-        sem = torch.zeros_like(m)
+        # Unlabelled pixels count as eligible, and that is what makes this term
+        # work at all on the GAMUS Kaggle mirror.  It ships no semantic raster,
+        # so `cls` arrives entirely as SEG_IGNORE_INDEX — and intersecting with
+        # the flat-class set then produced an EMPTY mask on every step of every
+        # epoch.  The v4 Kaggle log prints `flat=0.000` from step 0 to the end
+        # of the run: the planarity penalty, which README §3 calls the direct
+        # counter to "texture becomes terrain" and which matters most on the
+        # out-of-domain Indian imagery this model is for, was silently switched
+        # off for the whole run while still carrying w_flat=0.2 in the config.
+        #
+        # Where there is no label the GT-Laplacian test above is the only
+        # evidence available, and it is exactly the evidence this loss uses in
+        # the `cls is None` branch — so an all-unlabelled dataset now behaves
+        # identically to no dataset labels at all, which is plainly the intent.
+        # A labelled pixel of a non-flat class is still excluded.
+        sem = (c == SEG_IGNORE_INDEX)
         for i in flat_ids:
             sem |= (c == i)
         # Tighten to the flat classes unconditionally.  The old `if sem.any()`
@@ -294,9 +321,39 @@ def regression_terms(pred, target, valid, cfg, w, gsd):
     return total, {"l1": l1.detach(), "silog": sil.detach(), "grad": grad.detach()}
 
 
+_FP32_KEYS = ("fused", "a", "b", "seg", "b_logits", "b_centres")
+
+
 def compute_losses(out: dict, batch: dict, cfg, balancer: StratumBalancer):
-    tgt, val = batch["target"], batch["valid"].bool()
+    # ---- every loss term is computed in fp32, unconditionally --------------
+    # `compute_losses` is already called outside the autocast context, but that
+    # only stops *new* ops from being autocast — the head outputs arrive as fp16
+    # and fp16 inputs keep the arithmetic in fp16.  Two terms then overflow:
+    #
+    #   * `normal_loss` divides height differences by the GSD, so a 200 m
+    #     building edge at 0.33 m/px becomes ~600, and the `n.norm()` that
+    #     follows squares it — 3.6e5 against an fp16 ceiling of 65504.
+    #   * `silog_loss` takes a sqrt whose gradient diverges near zero.
+    #
+    # The v4 Kaggle run's log shows exactly this: `nrm=nan` in the forward from
+    # epoch 6 and inf gradients on 100 % of the optimiser steps in epochs 7-12.
+    # Casting here costs ~10 MB of fp32 activations on a (2, 1, 512, 512) batch
+    # and removes the whole failure mode; the ViT-L forward, which is where the
+    # step time actually goes, is untouched and still runs in fp16.
+    out = {k: (v.float() if (k in _FP32_KEYS and torch.is_tensor(v)
+                             and v.dtype.is_floating_point) else v)
+           for k, v in out.items()}
+
+    tgt, val = batch["target"].float(), batch["valid"].bool()
+    # A single non-finite pixel in the packed target poisons the mean, the
+    # backward and — through the optimiser state — everything after it.  One
+    # cheap elementwise op buys immunity, and `_masked_mean`'s `torch.where`
+    # already guarantees the excluded region cannot leak back in.
+    val = val & torch.isfinite(tgt)
+    tgt = torch.nan_to_num(tgt, 0.0, 0.0, 0.0)
     gsd = batch.get("gsd_m")
+    if gsd is not None:
+        gsd = gsd.float()
     w = balancer.weights(tgt, val)
 
     lf, sf = regression_terms(out["fused"], tgt, val, cfg, w, gsd)

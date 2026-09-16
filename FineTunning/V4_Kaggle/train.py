@@ -359,7 +359,11 @@ def main() -> None:
             # rest of the state after the optimiser exists (see below).
             full_ck = ck
             if ck.get("encoder_frozen") is False:
-                core.encoder.set_frozen(False)
+                # Same `top_blocks` as the session that wrote it, or the
+                # optimiser's saved param-group structure will not match.
+                core.encoder.set_frozen(
+                    False, int(ck.get("encoder_unfreeze_blocks",
+                                      cfg.encoder_unfreeze_blocks)))
         miss, unexp = core.load_state_dict(ck.get("model", ck), strict=False)
         kind = "full-state resume" if full_ck is not None else "warm start"
         print(f"[resume] {cfg.resume}: {kind}, "
@@ -434,7 +438,7 @@ def main() -> None:
     # parameters permanently un-all-reduced.  That is trap (a) all over again,
     # inside the fallback that exists to avoid it.
     if cfg.freeze_epochs <= 0:
-        core.encoder.set_frozen(False)
+        core.encoder.set_frozen(False, cfg.encoder_unfreeze_blocks)
 
     model = _wrap(core)
     if world_size > 1:
@@ -457,9 +461,44 @@ def main() -> None:
               f"conf <= {cfg.consistency_conf_m} m, ramp {cfg.consistency_rampup_epochs} ep)")
     balancer = StratumBalancer(cfg.stratum_balance_beta, cfg.stratum_weight_clip)
     ema = ModelEMA(core, cfg.ema_decay) if cfg.ema_decay > 0 else None
+    # `init_scale` defaults to 2**16 in torch, which on this network is too high
+    # to survive its own first optimiser step: the v4 Kaggle log skips steps 5,
+    # 11, 17 and 23 — the first four accumulation boundaries — purely backing the
+    # scale off from 65536.  Starting lower costs nothing (the scaler grows on
+    # its own) and gets real gradients into the weights from step 0.
     scaler = torch.amp.GradScaler(
-        "cuda", enabled=cfg.amp and n_gpu > 0 and cfg.amp_dtype == "fp16")
+        "cuda", enabled=cfg.amp and n_gpu > 0 and cfg.amp_dtype == "fp16",
+        init_scale=cfg.amp_init_scale, growth_interval=cfg.amp_growth_interval)
     amp_dt = torch.bfloat16 if cfg.amp_dtype == "bf16" else torch.float16
+
+    def _floor_scale() -> bool:
+        """Keep the loss scale above `cfg.amp_min_scale`.  Returns True if it had
+        to intervene.
+
+        `torch.amp.GradScaler` has a growth ceiling and NO floor.  Every skipped
+        step multiplies the scale by `backoff_factor` (0.5), and growth requires
+        `growth_interval` *consecutive successful* steps — so a long run of
+        skips is not self-limiting.  This is what ended the v4 Kaggle run:
+
+            e6: 281 optimiser step(s) skipped        <- fp16 overflow starts
+            e7: 500 optimiser step(s) skipped        <- 100 % of the epoch
+            e8..e11: 500 each,  e12: 330 of 330
+
+        281 backoffs take 2**16 to 2**-265, which is below the smallest fp32
+        subnormal, so the scale becomes *exactly* 0.0.  `unscale_` then divides
+        every gradient by zero, finds inf, and skips — forever.  Epochs 7-12 ran
+        ~4 hours of forward and backward passes and applied not one update: the
+        eval lines for e6, e8, e10 and e12 are byte-identical because the weights
+        genuinely never moved, and `best.pt` is the epoch-6 checkpoint.
+
+        A floor makes the failure recoverable and, more importantly, legible: at
+        the floor a skip means the *unscaled* gradient is genuinely non-finite,
+        which is a model/data problem and is reported as one below.
+        """
+        if not scaler.is_enabled() or scaler.get_scale() >= cfg.amp_min_scale:
+            return False
+        scaler.update(float(cfg.amp_min_scale))
+        return True
 
     opt, base_lrs = build_optimizer(
         cfg, core, with_encoder=not core.encoder.frozen)
@@ -469,6 +508,7 @@ def main() -> None:
     start_epoch = 1
     t0 = time.time()
     stop = False
+    dead_epochs = 0                  # consecutive epochs with zero applied steps
 
     if full_ck is not None:
         # The optimiser's param-group structure has to match what was saved,
@@ -503,7 +543,7 @@ def main() -> None:
         # ---- unfreeze the encoder once the decoder has warmed up ----------
         if cfg.freeze_epochs and epoch == cfg.freeze_epochs + 1:
             before = _bucket_params(model)   # sampled BEFORE anything changes
-            core.encoder.set_frozen(False)
+            core.encoder.set_frozen(False, cfg.encoder_unfreeze_blocks)
             opt, base_lrs = build_optimizer(cfg, core, with_encoder=True)
             if ema is not None:
                 ema = ModelEMA(core, cfg.ema_decay)   # shadow now covers the encoder
@@ -551,7 +591,9 @@ def main() -> None:
         # Losses accumulate on the device and are read once, at the end of the
         # epoch, for the same reason.
         run_loss_t = torch.zeros((), device=device, dtype=torch.float64)
-        n_bad = 0
+        n_bad = 0        # optimiser steps skipped this epoch
+        n_ok = 0         # optimiser steps actually applied this epoch
+        n_run = 0        # skips since the last applied step
 
         for step, batch in enumerate(dl_tr):
             progress = max(
@@ -662,8 +704,11 @@ def main() -> None:
                     if scaler.is_enabled():
                         scaler.step(opt)
                         scaler.update()
+                        _floor_scale()
                     else:
                         opt.step()
+                    n_ok += 1
+                    n_run = 0
                     if ema is not None:
                         ema.update(core)
                     if teacher is not None:
@@ -681,9 +726,26 @@ def main() -> None:
                     if scaler.is_enabled():
                         scaler.update()
                     n_bad += 1
+                    n_run += 1
+                    floored = _floor_scale()
                     if n_bad <= 5 or n_bad % 50 == 0:
+                        sc = (f" scale={scaler.get_scale():.3g}"
+                              if scaler.is_enabled() else "")
                         print(f"  [e{epoch} s{step}] non-finite gradient "
-                              f"(#{n_bad}) — step skipped", flush=True)
+                              f"(#{n_bad}, {n_run} in a row){sc} — step skipped",
+                              flush=True)
+                    # At the floor the scale can no longer be the cause, so a run
+                    # of skips here is a real non-finite gradient.  Say so once,
+                    # loudly, instead of letting it read as ordinary fp16 noise
+                    # for four hours.
+                    if floored and n_run == cfg.amp_skip_patience:
+                        print(f"  [e{epoch} s{step}] WARNING: "
+                              f"{cfg.amp_skip_patience} consecutive skips with "
+                              f"the loss scale already at its "
+                              f"{cfg.amp_min_scale:g} floor — the *unscaled* "
+                              f"gradient is non-finite.  This is a model or data "
+                              f"problem, not a scaler problem; the run continues "
+                              f"but is not learning.", flush=True)
                 opt.zero_grad(set_to_none=True)
             s_win += batch["target"].shape[0]
             if step % 25 == 0:
@@ -727,12 +789,45 @@ def main() -> None:
                     break
 
         run_loss = float(run_loss_t)
+        # Reported as a FRACTION, always, not as a bare count.  "500 optimiser
+        # step(s) skipped" was in the v4 log six times and read as a tolerable
+        # nuisance; "500/500 (100 %) — this epoch applied NO updates" does not.
         if n_bad:
-            print(f"  e{epoch}: {n_bad} optimiser step(s) skipped on non-finite "
-                  f"gradients")
+            n_opt = n_ok + n_bad
+            frac = n_bad / max(1, n_opt)
+            print(f"  e{epoch}: {n_bad}/{n_opt} optimiser step(s) skipped on "
+                  f"non-finite gradients ({frac:.0%})")
+            if n_ok == 0:
+                print(f"  e{epoch}: WARNING: no optimiser step was applied this "
+                      f"entire epoch — the weights are unchanged and the compute "
+                      f"was wasted.")
+            elif frac > 0.25:
+                print(f"  e{epoch}: WARNING: over a quarter of this epoch's "
+                      f"updates were dropped; the effective LR schedule no "
+                      f"longer matches the one that was planned.")
         rec = {"epoch": epoch, "train_loss": run_loss / max(1, nb),
+               "opt_steps": n_ok, "opt_steps_skipped": n_bad,
                "encoder_frozen": core.encoder.frozen,
                "minutes": (time.time() - t0) / 60}
+
+        # Two consecutive dead epochs means the floor above did not help and
+        # nothing is being learned.  Burning the rest of a 480-minute budget on
+        # that is strictly worse than stopping and letting the export stage turn
+        # the last good `best.pt` into deliverables, which is what `stop` does.
+        dead_epochs = dead_epochs + 1 if (n_ok == 0 and n_bad) else 0
+        if dead_epochs >= 2:
+            print(f"  [abort] {dead_epochs} consecutive epochs applied zero "
+                  f"optimiser steps — stopping training and going straight to "
+                  f"the final evaluation and exports.")
+            stop = True
+        if world_size > 1:
+            # `gn` is computed after DDP's reduction, so every rank sees the same
+            # value and reaches the same verdict — but one collective an epoch is
+            # free and a rank that broke out here alone would hang the others in
+            # the barrier below until the NCCL timeout.  Agree explicitly.
+            stop_t = torch.tensor([1.0 if stop else 0.0], device=device)
+            dist.all_reduce(stop_t, op=dist.ReduceOp.MAX)
+            stop = bool(stop_t.item() > 0)
 
         # Everything from here to the end of the epoch is inference-only or
         # disk I/O, and all of it runs on `core`, never on the DDP wrapper:
@@ -946,6 +1041,12 @@ def _save_full(path: Path, core, opt, scaler, ema, teacher, epoch: int,
         "best": float(best),
         "history": history,
         "encoder_frozen": bool(core.encoder.frozen),
+        # Pinned so a resumed session rebuilds the SAME optimiser param groups.
+        # With a partial unfreeze the group count depends on how many blocks are
+        # trainable, and `opt.load_state_dict` matches groups positionally — a
+        # resume that read a different `encoder_unfreeze_blocks` out of the
+        # config would load the wrong moments into the wrong tensors.
+        "encoder_unfreeze_blocks": int(getattr(core.cfg, "encoder_unfreeze_blocks", 0)),
         "rng": _rng_state(),
     }
     tmp = path.with_suffix(path.suffix + ".tmp")

@@ -756,9 +756,9 @@ want the original version left untouched regardless.
 | | |
 |---|---|
 | prepare (1200 GAMUS + 1 SynRS3D archive) | 30–60 min, network-bound, one time, CPU notebook |
-| epochs 1–2, encoder frozen | ~10 min/epoch |
-| epochs 3–40, encoder trainable, checkpointed | ~20–25 min/epoch |
-| eval every 2 epochs (rank 0 only) | ~2 min each |
+| epochs 1–2, encoder frozen | ~22 min/epoch (measured: 4.5 img/s) |
+| epochs 3–16, top 16 blocks trainable, checkpointed | ~32 min/epoch (measured: 2.1 img/s with all 24 unfrozen) |
+| eval every epoch (rank 0 only) | ~1.5 min each |
 | final eval + TTA + sliding eval | 30–60 min |
 | figures + report + ONNX | 5–10 min |
 | **total** | **~16–17 h**, i.e. two sessions at `--session_minutes 480` |
@@ -779,9 +779,99 @@ prints every 25 steps:
   a `[ddp] WARNING` is printed if it fails to grow.
 - `run.log` must contain **one** set of loss lines, not two interleaved ones —
   that is the proof rank 1's stdout redirect worked.
+- **The skipped-step fraction at the end of each epoch.** See §5.9 — this is the
+  line that would have caught the 2025-09-15 run four hours earlier.
 
 Then deliberately kill a session around epoch 4 and resume from `last_full.pt`:
 `run.log` should show the LR continuing down the cosine rather than re-warming.
+
+### 5.9 The 2025-09-15 run: half the budget trained nothing
+
+The first full Kaggle run finished cleanly, reported `sliding+TTA RMSE 3.959 m`,
+and produced every artefact except the ONNX graph. It also wasted about four of
+its eight training hours, and its own log says so if you read the right line:
+
+```
+e1:   7/500 optimiser step(s) skipped on non-finite gradients
+e2:   2/500
+e6: 281/500        <- fp16 gradients start overflowing
+e7: 500/500        <- 100 % of the epoch
+e8: 500/500   e9: 500/500   e10: 500/500   e11: 500/500   e12: 330/330
+```
+
+`torch.amp.GradScaler` halves the loss scale on every skipped step, has a growth
+ceiling and **no floor**. Starting from `2**16`, backoff number 166 takes the
+scale below the smallest fp32 subnormal, so it becomes *exactly* `0.0` — and
+`unscale_` then divides every gradient by zero, finds `inf`, and skips. Forever.
+There is no path back, because growth needs `growth_interval` consecutive
+*successful* steps.
+
+Epochs 7–12 ran ~240 minutes of forward and backward passes and applied **zero**
+optimiser updates. The tell was in plain sight and nobody was looking for it:
+
+```
+eval e6   RMSE=3.947 MAE=2.319 r=0.899 d1=0.482 bal=4.299
+eval e8   RMSE=3.947 MAE=2.319 r=0.899 d1=0.482 bal=4.299
+eval e10  RMSE=3.947 MAE=2.319 r=0.899 d1=0.482 bal=4.299
+eval e12  RMSE=3.947 MAE=2.319 r=0.899 d1=0.482 bal=4.299
+```
+
+Byte-identical, because the weights genuinely never moved. `best.pt` is the
+epoch-6 checkpoint. `3.947 m` is a 6-epoch result wearing a 12-epoch run's
+wall-clock.
+
+What overflowed, and why it took until epoch 6: `compute_losses` is called
+outside the autocast block, but the head outputs arrive as fp16 and fp16 inputs
+keep the arithmetic in fp16. `normal_loss` divides height differences by the
+0.33 m GSD, so a tall building edge becomes ~600 and the squared norm after it
+~3.6e5 — against an fp16 ceiling of 65504. The log prints `nrm=nan` from epoch 6
+onward. `silog_loss` was the second path: its `sqrt(var + 1e-7)` has a gradient
+of ~1600 as the variance approaches zero, which is what a tile of flat ground
+produces, and the additive epsilon never stops that flow.
+
+Five changes, in four files:
+
+| Where | Change |
+|---|---|
+| `models/losses.py` | every loss term computes in **fp32**, unconditionally — removes the overflow at source |
+| `models/losses.py` | `silog_loss` floors the variance with `clamp_min` (zero gradient below the floor) instead of nudging it with `+ 1e-7` |
+| `train.py` | the loss scale has a floor (`--amp_min_scale`, default 1.0), so a run of skips is recoverable rather than terminal |
+| `train.py` | skips are reported as a **fraction**, a dead epoch is called out explicitly, and two consecutive dead epochs abort to the export stage instead of burning the budget |
+| `config.py` | `--amp_init_scale 2**13` (not `2**16`, which skipped the first four boundaries of epoch 1 just backing down) and `--amp_growth_interval 500` (not 2000, which was longer than an entire epoch on this profile) |
+
+Two more things the same log exposed, neither of them the crash:
+
+- **`flat=0.000` on every step of every epoch.** The GAMUS Kaggle mirror ships
+  no semantic raster, so `cls` arrives entirely as `SEG_IGNORE_INDEX` — and
+  `flatness_loss` intersected its GT-flatness mask with the flat-*class* set,
+  which is empty. The planarity penalty §3 calls the direct counter to "texture
+  becomes terrain", and which matters most on the out-of-domain Indian imagery
+  this model is for, was switched off for the whole run while still carrying
+  `w_flat = 0.2`. Unlabelled pixels now count as eligible, so an all-unlabelled
+  dataset behaves exactly like no `cls` at all.
+- **No `depthwizard.onnx`.** The exporter traced a dynamic batch axis on a
+  **batch-1** example; `torch.export` treats 1 as a special size and specialises
+  rather than keeping it symbolic, so both the `dynamic_shapes` attempt and the
+  `dynamic_axes` fallback died with `ConstraintViolationError: ... resulted in a
+  specialized value of 1`. It now traces at batch 2 and verifies at batch 1,
+  which also proves the axis came out dynamic.
+
+And two accuracy changes that follow from what the run measured rather than from
+what it broke:
+
+- `--encoder_unfreeze_blocks 16` with `--llrd 0.90`. The old profile unfroze all
+  24 blocks at `--llrd 0.80`, which puts the bottom block at `0.8**24` = 0.5 % of
+  `--encoder_lr` — the log prints the range as `lr 2.83e-07..3.00e-04`. The lower
+  half of a 303 M-parameter ViT-L was paying full price in gradients, all-reduce
+  traffic and AdamW state to move essentially not at all, and throughput fell
+  from 4.5 to 2.1 img/s for it. `--encoder_unfreeze_blocks 0` restores the old
+  behaviour.
+- `--epochs 16 --eval_every 1`. `progress = max(epoch fraction, wall-clock
+  fraction)` and 40 epochs was never reachable, so the epoch half of that max was
+  dead all run and the cosine was driven purely by the clock. And at
+  `eval_every 2`, `best.pt` had six selection points across 12 epochs — too
+  coarse when `d1` went 0.493 → 0.533 → 0.482 across e2/e4/e6 while RMSE fell
+  monotonically.
 
 ### 5.8 Running it on an H100 instead
 

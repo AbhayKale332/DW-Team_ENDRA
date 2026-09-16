@@ -79,10 +79,30 @@ class DINOv3Encoder(nn.Module):
         return found
 
     # -- freezing -------------------------------------------------------
-    def set_frozen(self, frozen: bool) -> None:
+    def set_frozen(self, frozen: bool, top_blocks: int = 0) -> None:
+        """Freeze the backbone, or unfreeze `top_blocks` of it (0 = all of it).
+
+        A partial unfreeze leaves the patch embedding and the lower blocks with
+        `requires_grad=False`, which is all three of the places that matters:
+        `llrd_param_groups` already skips them, DDP does not bucket them, and
+        AdamW never allocates their two moment tensors.
+        """
         self.frozen = bool(frozen)
         for p in self.model.parameters():
             p.requires_grad_(not self.frozen)
+        if not self.frozen and top_blocks > 0 and self.blocks is not None:
+            keep = set()
+            for b in list(self.blocks)[-int(top_blocks):]:
+                keep.update(id(p) for p in b.parameters())
+            n_kept = 0
+            for p in self.model.parameters():
+                if id(p) in keep:
+                    n_kept += 1
+                else:
+                    p.requires_grad_(False)
+            print(f"[model] partial unfreeze: top {min(int(top_blocks), len(self.blocks))}"
+                  f"/{len(self.blocks)} blocks trainable ({n_kept} tensors); "
+                  f"patch embedding and lower blocks stay frozen")
         if self.frozen:
             self.model.eval()
         else:

@@ -56,7 +56,21 @@ def export(ckpt: str, out_path: str, *, opset: int = 17, hf_token: str = "",
     wrapper = _HeightOnly(model).eval()
 
     s = spec.tile_size
-    dummy = torch.zeros(1, 3, s, s, dtype=torch.float32)
+    # Traced at batch 2, NOT batch 1.  `torch.export` treats 0 and 1 as special
+    # sizes and will specialise a dimension whose example value is 1 rather than
+    # keep it symbolic — so tracing a "dynamic batch" export on a batch-1 example
+    # is self-defeating.  The v4 Kaggle run lost its ONNX deliverable to exactly
+    # this: both the `dynamic_shapes` attempt and the `dynamic_axes` fallback
+    # (which the dynamo exporter converts and re-traces) died with
+    #
+    #   ConstraintViolationError: Constraints violated (batch)!
+    #   - Not all values of batch = L['image'].size()[0] in the specified range
+    #     satisfy the generated guard L['image'].size()[0] <= 2
+    #   - solving the guards ... resulted in a specialized value of 1
+    #
+    # and the run finished with no depthwizard.onnx at all.  Two 512x512 fp32
+    # tiles is 6 MB of CPU memory to trace with; the graph is identical.
+    dummy = torch.zeros(2, 3, s, s, dtype=torch.float32)
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -66,8 +80,10 @@ def export(ckpt: str, out_path: str, *, opset: int = 17, hf_token: str = "",
         try:
             # torch >= 2.5 dynamo exporter: `dynamic_shapes` is the supported way
             # to say "batch is free"; `dynamic_axes` still works but warns and is
-            # converted internally.
-            batch = torch.export.Dim("batch")
+            # converted internally.  `min=1` is explicit because `Dim`'s own
+            # default lower bound is 2, which would make a batch-1 inference —
+            # what `infer/engine.py` actually does on a single tile — out of range.
+            batch = torch.export.Dim("batch", min=1)
             torch.onnx.export(wrapper, (dummy,), str(out_path),
                               dynamic_shapes={"image": {0: batch}}, **common)
         except (AttributeError, TypeError, ValueError, RuntimeError) as e:
@@ -88,7 +104,11 @@ def export(ckpt: str, out_path: str, *, opset: int = 17, hf_token: str = "",
     print(f"[onnx] {out_path} ({mb:.0f} MB) + {out_path.name}.json")
 
     if check:
-        verify(out_path, wrapper, dummy)
+        # Verified at batch 1, having been traced at batch 2, so the check also
+        # proves the batch axis really came out dynamic instead of baked — which
+        # is the one property `dynamic_shapes` is there to deliver and the one an
+        # `onnxruntime` deployment discovers the hard way if it did not.
+        verify(out_path, wrapper, dummy[:1])
     return out_path
 
 

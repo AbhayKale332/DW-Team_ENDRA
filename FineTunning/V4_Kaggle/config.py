@@ -132,6 +132,16 @@ class Config:
     # chopped off with the LR high.
     epochs: int = 40
     freeze_epochs: int = 2                  # encoder frozen for this many epochs
+    # How many transformer blocks, counted from the output, become trainable at
+    # the unfreeze.  0 = all of them, which is what the v4 Kaggle run did: 303 M
+    # encoder parameters against 3 453 GAMUS tiles, at 2.1 img/s instead of the
+    # 4.5 img/s the frozen encoder managed.  On a small labelled set the lower
+    # blocks of a SAT-493M ViT-L are already better general-purpose overhead
+    # imagery features than 42 passes over five US cities can make them, and
+    # every block left frozen is ~12.6 M fewer parameters of gradient *and* of
+    # AdamW state (~150 MB a block on a 15 GiB T4) and a faster step.  16 keeps
+    # the top two thirds adaptable and roughly halves the unfrozen cost.
+    encoder_unfreeze_blocks: int = 0
     # The cap covers *training* only; the final plain/TTA/sliding evaluation,
     # the qualitative export, figures, the report and the ONNX export run after
     # it and cost ~30 min on v3.  280 + 30 keeps the whole run inside a 5.5 h
@@ -139,7 +149,15 @@ class Config:
     max_minutes: float = 280.0              # hard wall-clock cap on training
     learning_rate: float = 3e-4             # decoder + heads
     encoder_lr: float = 6e-5                # top encoder block; decayed downward
-    llrd: float = 0.80                      # layer-wise LR decay per block
+    # Layer-wise LR decay, applied per block as `encoder_lr * llrd ** (L - depth)`.
+    # 0.80 over a 24-block ViT-L puts the bottom block at 0.8**24 = 0.5 % of
+    # `encoder_lr`, i.e. 2.8e-7 — the v4 Kaggle log prints exactly that range
+    # ("lr 2.83e-07..3.00e-04").  The lower half of the encoder was therefore
+    # paying full price in gradients, DDP all-reduce traffic and AdamW state to
+    # move essentially not at all.  0.90 keeps the same shape over a span where
+    # every unfrozen block has a usable LR; pair it with
+    # `encoder_unfreeze_blocks` rather than widening the span further.
+    llrd: float = 0.90                      # layer-wise LR decay per block
     weight_decay: float = 0.05
     warmup_frac: float = 0.05
     grad_clip: float = 1.0
@@ -169,6 +187,24 @@ class Config:
     # ----- precision / perf -----------------------------------------
     amp: bool = True
     amp_dtype: str = "bf16"                 # bf16 on Hopper
+    # ----- fp16 loss scaling (Turing/T4 profile) --------------------
+    # torch's GradScaler defaults are init_scale=2**16, growth_interval=2000 and
+    # NO lower bound on the scale.  All three hurt here, and the third one ended
+    # the v4 Kaggle run: see `_floor_scale` in train.py for the full account.
+    #
+    #   * 2**16 is high enough that the first four accumulation boundaries of
+    #     epoch 1 were skipped just backing it down.  2**13 starts inside the
+    #     range the run actually settled at and the scaler grows from there.
+    #   * growth_interval 2000 is longer than an entire epoch on this profile
+    #     (500 optimiser steps), so a scale that backed off once could not
+    #     recover within the run.  500 lets it climb back each epoch.
+    #   * amp_min_scale is the floor that makes a long run of skips survivable
+    #     instead of terminal.  Below ~1.0 there is no headroom left to reclaim
+    #     anyway: a skip at scale 1.0 means the true gradient is non-finite.
+    amp_init_scale: float = 2.0 ** 13
+    amp_growth_interval: int = 500
+    amp_min_scale: float = 1.0
+    amp_skip_patience: int = 50             # consecutive floored skips -> warn
     channels_last: bool = True
     # OFF.  The v4 draft defaulted this to True with the comment "required to
     # fit ViT-L unfrozen @512" — the v3 H100 log disproves that directly: the
@@ -285,6 +321,10 @@ class Config:
         assert self.gsd_jitter_lo_m <= self.gsd_jitter_hi_m
         assert 0 <= self.freeze_epochs <= self.epochs
         assert 0.0 <= self.unlabeled_batch_frac <= 2.0
+        assert self.encoder_unfreeze_blocks >= 0
+        # A floor above the initial scale would pin the scale there and defeat
+        # the backoff the scaler exists to perform.
+        assert 0.0 < self.amp_min_scale <= self.amp_init_scale
         try:
             Path(self.output_dir).mkdir(parents=True, exist_ok=True)
         except OSError:
