@@ -321,7 +321,17 @@ def regression_terms(pred, target, valid, cfg, w, gsd):
     return total, {"l1": l1.detach(), "silog": sil.detach(), "grad": grad.detach()}
 
 
-_FP32_KEYS = ("fused", "a", "b", "seg", "b_logits", "b_centres")
+# `alpha` and `b_std` join the original set for the same reason the rest are in
+# it: `alpha` is reported every 25 steps and is the only published trace of the
+# gate, and `b_std` is what `consistency_loss` thresholds the mean-teacher's
+# pseudo-labels with, at metre precision.  Neither should be read in fp16.
+_FP32_KEYS = ("fused", "a", "b", "seg", "b_logits", "b_centres",
+              "alpha", "b_std")
+
+# Probed whenever a forward goes non-finite; these names are what `train.py`
+# prints.  Listed earliest-in-the-graph first, so the leftmost name in the report
+# is the tensor that went bad on its own rather than by inheritance.
+NONFINITE_PROBE_KEYS = ("b_centres", "b_logits", "a", "b", "fused")
 
 
 def compute_losses(out: dict, batch: dict, cfg, balancer: StratumBalancer):
@@ -343,6 +353,18 @@ def compute_losses(out: dict, batch: dict, cfg, balancer: StratumBalancer):
     out = {k: (v.float() if (k in _FP32_KEYS and torch.is_tensor(v)
                              and v.dtype.is_floating_point) else v)
            for k, v in out.items()}
+
+    # ---- which tensor went non-finite, named ------------------------------
+    # The second v4 Kaggle run spent epochs 4 and 5 printing `l1=nan ... bin=3.77`
+    # with no way to tell from the log which head produced the NaN; working it
+    # out afterwards meant reasoning backwards from which loss terms survived.
+    # These are `any()` reductions over tensors the step already has resident,
+    # they stay on the device, and `train.py` only reads them on the steps it was
+    # already going to print — so the answer is in the log for free.
+    tgt_dev = batch["target"].device
+    nf = torch.stack([(~torch.isfinite(out[k])).any() if k in out
+                      else torch.zeros((), dtype=torch.bool, device=tgt_dev)
+                      for k in NONFINITE_PROBE_KEYS])
 
     tgt, val = batch["target"].float(), batch["valid"].bool()
     # A single non-finite pixel in the packed target poisons the mean, the
@@ -384,5 +406,6 @@ def compute_losses(out: dict, batch: dict, cfg, balancer: StratumBalancer):
         "bin": l_bin.detach(), "bin_ent": -l_ent.detach(),
         "seg": l_seg.detach(),
         "alpha": out["alpha"].detach().mean(),
+        "nonfinite": nf,
     }
     return total, stats

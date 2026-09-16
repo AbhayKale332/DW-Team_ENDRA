@@ -78,7 +78,8 @@ from eval.metrics import evaluate, format_line
 from eval.report import export_qualitative, export_viewer_sample, write_metrics_json
 from models.ema import ModelEMA
 from models.heads import DepthWizardNet
-from models.losses import StratumBalancer, compute_losses, consistency_loss
+from models.losses import (NONFINITE_PROBE_KEYS, StratumBalancer,
+                           compute_losses, consistency_loss)
 
 
 class Tee:
@@ -750,6 +751,9 @@ def main() -> None:
             s_win += batch["target"].shape[0]
             if step % 25 == 0:
                 # Only here do the remaining stats get pulled off the device.
+                # `nonfinite` is the one vector-valued entry — one flag per probed
+                # tensor — so it is pulled out before the scalar sweep.
+                nf = stats.pop("nonfinite", None)
                 st = {k: float(v) for k, v in stats.items()}
                 el = (time.time() - t0) / 60
                 dt = max(1e-6, time.time() - t_win)
@@ -758,13 +762,19 @@ def main() -> None:
                         if n_gpu else "")
                 con = (f" con={st['con']:.3f}/{st['con_keep']:.0%}"
                        if "con" in st else "")
+                # Names the tensor that went non-finite instead of leaving the
+                # reader to infer it from which loss terms survived.  Costs one
+                # 5-element D2H copy, and only on a step that is already syncing.
+                bad = ([n for n, f in zip(NONFINITE_PROBE_KEYS, nf.tolist()) if f]
+                       if nf is not None else [])
+                nfs = f" NON-FINITE:{','.join(bad)}" if bad else ""
                 print(f"  e{epoch} s{step}/{n_steps} loss={st['loss']:.3f} "
                       f"(l1={st['l1']:.2f} sil={st['silog']:.2f} "
                       f"nrm={st['normal']:.3f} flat={st['flat']:.3f} "
                       f"bin={st['bin']:.2f} ent={st['bin_ent']:.2f} "
                       f"seg={st['seg']:.2f} a={st['alpha']:.2f}{con}) "
                       f"lr={opt.param_groups[0]['lr']:.2e} "
-                      f"{ips:.1f} img/s{vram} {el:.0f}min", flush=True)
+                      f"{ips:.1f} img/s{vram} {el:.0f}min{nfs}", flush=True)
             # Both caps.  Checked only on an accumulation boundary, for two
             # reasons: the all-reduce below is a device sync and this file
             # deliberately keeps those to one per *optimiser* step, and breaking
