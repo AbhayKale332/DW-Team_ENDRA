@@ -75,7 +75,11 @@ class Config:
     # An "epoch" is a fixed number of random crops, decoupled from tile count so
     # the LR schedule and the wall-clock budget stay predictable.
     crops_per_epoch: int = 12000
-    val_tiles: int = 400
+    val_tiles: int = 400                    # 0 -> score the whole val store.
+                                            # Non-zero selects the FIRST n tiles in
+                                            # sorted-stem order (a prefix, not a
+                                            # random sample) — kept at 400 so the
+                                            # number stays comparable to v1-v4.
     max_valid_height_m: float = 200.0       # AGL above this is LiDAR noise, not a building
 
     # ----- geometry / GSD -------------------------------------------

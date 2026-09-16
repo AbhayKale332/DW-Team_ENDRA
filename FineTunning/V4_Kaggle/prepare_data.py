@@ -64,10 +64,22 @@ GEONRW_TEST_CITIES = ("duesseldorf", "herne", "neuss")
 
 
 def _remap(a: np.ndarray, table: dict) -> np.ndarray:
+    """Map source ids through `table`; anything unlisted becomes NO_LABEL.
+
+    The clip used to be `np.clip(a, 0, len(lut) - 1)`, which silently folded
+    *every* out-of-range id onto the highest class instead of discarding it — so
+    a void/ignore id (GAMUS-style 255) would have been packed as a real class and
+    trained on as ground truth.  Out-of-range now routes to NO_LABEL, which
+    `dataset.py` turns into SEG_IGNORE_INDEX and the CE loss skips.
+    """
     lut = np.full(int(max(table) + 1), NO_LABEL, np.uint8)
     for k, v in table.items():
         lut[k] = v
-    return lut[np.clip(a, 0, len(lut) - 1).astype(np.int32)]
+    a = np.asarray(a).astype(np.int32)
+    out = np.full(a.shape, NO_LABEL, np.uint8)
+    ok = (a >= 0) & (a < len(lut))
+    out[ok] = lut[a[ok]]
+    return out
 
 
 def _token(explicit: str = "") -> str | None:
@@ -163,8 +175,14 @@ def prepare_gamus(root: Path, split: str, n_tiles: int, token, force: bool,
             k = "image" if "image" in f else list(f.keys())[0]
             return np.asarray(f[k][()])
 
+    # `classes/` is fetched best-effort (the except below swallows a 404 so a
+    # repo without semantics still packs).  That silence is exactly how every v4
+    # run so far trained with a 0.2-weight semantic head that contributed
+    # nothing: the PNG mirror has no classes, and this path would not have said
+    # so either.  Count the yield and stamp it into the index.
     writer = ShardWriter(out, tile_px=1024, gsd_m=GAMUS_GSD_M, shard_tiles=128)
     done = 0
+    n_cls = 0
     with ThreadPoolExecutor(max_workers=workers) as ex:
         for stem, paths in ex.map(_safe(fetch), stems):
             if paths is None:
@@ -178,6 +196,7 @@ def prepare_gamus(root: Path, split: str, n_tiles: int, token, force: bool,
                 agl = np.where(valid, np.clip(agl, 0.0, None), 0.0)
                 writer.add(stem, rgb, agl, cls, valid)
                 done += 1
+                n_cls += cls is not None
             except Exception as e:  # noqa: BLE001
                 print(f"[gamus/{split}] skip {stem}: {e}")
             finally:
@@ -186,9 +205,20 @@ def prepare_gamus(root: Path, split: str, n_tiles: int, token, force: bool,
                         Path(p).unlink(missing_ok=True)
             if done % 200 == 0:
                 print(f"  {done}/{len(stems)}", flush=True)
+    writer.has_seg = n_cls > 0
     idx = writer.finalise()
     shutil.rmtree(tmp, ignore_errors=True)
     print(f"[gamus/{split}] packed {idx['n']} tiles into {len(idx['shards'])} shards")
+    if n_cls == done and done:
+        print(f"[gamus/{split}] semantic labels: {n_cls}/{done} tiles OK")
+    elif n_cls:
+        print(f"[gamus/{split}] !! semantic labels on only {n_cls}/{done} tiles — "
+              f"the rest train with seg ignored")
+    else:
+        print(f"[gamus/{split}] !! NO semantic labels fetched (0/{done}). "
+              f"seg_ce_loss will be exactly 0.0 and w_seg buys nothing; "
+              f"flatness_loss loses its ground/road/water restriction. "
+              f"Check the token's access to {repo}:classes/{split}/, or pass --w_seg 0.")
 
 
 def _safe(fn):

@@ -19,6 +19,7 @@ import numpy as np
 import torch
 from torch.utils.data import ConcatDataset, DataLoader, WeightedRandomSampler
 
+from .augment import achievable_gsd_range
 from .dataset import FullTileDataset, TileDataset, UnlabeledTileDataset
 from .packed import PackedStore, store_exists
 
@@ -142,10 +143,40 @@ def build_loaders(cfg, spec, rank: int = 0, world_size: int = 1,
         train_sets.append(TileDataset(cfg, st, spec, name, train=True,
                                       length=len(st), gpu_augment=gpu_aug))
         train_w.append(float(weights.get(name, 1.0)))
-        print(f"[data] {name}/train: {len(st)} tiles @ {st.tile_px}px / {st.gsd_m} m")
+        # The GSD jitter range in the config is a *request*; what a store can
+        # actually deliver is bounded by its own extent, because v3 moved to
+        # picking the crop in source pixels first (see dwdata/augment.py).  A
+        # 1024 px / 0.33 m GAMUS tile caps at 1024*0.33/512 = 0.66 m, so the
+        # configured 1.20 m upper bound is silently unreachable and the real
+        # scale span is 2.2x, not 4x.  That clamp is correct — it is what stops
+        # v2's zero-padding bug — but it was invisible, so print it: mixing a
+        # coarse source (DFC2019 at 1.3 m) is the only way to actually train the
+        # coarse end, and you cannot tell that from the config alone.
+        lo_g, hi_g = achievable_gsd_range(
+            st.tile_px, st.tile_px, st.gsd_m, cfg.tile_size,
+            cfg.gsd_jitter_lo_m, cfg.gsd_jitter_hi_m)
+        note = ""
+        if hi_g < cfg.gsd_jitter_hi_m - 1e-6:
+            note = f"  [!] requested hi {cfg.gsd_jitter_hi_m:.2f} unreachable"
+        print(f"[data] {name}/train: {len(st)} tiles @ {st.tile_px}px / {st.gsd_m} m"
+              f"  gsd_jitter={lo_g:.2f}..{hi_g:.2f} m  seg={'yes' if st.has_seg else 'NO'}{note}")
     if missing:
         print(f"[data] not prepared, skipped: {missing}  "
               f"(run `python prepare_data.py --datasets {','.join(missing)}`)")
+    # Every v4 run to date carried w_seg=0.2 against stores with no semantic
+    # raster, so seg_ce_loss returned exactly 0.0 on every step of every epoch
+    # and nobody noticed until the run was over.  It is one boolean, already in
+    # index.json — say it at startup instead.
+    if train_sets and float(getattr(cfg, "w_seg", 0.0)) > 0:
+        seg_ok = [ds.src for ds in train_sets if ds.store.has_seg]
+        if not seg_ok:
+            print(f"[data] !! w_seg={cfg.w_seg} but NO train store has semantic labels — "
+                  f"seg_ce_loss will be exactly 0.0 for the whole run and "
+                  f"flatness_loss loses its ground/road/water restriction. "
+                  f"Pass --w_seg 0, or prepare a source that ships classes.")
+        elif len(seg_ok) < len(train_sets):
+            print(f"[data] w_seg={cfg.w_seg}; semantic labels only from {seg_ok}")
+
     if not train_sets:
         raise RuntimeError(
             f"no prepared datasets under {root}. Run prepare_data.py first.")
@@ -187,7 +218,14 @@ def build_loaders(cfg, spec, rank: int = 0, world_size: int = 1,
         val_store, val_name = train_sets[0].store, train_sets[0].src
         print(f"[data] no dedicated val split; using a slice of {val_name}/train")
 
-    n_val = min(cfg.val_tiles, len(val_store))
+    # `TileDataset`/`FullTileDataset` both index with `ti = i % len(store)`, so
+    # a length of N selects the **first N tiles in sorted-stem order** — a
+    # prefix, not a random sample.  That is deliberately left alone: v1-v4 were
+    # all scored on the same prefix, and swapping in a random subset now would
+    # silently break the only yardstick we have (v3's 2.723 m).  `--val_tiles 0`
+    # scores the whole store instead, which is the honest number to report
+    # alongside it.
+    n_val = len(val_store) if cfg.val_tiles <= 0 else min(cfg.val_tiles, len(val_store))
     # Val runs every `eval_every` epochs, so it does not need — and must not
     # hold — a second full set of persistent workers: with num_workers sized for
     # the GPU (16+) that doubled the process count and had the two pools
@@ -213,7 +251,8 @@ def build_loaders(cfg, spec, rank: int = 0, world_size: int = 1,
         persistent_workers=False,
         prefetch_factor=cfg.prefetch_factor if n_val_workers else None,
     )
-    print(f"[data] val: {n_val} tiles from {val_name}  "
+    how = "all" if n_val >= len(val_store) else f"first {n_val} of {len(val_store)}, prefix not sample"
+    print(f"[data] val: {n_val} tiles from {val_name} ({how})  "
           f"({len(dl_tr)} train steps/epoch)")
     full = FullTileDataset(cfg, val_store, spec, val_name, length=n_val)
     return dl_tr, dl_va, full
