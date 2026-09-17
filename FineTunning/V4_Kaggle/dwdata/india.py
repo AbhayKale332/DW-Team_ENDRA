@@ -167,7 +167,8 @@ def _grid(h: int, w: int, tile: int, stride: int):
 def pack_labeled(src_dir: Path, out_dir: Path, tile_px: int, gsd_m: float,
                  max_tiles: int = 0, force: bool = False,
                  dsm_is_absolute: bool = False,
-                 label: str = "india/labeled") -> dict | None:
+                 label: str = "india/labeled",
+                 max_height_m: float = 0.0) -> dict | None:
     """Paired Indian rasters -> a packed store the trainer can sample directly.
 
     `dsm_is_absolute=True` says the height raster is elevation above sea level
@@ -185,7 +186,16 @@ def pack_labeled(src_dir: Path, out_dir: Path, tile_px: int, gsd_m: float,
         return None
     print(f"[{label}] {len(recs)} pairs under {src_dir} -> {out_dir}")
 
-    w = ShardWriter(out_dir, tile_px=tile_px, gsd_m=gsd_m, shard_tiles=128)
+    # `has_seg` is what `loaders.py` prints at startup and what the `w_seg > 0`
+    # guard there tests, so a store that claims semantic labels it does not have
+    # defeats the one check standing between a live `w_seg` and a loss term that
+    # is silently always zero.  `ShardWriter` defaults it to True, and this
+    # packer used to take that default even when not one record carried a seg
+    # raster — DFC23 packs `cls=None` for every tile and still came out
+    # advertising `seg=yes`.  Take it from the data.
+    any_seg = any(r["seg"] is not None for r in recs)
+    w = ShardWriter(out_dir, tile_px=tile_px, gsd_m=gsd_m, shard_tiles=128,
+                    has_seg=any_seg)
     n = 0
     for rec in recs:
         try:
@@ -208,6 +218,12 @@ def pack_labeled(src_dir: Path, out_dir: Path, tile_px: int, gsd_m: float,
 
                 seg = resize(seg, rgb.shape[:2], "nearest")
             valid = np.isfinite(hgt) & (hgt > -2.0) & (hgt < 500.0)
+            # `max_height_m` marks anything above it INVALID rather than
+            # clipping it: a stereo blunder is not a building of the ceiling
+            # height, it is an unknown, and clipping would train the ceiling as
+            # fact.  Off (0.0) by default — 500 m stays the only filter.
+            if max_height_m > 0:
+                valid &= hgt <= max_height_m
             hgt = np.where(valid, np.clip(hgt, 0.0, None), 0.0).astype(np.float32)
             for y, x in _grid(*rgb.shape[:2], tile_px, tile_px):
                 sl = (slice(y, y + tile_px), slice(x, x + tile_px))
@@ -224,7 +240,8 @@ def pack_labeled(src_dir: Path, out_dir: Path, tile_px: int, gsd_m: float,
         if max_tiles and n >= max_tiles:
             break
     idx = w.finalise()
-    print(f"[{label}] packed {idx['n']} tiles @ {tile_px}px / {gsd_m} m")
+    print(f"[{label}] packed {idx['n']} tiles @ {tile_px}px / {gsd_m} m  "
+          f"seg={'yes' if any_seg else 'NO'}")
     return idx
 
 

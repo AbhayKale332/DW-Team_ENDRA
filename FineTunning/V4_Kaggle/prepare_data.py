@@ -637,40 +637,80 @@ def prepare_dfc23(root: Path, a) -> None:
             idx = pack_labeled(stage, out, a.dfc23_tile, gsd,
                                max_tiles=a.dfc23_max, force=a.force,
                                dsm_is_absolute=a.dfc23_absolute_dsm,
-                               label=f"dfc23/{name}/{split}")
+                               label=f"dfc23/{name}/{split}",
+                               max_height_m=a.dfc23_max_height_m)
             if idx:
                 _dfc23_height_check(out, f"{name}/{split}")
     shutil.rmtree(root / "_dfc23_stage", ignore_errors=True)
 
 
-def _dfc23_height_check(out: Path, label: str) -> None:
-    """Say what was actually packed.  DFC23 Track 2 ships an nDSM (height above
-    ground), so the median should sit near 0 — a median metres above zero is what
-    an absolute DSM slipping through looks like, and it would poison the target
-    silently."""
+def _dfc23_height_check(out: Path, label: str, tall_m: float = 100.0,
+                        edge_px: int = 32) -> None:
+    """Say what was actually packed, and check the two things that bite.
+
+    **Is it really an nDSM?**  DFC23 Track 2 ships height above ground, so the
+    median belongs near 0.  A median metres above zero is an absolute DSM, which
+    would poison the target silently.
+
+    **Are the very tall pixels real?**  The DFC23 nDSMs are stereo-derived and
+    carry blunders at tile edges.  Measured on a New Delhi training scene, every
+    single pixel above 100 m — 2,615 of them, up to 183.2 m — sat in rows 0-31, a
+    ribbon glued to the top border, over RGB that is ordinary city (luminance
+    119.5 vs 133.5 for the rest of the tile, no structure).  Nothing downstream
+    catches that: `pack_labeled` filters at 500 m and `dataset.py` clamps at
+    `--max_valid_height_m` 200, so a phantom 183 m target on a normal rooftop is
+    trained as fact — and `StratumBalancer` (beta 0.7, clip 8) hands the tallest
+    stratum the *largest* loss weight in the batch, on a model whose measured
+    problem is already tall-structure bias.
+
+    So this reports the tall mass split by border vs interior.  A tall fraction
+    concentrated in the border band is the artefact signature; use
+    `--dfc23_max_height_m` to drop it.  It is a report, not a silent edit: real
+    buildings do sit at tile edges, because DFC23's tiles are cut from larger
+    scenes.
+    """
     from dwdata.packed import PackedStore
 
     st = PackedStore(out)
     n = min(len(st), 64)
-    vals = []
+    vals, n_edge, n_inner, px_edge, px_inner = [], 0, 0, 0, 0
     for i in range(n):
         _, h, _, v = st.get(i)
         h = np.asarray(h, np.float32)
         v = np.asarray(v, bool)
-        if v.any():
-            vals.append(h[v])
+        if not v.any():
+            continue
+        vals.append(h[v])
+        e = np.zeros(h.shape, bool)
+        k = min(edge_px, min(h.shape) // 2)
+        e[:k] = e[-k:] = True
+        e[:, :k] = e[:, -k:] = True
+        tall = (h > tall_m) & v
+        n_edge += int((tall & e).sum());   px_edge += int((v & e).sum())
+        n_inner += int((tall & ~e).sum()); px_inner += int((v & ~e).sum())
     if not vals:
         print(f"[dfc23] HEIGHT CHECK {label}: no valid pixels")
         return
     h = np.concatenate(vals)
     med, p99, mx = (float(np.median(h)), float(np.percentile(h, 99)),
                     float(h.max()))
+    zero = float((h == 0.0).mean()) * 100.0
     note = ""
     if med > 3.0:
-        note = ("   [!] median is metres above ground — this looks like an "
+        note = ("\n        [!] median is metres above ground — this looks like an "
                 "ABSOLUTE DSM, not an nDSM.  Re-run with --dfc23_absolute_dsm.")
     print(f"[dfc23] HEIGHT CHECK {label}: median {med:.2f} m  p99 {p99:.1f} m  "
-          f"max {mx:.1f} m  (over {n} tiles){note}")
+          f"max {mx:.1f} m  exactly-0 {zero:.1f} %  (over {n} tiles){note}")
+    if n_edge or n_inner:
+        f_e = 100.0 * n_edge / max(1, px_edge)
+        f_i = 100.0 * n_inner / max(1, px_inner)
+        flag = ""
+        # Uniform structure would put roughly equal *rates* in both bands.
+        if f_e > 4.0 * max(f_i, 1e-6):
+            flag = ("   [!] concentrated at the tile border — stereo blunders, "
+                    "not buildings.  Consider --dfc23_max_height_m.")
+        print(f"[dfc23]   >{tall_m:.0f} m: {f_e:.3f} % of border-{edge_px}px "
+              f"pixels vs {f_i:.3f} % of interior{flag}")
 
 
 def prepare_india_unlabeled(root: Path, a) -> None:
@@ -740,6 +780,11 @@ def main() -> None:
     ap.add_argument("--dfc23_gsd", type=float, default=0.5,
                     help="fallback metres/pixel when a scene carries no GeoTIFF "
                          "transform")
+    ap.add_argument("--dfc23_max_height_m", type=float, default=0.0,
+                    help="mark nDSM pixels above this INVALID (0 = off). The "
+                         "DFC23 stereo nDSMs carry >100 m blunders in a ribbon "
+                         "along tile borders; the HEIGHT CHECK printed after "
+                         "packing says whether yours do")
     ap.add_argument("--dfc23_absolute_dsm", action="store_true",
                     help="the height rasters are elevation ASL, not height AGL "
                          "(DFC23 Track 2 ships nDSM, so normally leave this off)")

@@ -979,6 +979,79 @@ That second number is the point: "v4 beat v4-2 on GAMUS val" is partly just v4
 having trained on nothing but the val domain, and with one in-domain number
 there is no way to tell that apart from real generalisation.
 
+Measured on the 605-scene `track2_test_data` download (the test split ships
+rgb + sar and no reference, so this is the imagery, not the labels):
+
+| property | value |
+|---|---|
+| scene size | **512 × 512, all 605** — not large scenes |
+| RGB | `uint8`, 3-band |
+| SAR | `float32`, 1-band, ~0.03–12 (unused) |
+| pixel size in the transform | 0.5 m, uniform |
+| CRS | **`None`, all 605** |
+| black/nodata | none worth the name — max 2.56 % zero-luminance, no scene above 5 % |
+| per-scene dynamic range | p2 spans 0–90 DN, p98 spans 107–249 DN |
+
+Three consequences worth knowing before you set the flags.
+
+**The GSD comes from `--dfc23_gsd`, not from the file.** `raster_gsd_m` returns
+its default when `ds.crs is None` (it cannot know the transform's units without
+one), so every scene lands in one `dfc23_g050` store. The 0.5 m default is right
+— the transform agrees and it matches SuperView-1 — but the per-GSD grouping is
+inert on this data. It stays in because the contest also sourced 0.8 m Gaofen-2,
+and a future drop that carries a CRS would otherwise pool them silently.
+
+**There is no scale-augmentation headroom.** A 512 px store at a 512 px model
+input caps the achievable GSD at `512 × 0.5 / 512 = 0.5 m`, so DFC23's jitter
+range collapses to 0.30–0.50 m and the `[!] requested hi 1.20 unreachable`
+warning fires for it too. Do not "fix" this by packing a smaller tile: a store
+whose tiles are smaller than `tile_size` gets upsampled crops, which is worse.
+DFC23 is in the mix for domain realism; the scale range comes from GAMUS
+(0.30–0.66) and `synrs3d_g1` (0.30–0.80).
+
+**One tile per scene**, so the scene-level split is here indistinguishable from a
+tile-level one. It is still the correct thing to do and still tested — it starts
+to matter the moment a source ships scenes bigger than one tile.
+
+Budget: 1.84 MB per packed 512 px tile, so the ~1,773-scene Track 2 training
+split is ≈3.3 GB.
+
+The reference nDSMs have a failure mode worth knowing about before you weight
+this source. On the New Delhi training scene `GF2_NewDelhi_28.5557_77.1194`,
+**every** pixel above 100 m — 2,615 of them, up to 183.2 m — lies in rows 0-31,
+a ribbon glued to the tile's top border. The RGB underneath is ordinary city
+(luminance 119.5 and texture std 33.6, against 133.5 / 38.8 for the rest of the
+tile); there is no structure there. They are stereo blunders.
+
+Nothing downstream catches that on its own: `pack_labeled` filters at 500 m and
+`dataset.py` clamps at `--max_valid_height_m` 200, so a phantom 183 m target on
+a normal rooftop trains as fact — and `StratumBalancer` (beta 0.7, clip 8) gives
+the tallest stratum the *largest* loss weight in the batch, on a model whose
+measured problem is already tall-structure bias (`tall_bias −1.70`, 20 m+ bias
+−2.20). So `prepare_data.py` now reports the tall mass split by border vs
+interior after packing:
+
+```
+[dfc23] HEIGHT CHECK dfc23_g050/train: median 0.00 m  p99 99.7 m  max 183.1 m  exactly-0 85.6 %
+[dfc23]   >100 m: 4.256 % of border-32px pixels vs 0.000 % of interior   [!] concentrated
+          at the tile border — stereo blunders, not buildings.
+```
+
+`--dfc23_max_height_m 100` marks those pixels **invalid** rather than clipping
+them — a blunder is an unknown, not a building of the ceiling height, and
+clipping would train 100 m as fact. On that scene it takes p99 from 99.7 m to
+28.0 m, which is a plausible New Delhi figure. It is off by default and the
+check is a report, not a silent edit: real buildings do sit at tile edges,
+because DFC23's tiles are cut from larger scenes, and three scenes are not
+enough to know how common this is. Pack the real split, read the line, decide.
+
+Also note the label distribution is not GAMUS-shaped. The three New Delhi nDSMs
+run 69-87 % at exactly 0.0 m with a second mass at 20-50 m (9-24 %) and very
+little between 0.5 and 5 m — consistent with a ~2 m stereo product resampled to
+0.5 m. GAMUS's val prefix, by contrast, is 49 % under 2 m and 9 % above 20 m.
+Mixing the two shifts what the stratum balancer sees; watch `per_stratum` rather
+than assuming the weights transfer.
+
 The pairing needed one new piece. DFC23 discriminates optical from height by
 **parent directory** (`rgb/P_0199.tif`, `dsm/P_0199.tif`, identical filenames),
 while `dwdata.india.pair_rasters` keys on filename *suffix* — handed that tree

@@ -56,6 +56,7 @@ class _Args:
         self.dfc23_max = 0
         self.dfc23_val_frac = 0.25
         self.dfc23_gsd = 0.5
+        self.dfc23_max_height_m = 0.0
         self.dfc23_absolute_dsm = False
         self.force = True
         self.__dict__.update(kw)
@@ -172,7 +173,87 @@ def test_absolute_dsm_is_not_silently_accepted_as_ndsm(tmp_path, capsys):
              (rng.random((600, 600, 3)) * 200 + 30).astype(np.uint8))
         _tif(src / "dsm" / f"P_{i:04d}.tif",
              np.full((600, 600), 214.0, np.float32))    # elevation ASL
-    prepare_dfc23(tmp_path / "out", _Args(dfc23_dir=str(src), dfc23_val_frac=0.0))
+    prepare_dfc23(tmp_path / "out", _Args(dfc23_dir=str(src), dfc23_val_frac=0.0,
+                                          dfc23_tile=512))
     out = capsys.readouterr().out
     assert "HEIGHT CHECK" in out
     assert "ABSOLUTE DSM" in out, out
+
+
+def test_a_store_with_no_class_rasters_does_not_claim_to_have_them(tmp_path):
+    """`has_seg` is what `loaders.py` prints and what its `w_seg > 0` guard
+    tests, so a store advertising labels it does not carry defeats the only
+    check standing between a live `w_seg` and a loss term that is always zero —
+    which is the exact bug that made every v4 run carry an inert seg head.
+    DFC23 packs `cls=None` for every tile; `ShardWriter` defaults `has_seg` to
+    True, and `pack_labeled` used to take that default."""
+    src = tmp_path / "track2" / "train"
+    for i in range(6):
+        _scene(src, f"P_{i:04d}")
+    out = tmp_path / "out"
+    prepare_dfc23(out, _Args(dfc23_dir=str(src), dfc23_val_frac=0.0))
+    st = PackedStore(out / "dfc23_g050" / "train")
+    assert st.has_seg is False
+    _, _, cls, _ = st.get(0)
+    assert (np.asarray(cls) == 255).all()      # NO_LABEL everywhere
+
+
+def _scene_with_border_blunder(root, stem, h=512, w=512):
+    """A real DFC23 failure mode, reproduced: ordinary city under a ribbon of
+    100 m+ nDSM glued to the top edge.
+
+    Measured on `GF2_NewDelhi_28.5557_77.1194`: every pixel above 100 m in the
+    scene — 2,615 of them, up to 183.2 m — lay in rows 0-31, over RGB whose
+    luminance (119.5) and texture (std 33.6) match the rest of the tile
+    (133.5 / 38.8). Stereo blunders, not buildings.
+    """
+    (root / "rgb").mkdir(parents=True, exist_ok=True)
+    (root / "dsm").mkdir(parents=True, exist_ok=True)
+    rng = np.random.default_rng(abs(hash(stem)) % 2 ** 31)
+    _tif(root / "rgb" / f"{stem}.tif",
+         (rng.random((h, w, 3)) * 200 + 30).astype(np.uint8))
+    nd = np.zeros((h, w), np.float32)
+    nd[200:300, 200:300] = 14.0          # a real building, interior
+    nd[0:24, 0:288] = 150.0              # the artefact ribbon, on the border
+    _tif(root / "dsm" / f"{stem}.tif", nd)
+
+
+def test_border_concentrated_tall_mass_is_reported(tmp_path, capsys):
+    src = tmp_path / "track2" / "train"
+    for i in range(5):
+        _scene_with_border_blunder(src, f"P_{i:04d}")
+    prepare_dfc23(tmp_path / "out", _Args(dfc23_dir=str(src), dfc23_val_frac=0.0))
+    out = capsys.readouterr().out
+    assert ">100 m:" in out, out
+    assert "concentrated at the tile border" in out, out
+
+
+def test_max_height_invalidates_rather_than_clips(tmp_path):
+    """A blunder is an *unknown*, not a building of the ceiling height — clipping
+    to the ceiling would train 100 m as fact on an ordinary rooftop."""
+    src = tmp_path / "track2" / "train"
+    for i in range(5):
+        _scene_with_border_blunder(src, f"P_{i:04d}")
+    out = tmp_path / "out"
+    prepare_dfc23(out, _Args(dfc23_dir=str(src), dfc23_val_frac=0.0,
+                             dfc23_tile=512, dfc23_max_height_m=100.0))
+    st = PackedStore(out / "dfc23_g050" / "train")
+    _, h, _, val = st.get(0)
+    h, val = np.asarray(h, np.float32), np.asarray(val, bool)
+    assert not (h[val] > 100.0).any(), "a pixel above the ceiling survived as valid"
+    assert h.shape == (512, 512), "these indices assume one tile per scene"
+    assert not val[0:24, 0:288].any(), "the ribbon should be invalid, not clipped"
+    assert val[200:300, 200:300].all(), "the real 14 m building must survive"
+    assert float(h[val].max()) == pytest.approx(14.0, abs=0.1)
+
+
+def test_max_height_off_by_default_leaves_the_target_untouched(tmp_path):
+    src = tmp_path / "track2" / "train"
+    for i in range(5):
+        _scene_with_border_blunder(src, f"P_{i:04d}")
+    out = tmp_path / "out"
+    prepare_dfc23(out, _Args(dfc23_dir=str(src), dfc23_val_frac=0.0,
+                             dfc23_tile=512))
+    st = PackedStore(out / "dfc23_g050" / "train")
+    _, h, _, val = st.get(0)
+    assert float(np.asarray(h)[np.asarray(val, bool)].max()) == pytest.approx(150.0, abs=0.1)
