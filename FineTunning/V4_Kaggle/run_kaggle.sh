@@ -92,7 +92,7 @@ PY
     # replacement=True anyway.
     PREP_ROOT="${DW_PREPARE_ROOT:-/kaggle/working/dwdata}"
     $PY prepare_data.py --data_root "$PREP_ROOT" --datasets gamus,synrs3d \
-      --gamus_train 1200 --gamus_val 160 --synrs3d_archives 1 "$@"
+      --gamus_train 1200 --gamus_val 160 --synrs3d_archives 4 "$@"
     # Pre-compute the 2/98 stretch bounds here, once, so no training worker ever
     # pays a full-tile histogram — and so rank 1 never has to (it is gated off
     # that write; see dwdata/loaders.py `_prime`).
@@ -119,8 +119,12 @@ PY
     for d in "$KIN"/*/dwdata/* "$KIN"/*/*; do
       [ -d "$d" ] || continue
       name="$(basename "$d")"
+      # Sources packed one store per GSD family arrive suffixed
+      # (synrs3d_g05, dfc23_g050), so those patterns are globs.  A store whose
+      # name is not matched here is silently skipped and train.py then reports
+      # it as "not prepared" — check this list first when a source goes missing.
       case "$name" in
-        gamus|geonrw|synrs3d|india_labeled|india_unlabeled) ;;
+        gamus|geonrw|synrs3d|synrs3d_*|dfc23|dfc23_*|india_labeled|india_unlabeled) ;;
         *) continue ;;
       esac
       [ -n "$(find "$d" -name index.json -print -quit 2>/dev/null)" ] || continue
@@ -187,10 +191,24 @@ PY
     # the same 480 min.  Use `--encoder_unfreeze_blocks 0` for the old
     # whole-encoder behaviour.
     #
-    # --epochs 16 replaces 40 because `progress = max(epoch fraction, wall-clock
-    # fraction)` and 40 was never reachable — the epoch half of that max was
-    # dead the whole run and the cosine was driven purely by the clock.  16 is
-    # the measured rate; if the card turns out slower the clock still governs.
+    # --epochs 24 / --max_minutes 960 / --session_minutes 480 is a TWO-session
+    # profile, and all three numbers have to be passed identically in both
+    # sessions.  `progress = max(epoch fraction, elapsed/max_minutes)`, so
+    # `max_minutes` is the budget the cosine is SIZED for, not a safety cap:
+    # 24 epochs at the measured rate (~22 min frozen, ~40 min after the 16-block
+    # unfreeze) is ~960 min, so the epoch term and the clock term land together
+    # instead of one of them being dead the whole run.
+    #
+    # The v4-2 run is the cautionary tale.  It went out as --max_minutes 600
+    # --epochs 16 --session_minutes 480 --save_full_state false: the session cap
+    # fired at 81 % of the cosine with the LR still at 5.09e-05, and with no
+    # last_full.pt the remaining anneal could not be resumed.  It scored 3.804 m
+    # against v4's 3.441 m on the same 400-tile val prefix.  train.py now prints
+    # a [sched] line at startup saying exactly where the cosine will stop, and
+    # config.validate() warns on this combination.
+    #
+    # Session 2 adds, and changes nothing else:
+    #   --resume /kaggle/input/<session-1>/outputs/v4/last_full.pt
     #
     # --eval_every 1 because 12 epochs at eval_every 2 gave best.pt only six
     # selection points, and the run's own numbers show why that is too coarse:
@@ -214,12 +232,12 @@ PY
     # the 19 GB output quota.  Kaggle versions /kaggle/working anyway.
     torchrun --standalone --nnodes=1 --nproc_per_node="$NPROC" train.py \
       --data_root "$DATA" --output_dir "$OUT" \
-      --datasets gamus,synrs3d \
+      --datasets gamus,synrs3d_g05,synrs3d_g1 \
       --amp_dtype fp16 --grad_checkpoint_encoder true \
       --batch_size 2 --grad_accum 6 --eval_batch_mult 8 \
       --num_workers 2 --prefetch_factor 2 --compile_model false \
       --encoder_unfreeze_blocks 16 --llrd 0.90 \
-      --epochs 16 --eval_every 1 --max_minutes 480 --session_minutes 480 \
+      --epochs 24 --eval_every 1 --max_minutes 960 --session_minutes 480 \
       --save_full_state true --make_zip false "$@"
     ;;
 
@@ -232,7 +250,7 @@ PY
     # reads `history` and `best` back out of the committed metrics.json instead
     # of rewriting it with an empty history and losing the training curves.
     $PY train.py --data_root "$DATA" --output_dir "$OUT" \
-      --datasets gamus,synrs3d --amp_dtype fp16 \
+      --datasets gamus,synrs3d_g05,synrs3d_g1 --amp_dtype fp16 \
       --batch_size 2 --eval_batch_mult 8 --num_workers 2 \
       --epochs 0 --freeze_epochs 0 --make_zip false "$@"
     ;;

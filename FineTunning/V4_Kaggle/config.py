@@ -63,11 +63,25 @@ LANDSCAPE_NAMES: tuple[str, ...] = ("urban", "sparse", "hilly", "forested")
 @dataclass
 class Config:
     # ----- data ------------------------------------------------------
-    datasets: str = "gamus,synrs3d"         # comma list of {gamus,geonrw,synrs3d,
-                                            #  india_labeled,india_unlabeled}
-                                            # (a source that was not prepared is skipped)
+    # Comma list of prepared store names:
+    #   gamus  geonrw  india_labeled  india_unlabeled
+    #   synrs3d_g005 / synrs3d_g05 / synrs3d_g1   (one store per GSD family)
+    #   dfc23_g050 / dfc23_g080 / …               (one store per measured GSD)
+    # A source that was not prepared is skipped with a printed note.  The
+    # suffixed names exist because `index.json` carries one `gsd_m` per store
+    # and `dataset.py` turns it straight into the crop's effective GSD, so
+    # pooling families under one nominal is a scale lie about the training set.
+    # The FIRST name here that has a val split becomes the primary val set and
+    # the one best.pt is selected on — keep `gamus` first to stay comparable
+    # with v1-v4.
+    datasets: str = "gamus,synrs3d_g05,synrs3d_g1"
     data_root: str = _DEFAULT_DATA_ROOT     # where prepare_data.py wrote the shards
-    sampler_weights: str = "gamus:1,geonrw:1,synrs3d:1,india_labeled:2"
+    # Mix ratio, not tile counts — loaders.py normalises by store size.  Real
+    # imagery is weighted over synthetic, and DFC23 is the only source that is
+    # actually the deployment domain.
+    sampler_weights: str = ("gamus:2,dfc23:2,geonrw:1,"
+                            "synrs3d_g005:1,synrs3d_g05:1,synrs3d_g1:1,"
+                            "india_labeled:2")
     gamus_repo: str = "earthflow/GAMUS"
     geonrw_repo: str = "torchgeo/geonrw"
     synrs3d_repo: str = "JTRNEO/SynRS3D"
@@ -329,6 +343,25 @@ class Config:
         # A floor above the initial scale would pin the scale there and defeat
         # the backoff the scaler exists to perform.
         assert 0.0 < self.amp_min_scale <= self.amp_init_scale
+        # The cosine is driven by max(epoch fraction, elapsed/max_minutes)
+        # (train.py), so `max_minutes` is the budget the schedule is SIZED for,
+        # not a safety cap.  If this session stops before that budget is spent
+        # and nothing was written to continue from, the anneal is simply lost:
+        # the v4-2 run was launched --max_minutes 600 --session_minutes 480
+        # --save_full_state false, died at the session cap with progress 0.81,
+        # and ended at lr 5.09e-05 instead of the 8e-06 floor its predecessor
+        # reached.  It scored 3.804 m against that predecessor's 3.441 m.
+        # A warning, not an assert: a deliberate short probe of a long schedule
+        # is a legitimate thing to run.
+        if self.session_minutes > 0 and self.max_minutes > self.session_minutes \
+                and not self.save_full_state and not self.resume:
+            print(f"[config] !! max_minutes={self.max_minutes:.0f} exceeds "
+                  f"session_minutes={self.session_minutes:.0f}, so this session "
+                  f"stops at {100.0 * self.session_minutes / self.max_minutes:.0f} % "
+                  f"of the LR cosine — with save_full_state=false and no "
+                  f"--resume, the rest of the anneal is unrecoverable.  Pass "
+                  f"--save_full_state true and resume in a second session, or "
+                  f"set --max_minutes {self.session_minutes:.0f} to fit one.")
         try:
             Path(self.output_dir).mkdir(parents=True, exist_ok=True)
         except OSError:
@@ -348,6 +381,25 @@ class Config:
                 k, v = part.split(":")
                 out[k.strip()] = float(v)
         return out
+
+    def sampler_weight(self, name: str, default: float = 1.0) -> float:
+        """Weight for one store, falling back to its base source name.
+
+        Sources packed one store per GSD family arrive as `dfc23_g050` /
+        `synrs3d_g05`, but the thing anyone actually wants to weight is the
+        *source*.  So `dfc23:2` covers every `dfc23_*` family, while a fully
+        qualified `synrs3d_g1:3` still wins over a bare `synrs3d:1` — exact
+        match first, then the longest prefix.
+        """
+        w = self.sampler_weight_map()
+        if name in w:
+            return w[name]
+        parts = name.split("_")
+        for i in range(len(parts) - 1, 0, -1):
+            base = "_".join(parts[:i])
+            if base in w:
+                return w[base]
+        return default
 
 
 def parse_config(argv: list[str] | None = None) -> Config:

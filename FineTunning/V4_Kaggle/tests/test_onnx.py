@@ -97,3 +97,66 @@ def test_onnx_adapter_plugs_into_the_engine(tmp_path, monkeypatch):
         assert seg.shape == (150, 210)
     finally:
         undo()
+
+
+def test_sidecar_records_the_opset_the_graph_actually_has(tmp_path):
+    """`opset_version=` is a request, not a guarantee.
+
+    The dynamo exporter emits at its own native opset and then asks onnxscript
+    to down-convert; when an op has no version adapter that conversion fails,
+    onnxscript prints a traceback, reports "the model was not modified", and the
+    export returns successfully at the native opset.  The v4-2 run hit exactly
+    that on `Resize` (the head's F.interpolate) and wrote `"opset": 17` into
+    `depthwizard.onnx.json` for a graph that is not opset 17 — a sidecar that
+    lies to whoever deploys it.
+    """
+    onnx = pytest.importorskip("onnx")
+    ckpt, spec, undo = _ckpt(tmp_path)
+    try:
+        from infer.export_onnx import export
+
+        out = tmp_path / "m.onnx"
+        try:
+            export(str(ckpt), str(out), opset=17, check=False)
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(f"torch.onnx export unavailable: {e}")
+
+        import json
+        meta = json.loads(Path(str(out) + ".json").read_text())
+        m = onnx.load(str(out), load_external_data=False)
+        real = next(i.version for i in m.opset_import if i.domain in ("", "ai.onnx"))
+        assert meta["opset"] == real
+        assert meta["opset_requested"] == 17
+        # and every external weight file the graph references is named
+        for name in meta["external_data"]:
+            assert (out.parent / name).is_file(), name
+    finally:
+        undo()
+
+
+def test_external_weight_files_are_reported_so_they_can_be_shipped(tmp_path, capsys):
+    """A 300 M-parameter model that serialises to a few MB has put its weights
+    in sibling `.data` files; `depthwizard.onnx` alone then loads nothing, and
+    with `--make_zip false` nothing else bundles the directory."""
+    pytest.importorskip("onnx")
+    ckpt, spec, undo = _ckpt(tmp_path)
+    try:
+        from infer.export_onnx import export
+
+        out = tmp_path / "m.onnx"
+        try:
+            export(str(ckpt), str(out), opset=17, check=False)
+        except Exception as e:  # noqa: BLE001
+            pytest.skip(f"torch.onnx export unavailable: {e}")
+        printed = capsys.readouterr().out
+        import json
+        meta = json.loads(Path(str(out) + ".json").read_text())
+        if meta["external_data"]:
+            assert "EXTERNAL" in printed
+            for name in meta["external_data"]:
+                assert name in printed
+        else:
+            # self-contained: the graph must then actually carry the weights
+            assert out.stat().st_size > 0
+    finally:
+        undo()

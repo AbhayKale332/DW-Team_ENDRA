@@ -165,3 +165,79 @@ def test_save_full_state_is_off_by_default(tmp_path, store, monkeypatch):
         assert not (Path(cfg.output_dir) / "last_full.pt").exists()
     finally:
         undo()
+
+
+# ---------------------------------------------------------------------
+# The launch-flag combination that made the artefact necessary and then
+# withheld it.
+# ---------------------------------------------------------------------
+def test_budget_longer_than_the_session_warns_when_it_cannot_be_resumed(capsys):
+    """`--max_minutes 960 --session_minutes 480 --save_full_state false`.
+
+    `max_minutes` is the budget the LR cosine is *sized* for (train.py drives
+    progress off max(epoch fraction, elapsed/max_minutes)), not a safety cap.
+    Setting it past the session cap with nothing written to continue from does
+    not shorten the run — it truncates the anneal and throws the rest away.  The
+    v4-2 run went out exactly like this: it stopped at 81 % of the cosine with
+    the LR still at 5.09e-05, left no `last_full.pt`, and scored 3.804 m against
+    the previous run's 3.441 m on the same val prefix.
+    """
+    from config import parse_config
+
+    parse_config(["--max_minutes", "960", "--session_minutes", "480",
+                  "--save_full_state", "false"])
+    out = capsys.readouterr().out
+    assert "[config] !!" in out
+    assert "50 %" in out          # 480 of 960
+    assert "unrecoverable" in out
+
+
+def test_no_warning_when_the_budget_fits_or_the_run_can_be_resumed(capsys):
+    from config import parse_config
+
+    # fits in one session
+    parse_config(["--max_minutes", "480", "--session_minutes", "480"])
+    assert "[config] !!" not in capsys.readouterr().out
+    # two sessions, but resumable — the documented profile
+    parse_config(["--max_minutes", "960", "--session_minutes", "480",
+                  "--save_full_state", "true"])
+    assert "[config] !!" not in capsys.readouterr().out
+    # this IS the second session
+    parse_config(["--max_minutes", "960", "--session_minutes", "480",
+                  "--resume", "/tmp/last_full.pt"])
+    assert "[config] !!" not in capsys.readouterr().out
+    # no session cap at all
+    parse_config(["--max_minutes", "960"])
+    assert "[config] !!" not in capsys.readouterr().out
+
+
+def test_sampler_weight_falls_back_from_family_store_to_source(tmp_path):
+    """`dfc23:2` has to cover `dfc23_g050`.
+
+    Sources packed one store per GSD family arrive suffixed, but the thing
+    anyone writes a weight for is the source.  A missed fallback here is silent:
+    `loaders.py` just defaults the store to 1.0 and the mix ratio is quietly not
+    what `--sampler_weights` says.
+    """
+    from config import Config
+
+    c = Config()
+    c.sampler_weights = "gamus:2,dfc23:3,synrs3d:1,synrs3d_g1:5"
+    assert c.sampler_weight("gamus") == 2.0
+    assert c.sampler_weight("dfc23_g050") == 3.0      # prefix fallback
+    assert c.sampler_weight("dfc23_g080") == 3.0
+    assert c.sampler_weight("synrs3d_g05") == 1.0     # prefix fallback
+    assert c.sampler_weight("synrs3d_g1") == 5.0      # exact beats prefix
+    assert c.sampler_weight("geonrw") == 1.0          # default
+
+
+def test_val_split_lookup_is_prefix_aware(tmp_path):
+    """A source with no `_VAL_SPLIT` entry does not get "no val set" — it gets a
+    slice of the first *train* store scored as if it were one (loaders.py)."""
+    from dwdata.loaders import val_split_of
+
+    assert val_split_of("gamus") == "val"
+    assert val_split_of("dfc23_g050") == "val"
+    assert val_split_of("synrs3d_g05") is None
+    assert val_split_of("synrs3d") is None
+    assert val_split_of("nonesuch") is None

@@ -42,16 +42,59 @@ from dwdata.packed import NO_LABEL, ShardWriter, store_exists  # noqa: E402
 GAMUS_GSD_M = 0.33
 GEONRW_GSD_M = 1.0
 
-# SynRS3D archives, coarse-GSD family first (they give the model the >0.66 m
-# scale range that GAMUS's 1024 px tiles physically cannot reach).
+# SynRS3D GSD families.  The `gNNN` token in a folder name is a *range*, not a
+# value, and the ranges below are the ones the dataset card publishes
+# (https://huggingface.co/datasets/JTRNEO/SynRS3D):
+#
+#     g005  0.05 - 0.30 m      g05  0.30 - 0.60 m      g1  0.60 - 1.00 m
+#
+# The previous table here read {"g005": 0.3, "g05": 0.7}.  Both entries were
+# wrong: 0.3 is the *ceiling* of g005 rather than anything representative, and
+# 0.7 is outside g05 altogether.  Nominals are now the midpoint of the published
+# range, which is the best a single scalar can do — SynRS3D publishes GSD at the
+# folder level only, there is no per-image GSD anywhere in the archives, and
+# `index.json` carries one `gsd_m` per store (dwdata/packed.py).  So a g05 tile
+# labelled 0.45 m is still up to ±33 % off its own true GSD.  That residual is
+# inherent to the dataset and is the reason the families are packed into
+# *separate stores* below rather than pooled: pooling g005 (0.05-0.30) with g05
+# (0.30-0.60) under one nominal is a 3-10x scale lie, and `dataset.py` turns
+# `store.gsd_m` straight into the crop's effective GSD, which is what ties
+# apparent object size to metric height.
+_SYN_GSD = {"g005": 0.175, "g05": 0.45, "g1": 0.8}
+
+# g1 first, and it is the only family that serves the reason this source exists.
+# GAMUS's 1024 px / 0.33 m tiles cap at 1024*0.33/512 = 0.66 m
+# (dwdata/augment.py:achievable_gsd_range), so anything coarser has to come from
+# somewhere else — and the list here used to start with g05, which tops out at
+# 0.60 m, while carrying a comment claiming it supplied the ">0.66 m scale
+# range".  No g1 archive was in the list at all.  These three are the 5,537
+# images that actually reach past GAMUS's ceiling.
+# The whole g1 family is only 5,537 images across three archives, so the first
+# four entries are "all of g1, plus the g05 archive v4-2 actually trained on" —
+# `--synrs3d_archives 4` gets both stores and keeps continuity with that run.
 SYNRS3D_ARCHIVES = [
+    "SynRS3D/terrain_g1_low_v1.zip",    # 4,285
+    "SynRS3D/terrain_g1_high_v1.zip",   #   904
+    "SynRS3D/terrain_g1_mid_v1.zip",    #   348
     "SynRS3D/grid_g05_mid_v1.zip", "SynRS3D/terrain_g05_mid_v1.zip",
     "SynRS3D/grid_g005_mid_v1.zip", "SynRS3D/terrain_g005_mid_v1.zip",
     "SynRS3D/grid_g05_high_v1.zip", "SynRS3D/grid_g05_low_v1.zip",
     "SynRS3D/grid_g005_high_v1.zip", "SynRS3D/grid_g005_low_v1.zip",
     "SynRS3D/terrain_g05_low_v1.zip", "SynRS3D/terrain_g005_low_v1.zip",
 ]
-_SYN_GSD = {"g005": 0.3, "g05": 0.7}
+
+# Store name per family, e.g. "synrs3d_g05".  These are the names that go in
+# --datasets / --sampler_weights / _VAL_SPLIT / run_kaggle.sh's link whitelist.
+SYNRS3D_STORES = tuple(f"synrs3d_{k}" for k in _SYN_GSD)
+
+
+def _syn_family(rel: str) -> str:
+    """Which GSD family an archive path belongs to.  Longest token first, so
+    `_g005_` is never matched by the `g05` key."""
+    for k in sorted(_SYN_GSD, key=len, reverse=True):
+        if f"_{k}_" in rel:
+            return k
+    return "g05"
 
 # Class-id remaps into a shared 0..6 space.  These are best-effort (see README
 # §1.6 — GAMUS's own id order is not what v1/v2 assumed), which is exactly why
@@ -236,21 +279,40 @@ def _safe(fn):
 # ---------------------------------------------------------------------
 def prepare_synrs3d(root: Path, n_archives: int, token, force: bool, repo: str,
                     val_frac: float = 0.0) -> None:
+    """SynRS3D archives -> one packed store *per GSD family*.
+
+    Not one store for everything.  `index.json` carries a single `gsd_m`
+    (dwdata/packed.py), `dataset.py` reads it straight into the crop's effective
+    GSD, and that is what ties apparent object size to metric height — so
+    pooling g005 (0.05-0.30 m) and g05 (0.30-0.60 m) under one nominal tells the
+    model a 3-10x scale lie about most of its own training set.  The previous
+    version did exactly that: one `ShardWriter(..., gsd_m=0.5)` built outside the
+    archive loop, while the per-archive GSD was computed and then only printed.
+    """
     from huggingface_hub import hf_hub_download
 
-    out = root / "synrs3d" / "train"
-    if store_exists(out) and not force:
-        print(f"[synrs3d] already prepared -> {out}")
-        return
     import zipfile
 
     import tifffile
 
-    writer = ShardWriter(out, tile_px=512, gsd_m=0.5, shard_tiles=512)
+    rels = SYNRS3D_ARCHIVES[:n_archives]
+    fams = sorted({_syn_family(r) for r in rels})
+    outs = {f: root / f"synrs3d_{f}" / "train" for f in fams}
+    todo = [f for f in fams if force or not store_exists(outs[f])]
+    for f in fams:
+        if f not in todo:
+            print(f"[synrs3d] already prepared -> {outs[f]}")
+    if not todo:
+        return
+
+    writers = {f: ShardWriter(outs[f], tile_px=512, gsd_m=_SYN_GSD[f],
+                              shard_tiles=512) for f in todo}
     work = root / "_dl" / "synrs3d"
-    total = 0
-    for rel in SYNRS3D_ARCHIVES[:n_archives]:
-        gsd = next((v for k, v in _SYN_GSD.items() if f"_{k}_" in rel), 0.5)
+    total = dict.fromkeys(todo, 0)
+    for rel in rels:
+        fam = _syn_family(rel)
+        if fam not in writers:
+            continue
         ex_dir = work / rel.replace("/", "__")
         try:
             print(f"[synrs3d] downloading {rel} …", flush=True)
@@ -266,7 +328,9 @@ def prepare_synrs3d(root: Path, n_archives: int, token, force: bool, repo: str,
             continue
 
         opts = sorted(ex_dir.rglob("opt/*.tif"))
-        print(f"[synrs3d] {rel}: {len(opts)} tiles @ ~{gsd} m")
+        print(f"[synrs3d] {rel}: {len(opts)} tiles -> {fam} "
+              f"(nominal {_SYN_GSD[fam]} m)")
+        w = writers[fam]
         for opt in opts:
             nd = _sibling(opt, ("gt_nDSM", "gt_ndsm", "nDSM", "ndsm"))
             if nd is None:
@@ -280,19 +344,23 @@ def prepare_synrs3d(root: Path, n_archives: int, token, force: bool, repo: str,
                 cls = _remap(np.asarray(tifffile.imread(sg)).astype(np.int32),
                              SYN_TO_SHARED) if sg else None
                 valid = np.isfinite(h) & (h > -2.0) & (h < 500.0)
-                writer.add(opt.stem, rgb, np.where(valid, np.clip(h, 0, None), 0.0),
-                           cls, valid)
-                total += 1
+                # Stems repeat across archives (P_0001.tif is in all of them),
+                # and `stems` is what PackedStore keys on, so namespace them.
+                w.add(f"{ex_dir.name}__{opt.stem}", rgb,
+                      np.where(valid, np.clip(h, 0, None), 0.0), cls, valid)
+                total[fam] += 1
             except Exception:  # noqa: BLE001
                 continue
         shutil.rmtree(ex_dir, ignore_errors=True)
-        print(f"[synrs3d] running total {total} tiles", flush=True)
+        print(f"[synrs3d] running total {dict(total)}", flush=True)
 
-    # SynRS3D GSD varies per archive; the index stores the nominal value and the
-    # dataset clamps the achievable range per tile anyway.
-    idx = writer.finalise()
+    for f in todo:
+        idx = writers[f].finalise()
+        print(f"[synrs3d] packed {idx['n']} tiles -> synrs3d_{f} "
+              f"@ 512px / {_SYN_GSD[f]} m")
     shutil.rmtree(work, ignore_errors=True)
-    print(f"[synrs3d] packed {idx['n']} tiles")
+    print(f"[synrs3d] add to --datasets: "
+          f"{','.join('synrs3d_' + f for f in fams)}")
 
 
 def _sibling(opt: Path, subdirs: tuple[str, ...]) -> Path | None:
@@ -443,6 +511,168 @@ def _link_group(recs, stage: Path) -> None:
                     shutil.copy2(p, dst)
 
 
+# ---------------------------------------------------------------------
+# DFC23 Track 2  (2023 IEEE GRSS Data Fusion Contest)
+# ---------------------------------------------------------------------
+# Real 0.5 m satellite optical with a real nDSM reference — the only source in
+# the mix that is actually the deployment domain.  GAMUS is US aerial, SynRS3D
+# is synthetic, GeoNRW is a DEM proxy.
+#
+# SAR is deliberately ignored.  The packed store is 3-channel
+# (dwdata/packed.py) and DINOv3's patch embedding is Conv2d(3, …), so fusing the
+# co-registered SAR band means a store-format change *and* encoder surgery — for
+# a signal a Cartosat-class single-view optical deployment will not have at
+# inference anyway.
+#
+# `track2/val` and `track2_test_data` ship no reference nDSM (the contest
+# withheld it), so the only usable labels are under `track2/train`, and the val
+# split has to be carved out of those scenes here.
+_DFC23_RGB_DIRS = ("rgb", "opt", "optical", "image", "images")
+_DFC23_HGT_DIRS = ("dsm", "ndsm", "nDSM", "height", "agl", "gt_nDSM")
+
+
+def _dfc23_pairs(src: Path) -> list[dict]:
+    """Pair `<src>/rgb/NAME.tif` with `<src>/dsm/NAME.tif`.
+
+    DFC23 discriminates the two rasters by **parent directory** and gives them
+    identical filenames, which is exactly what `dwdata.india.pair_rasters` cannot
+    see: it keys on filename *suffix*, so both files would be claimed as the RGB
+    and every scene would come out unlabelled.  Pair here, then hand the rest to
+    `pack_labeled`, which already does the tiling, the height-raster resize onto
+    the RGB grid (DFC23 nDSMs come from ~2 m stereo), the valid/clip convention
+    and the mostly-nodata drop.
+    """
+    def pick(names: tuple[str, ...]) -> Path | None:
+        for n in names:
+            d = src / n
+            if d.is_dir():
+                return d
+        return None
+
+    rgb_d, hgt_d = pick(_DFC23_RGB_DIRS), pick(_DFC23_HGT_DIRS)
+    if rgb_d is None or hgt_d is None:
+        have = sorted(x.name for x in src.iterdir() if x.is_dir()) if src.is_dir() else []
+        print(f"[dfc23] need an rgb-like and a dsm-like subdirectory under {src}; "
+              f"found {have}")
+        return []
+    hgt = {p.stem: p for p in hgt_d.iterdir()
+           if p.suffix.lower() in (".tif", ".tiff")}
+    recs = []
+    for r in sorted(rgb_d.iterdir()):
+        if r.suffix.lower() not in (".tif", ".tiff"):
+            continue
+        h = hgt.get(r.stem)
+        if h is not None:
+            recs.append({"stem": r.stem, "rgb": r, "hgt": h, "seg": None})
+    print(f"[dfc23] {len(recs)} rgb+nDSM pairs under {src} "
+          f"({rgb_d.name}/ + {hgt_d.name}/)")
+    return recs
+
+
+def _dfc23_stage(recs: list[dict], stage: Path) -> None:
+    """Symlink a scene group into the `<stem>_rgb` / `<stem>_ndsm` convention
+    `dwdata.india.pair_rasters` understands."""
+    stage.mkdir(parents=True, exist_ok=True)
+    for r in recs:
+        for key, suf in (("rgb", "_rgb"), ("hgt", "_ndsm")):
+            p = r[key]
+            dst = stage / f"{r['stem']}{suf}{p.suffix}"
+            if dst.exists():
+                continue
+            try:
+                dst.symlink_to(p.resolve())
+            except OSError:
+                shutil.copy2(p, dst)
+
+
+def prepare_dfc23(root: Path, a) -> None:
+    """DFC23 Track 2 rgb+nDSM -> one packed store per GSD family, per split.
+
+    Split is by **scene, not tile**, for the same reason `prepare_india_labeled`
+    is: tiles cut from one scene are near-duplicates, so a random split leaks the
+    val set into training and the val number stops meaning anything.
+
+    Grouped by GSD for the same reason SynRS3D is: DFC23 optical is SuperView-1
+    at 0.5 m *and* Gaofen-2 at 0.8 m, and `index.json` carries one `gsd_m` per
+    store.
+    """
+    from dwdata.india import pack_labeled, raster_gsd_m
+
+    src = Path(a.dfc23_dir).expanduser()
+    if not a.dfc23_dir or not src.is_dir():
+        print("[dfc23] needs --dfc23_dir pointing at a DFC23 Track 2 split "
+              "holding rgb/ and dsm/ (e.g. .../track2/train); skipping")
+        return
+    recs = _dfc23_pairs(src)
+    if not recs:
+        return
+
+    # One store per rounded GSD family.  Read per scene from the GeoTIFF
+    # transform; --dfc23_gsd is only the fallback for a scene with no CRS.
+    fams: dict[str, list[dict]] = {}
+    for r in recs:
+        g = raster_gsd_m(r["rgb"], a.dfc23_gsd)
+        fams.setdefault(f"g{round(g, 2):.2f}".replace(".", ""), []).append(
+            dict(r, gsd=g))
+    for fam, group in sorted(fams.items()):
+        gsd = float(np.median([r["gsd"] for r in group]))
+        name = f"dfc23_{fam}"
+        n_val = (max(1, int(round(len(group) * a.dfc23_val_frac)))
+                 if len(group) > 4 else 0)
+        order = np.random.default_rng(0).permutation(len(group))
+        splits = {"val": [group[i] for i in order[:n_val]],
+                  "train": [group[i] for i in order[n_val:]]}
+        print(f"[dfc23] {name}: {len(group)} scenes @ {gsd:.3f} m "
+              f"-> {len(splits['train'])} train / {n_val} val (split by scene)")
+        for split, grp in splits.items():
+            if not grp:
+                continue
+            out = root / name / split
+            if store_exists(out) and not a.force:
+                print(f"[dfc23] already prepared -> {out}")
+                continue
+            stage = root / "_dfc23_stage" / f"{name}_{split}"
+            shutil.rmtree(stage, ignore_errors=True)
+            _dfc23_stage(grp, stage)
+            idx = pack_labeled(stage, out, a.dfc23_tile, gsd,
+                               max_tiles=a.dfc23_max, force=a.force,
+                               dsm_is_absolute=a.dfc23_absolute_dsm,
+                               label=f"dfc23/{name}/{split}")
+            if idx:
+                _dfc23_height_check(out, f"{name}/{split}")
+    shutil.rmtree(root / "_dfc23_stage", ignore_errors=True)
+
+
+def _dfc23_height_check(out: Path, label: str) -> None:
+    """Say what was actually packed.  DFC23 Track 2 ships an nDSM (height above
+    ground), so the median should sit near 0 — a median metres above zero is what
+    an absolute DSM slipping through looks like, and it would poison the target
+    silently."""
+    from dwdata.packed import PackedStore
+
+    st = PackedStore(out)
+    n = min(len(st), 64)
+    vals = []
+    for i in range(n):
+        _, h, _, v = st.get(i)
+        h = np.asarray(h, np.float32)
+        v = np.asarray(v, bool)
+        if v.any():
+            vals.append(h[v])
+    if not vals:
+        print(f"[dfc23] HEIGHT CHECK {label}: no valid pixels")
+        return
+    h = np.concatenate(vals)
+    med, p99, mx = (float(np.median(h)), float(np.percentile(h, 99)),
+                    float(h.max()))
+    note = ""
+    if med > 3.0:
+        note = ("   [!] median is metres above ground — this looks like an "
+                "ABSOLUTE DSM, not an nDSM.  Re-run with --dfc23_absolute_dsm.")
+    print(f"[dfc23] HEIGHT CHECK {label}: median {med:.2f} m  p99 {p99:.1f} m  "
+          f"max {mx:.1f} m  (over {n} tiles){note}")
+
+
 def prepare_india_unlabeled(root: Path, a) -> None:
     """RGB-only Indian tiles -> `india_unlabeled/train` for the mean-teacher branch."""
     from dwdata.india import INDIA_AOIS, fetch_xyz_tiles, pack_unlabeled, tile_gsd_m
@@ -498,6 +728,21 @@ def main() -> None:
                          "from; you must supply one you are licensed to use")
     ap.add_argument("--india_zoom", type=int, default=18)
     ap.add_argument("--india_per_aoi", type=int, default=60)
+    ap.add_argument("--dfc23_dir", default="",
+                    help="DFC23 Track 2 directory holding rgb/ and dsm/ "
+                         "subdirectories with matching filenames "
+                         "(e.g. /kaggle/input/<ds>/track2/train)")
+    ap.add_argument("--dfc23_tile", type=int, default=512)
+    ap.add_argument("--dfc23_max", type=int, default=0, help="0 = all")
+    ap.add_argument("--dfc23_val_frac", type=float, default=0.15,
+                    help="fraction of DFC23 *scenes* (not tiles) held out for "
+                         "validation")
+    ap.add_argument("--dfc23_gsd", type=float, default=0.5,
+                    help="fallback metres/pixel when a scene carries no GeoTIFF "
+                         "transform")
+    ap.add_argument("--dfc23_absolute_dsm", action="store_true",
+                    help="the height rasters are elevation ASL, not height AGL "
+                         "(DFC23 Track 2 ships nDSM, so normally leave this off)")
     ap.add_argument("--hf_token", default="")
     ap.add_argument("--workers", type=int, default=12)
     ap.add_argument("--force", action="store_true")
@@ -513,8 +758,13 @@ def main() -> None:
     if "gamus" in names:
         prepare_gamus(root, "val", a.gamus_val, tok, a.force, a.gamus_repo, a.workers)
         prepare_gamus(root, "train", a.gamus_train, tok, a.force, a.gamus_repo, a.workers)
-    if "synrs3d" in names:
+    # `synrs3d` prepares every family the requested archives cover; the
+    # per-family store names (synrs3d_g05, …) are what --datasets takes at
+    # *train* time, and naming one of them here means the same thing.
+    if any(n == "synrs3d" or n.startswith("synrs3d_") for n in names):
         prepare_synrs3d(root, a.synrs3d_archives, tok, a.force, a.synrs3d_repo)
+    if "dfc23" in names or any(n.startswith("dfc23_") for n in names):
+        prepare_dfc23(root, a)
     if "geonrw" in names:
         prepare_geonrw(root, a.geonrw_max, tok, a.force, a.geonrw_repo)
     if "india_labeled" in names:

@@ -325,9 +325,14 @@ def main() -> None:
         (out_dir / "config.json").write_text(json.dumps(safe_config_dict(cfg), indent=2))
         (out_dir / "preproc.json").write_text(json.dumps(spec.to_dict(), indent=2))
 
-    from dwdata.loaders import CyclicLoader, build_loaders, build_unlabeled_loader
+    from dwdata.loaders import (CyclicLoader, build_aux_val_loaders,
+                                build_loaders, build_unlabeled_loader)
 
     dl_tr, dl_va, full_ds = build_loaders(cfg, spec, rank, world_size, is_main)
+    # Secondary val sets — scored and reported every eval, never selected on.
+    # Only rank 0 ever iterates a val loader, so the other ranks build none.
+    aux_val = (build_aux_val_loaders(cfg, spec, full_ds.src, is_main)
+               if is_main else {})
     dl_un = build_unlabeled_loader(cfg, spec, rank, world_size, is_main)
     un_iter = CyclicLoader(dl_un) if dl_un is not None else None
 
@@ -539,6 +544,27 @@ def main() -> None:
         del full_ck
 
     t_session = time.time()          # this session's own clock (session_minutes)
+
+    # Say up front where the LR schedule is going to end up.  The cosine is
+    # driven by max(epoch fraction, elapsed/max_minutes) below, so a run whose
+    # session cap lands before `max_minutes` stops part-way down the anneal —
+    # and until now that was only discoverable by reading the lr= column after
+    # the run was over.  v4-2 ended at lr 5.09e-05 (81 % of the cosine) and
+    # scored 3.804 m; v4, which annealed to 8.32e-06, scored 3.441 m.
+    if is_main:
+        used = (time.time() - t0) / 60.0
+        at_cap = (used + cfg.session_minutes if cfg.session_minutes > 0
+                  else cfg.max_minutes)
+        p_clock = min(1.0, at_cap / max(1e-8, cfg.max_minutes))
+        lr_end = cfg.learning_rate * lr_scale(p_clock, cfg.warmup_frac)
+        tail = "" if p_clock >= 1.0 - 1e-6 else (
+            f"  [!] the anneal does NOT complete this session — "
+            f"{'resume to finish it' if cfg.save_full_state else 'and save_full_state is OFF, so it cannot be resumed'}")
+        print(f"[sched] {cfg.epochs} epochs, budget {cfg.max_minutes:.0f} min"
+              f"{f' (session cap {cfg.session_minutes:.0f} min)' if cfg.session_minutes > 0 else ''}"
+              f"{f', {used:.0f} min already spent' if used > 1.0 else ''}"
+              f"  ->  cosine reaches {100.0 * p_clock:.0f} %, "
+              f"decoder lr {cfg.learning_rate:.2e} -> {lr_end:.2e}{tail}")
 
     for epoch in range(start_epoch, cfg.epochs + 1):
         # ---- unfreeze the encoder once the decoder has warmed up ----------
@@ -857,6 +883,20 @@ def main() -> None:
                                  gpu_prep=gpu_prep)
                     rec["val"] = m
                     print(f"  eval e{epoch}  {format_line(m)}")
+                    # Secondary val sets.  Reported next to the primary and
+                    # written into metrics.json, but deliberately NOT part of
+                    # the best.pt decision below: the primary is the 400-tile
+                    # GAMUS prefix every run since v1 has been scored on, and
+                    # selecting on anything else would end the only
+                    # run-to-run comparison the project has.  What these buy is
+                    # the question GAMUS cannot answer — US aerial imagery says
+                    # nothing about satellite imagery the model did not train
+                    # to fit.
+                    for _src, (_dl, _full) in aux_val.items():
+                        ma = evaluate(core, _dl, cfg, device, use_tta=False,
+                                      gpu_prep=gpu_prep)
+                        rec[f"val_{_src}"] = ma
+                        print(f"  eval e{epoch}  [{_src}] {format_line(ma)}")
                     if m["global"]["rmse_m"] < best:
                         best = m["global"]["rmse_m"]
                         _save(out_dir / "best.pt", core, spec, cfg, epoch, m, ema)

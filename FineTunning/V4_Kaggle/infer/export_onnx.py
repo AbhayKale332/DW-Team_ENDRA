@@ -94,14 +94,40 @@ def export(ckpt: str, out_path: str, *, opset: int = 17, hf_token: str = "",
                 wrapper, (dummy,), str(out_path), do_constant_folding=True,
                 dynamic_axes={"image": {0: "batch"}, "height_m": {0: "batch"},
                               "seg": {0: "batch"}}, **common)
+    # `opset` is a *request*.  The dynamo exporter emits at its own native
+    # opset and then asks onnxscript to down-convert; when an op has no version
+    # adapter that conversion fails, onnxscript prints a traceback, says "the
+    # model was not modified", and the export succeeds anyway at the native
+    # opset.  That is exactly what the v4-2 run hit —
+    #     RuntimeError: adapter_lookup: ... No Adapter To Version $17 for Resize
+    # (Resize comes from the head's F.interpolate) — and because
+    # `torch.onnx.export` never raised, the run recorded "opset": 17 for a graph
+    # that is not opset 17.  Read it back off the model instead of asserting it.
+    real_opset, ext = _describe(out_path)
     meta = {"preproc": spec.to_dict(), "input": f"float32 (batch,3,{s},{s}), "
             "encoder-normalised RGB at canonical GSD",
             "outputs": {"height_m": f"float32 (batch,1,{s},{s}) nDSM in metres",
                         "seg": f"int32 (batch,1,{s},{s}) class id"},
-            "opset": opset, "source_checkpoint": str(ckpt)}
+            "opset": real_opset, "opset_requested": opset,
+            "external_data": [f.name for f in ext],
+            "source_checkpoint": str(ckpt)}
     Path(str(out_path) + ".json").write_text(json.dumps(meta, indent=2))
     mb = out_path.stat().st_size / 1024 ** 2
-    print(f"[onnx] {out_path} ({mb:.0f} MB) + {out_path.name}.json")
+    print(f"[onnx] {out_path} ({mb:.0f} MB) + {out_path.name}.json"
+          + ("" if real_opset == opset else
+             f"  [!] opset {real_opset}, not the requested {opset}"))
+    if ext:
+        # A 300 M-parameter model that serialises to a few MB has put its
+        # weights in external .data files next to the graph: the v4-2 run wrote
+        # a 4 MB `depthwizard.onnx`.  Shipping that file alone loads nothing,
+        # and with --make_zip false nothing else bundles the directory, so the
+        # sidecars have to be named out loud.
+        tot = sum(f.stat().st_size for f in ext) / 1024 ** 2
+        print(f"[onnx] weights are EXTERNAL — ship these too ({tot:.0f} MB): "
+              + ", ".join(f.name for f in ext))
+    elif mb < 50:
+        print(f"[onnx] !! {mb:.0f} MB with no external-data files found — "
+              f"the graph looks weightless; check before shipping it.")
 
     if check:
         # Verified at batch 1, having been traced at batch 2, so the check also
@@ -110,6 +136,38 @@ def export(ckpt: str, out_path: str, *, opset: int = 17, hf_token: str = "",
         # `onnxruntime` deployment discovers the hard way if it did not.
         verify(out_path, wrapper, dummy[:1])
     return out_path
+
+
+def _describe(out_path) -> tuple[int, list]:
+    """(actual default opset of the written graph, external weight files).
+
+    The opset is read back off the proto rather than taken from the export
+    request, because a failed down-conversion leaves the graph at the exporter's
+    native opset without raising.  External-data files are found by asking the
+    graph which ones it references, falling back to "siblings that appeared next
+    to it" when the initialisers cannot be walked.
+    """
+    out_path = Path(out_path)
+    opset, refs = -1, []
+    try:
+        import onnx
+
+        m = onnx.load(str(out_path), load_external_data=False)
+        opset = next((i.version for i in m.opset_import if i.domain in ("", "ai.onnx")),
+                     -1)
+        for init in m.graph.initializer:
+            for kv in init.external_data:
+                if kv.key == "location":
+                    refs.append(kv.value)
+    except Exception as e:  # noqa: BLE001
+        print(f"[onnx] could not introspect the written graph ({e})")
+    d = out_path.parent
+    if refs:
+        ext = [d / r for r in dict.fromkeys(refs) if (d / r).is_file()]
+    else:
+        ext = sorted(f for f in d.glob(f"{out_path.name}*")
+                     if f != out_path and f.suffix != ".json")
+    return opset, ext
 
 
 def verify(onnx_path, torch_module=None, dummy=None, tol: float = 5e-2) -> bool:

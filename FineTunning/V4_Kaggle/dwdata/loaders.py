@@ -23,9 +23,23 @@ from .augment import achievable_gsd_range
 from .dataset import FullTileDataset, TileDataset, UnlabeledTileDataset
 from .packed import PackedStore, store_exists
 
-# Where each source's val split lives, if it has one.
+# Where each source's val split lives, if it has one.  Sources that are packed
+# one store per GSD family carry a suffix (`synrs3d_g05`, `dfc23_g050`), so the
+# lookup is prefix-aware — a source that falls through here gets no val store,
+# and `build_loaders` then silently scores a slice of the first *train* store
+# instead, which is a val number that means nothing.
 _VAL_SPLIT = {"gamus": "val", "geonrw": "test", "synrs3d": None,
               "india_labeled": "val", "india_unlabeled": None}
+_VAL_SPLIT_PREFIX = (("synrs3d_", None), ("dfc23_", "val"))
+
+
+def val_split_of(name: str) -> str | None:
+    if name in _VAL_SPLIT:
+        return _VAL_SPLIT[name]
+    for pre, sp in _VAL_SPLIT_PREFIX:
+        if name.startswith(pre):
+            return sp
+    return None
 
 
 def _open(root: Path, name: str, split: str) -> PackedStore | None:
@@ -130,7 +144,6 @@ def build_loaders(cfg, spec, rank: int = 0, world_size: int = 1,
     """
     root = Path(cfg.data_root)
     names = cfg.labeled_sources()
-    weights = cfg.sampler_weight_map()
     gpu_aug = bool(getattr(cfg, "gpu_augment", False))
 
     train_sets, train_w, missing = [], [], []
@@ -142,7 +155,7 @@ def build_loaders(cfg, spec, rank: int = 0, world_size: int = 1,
         _prime(st, spec, cfg, f"{name}/train", is_main)
         train_sets.append(TileDataset(cfg, st, spec, name, train=True,
                                       length=len(st), gpu_augment=gpu_aug))
-        train_w.append(float(weights.get(name, 1.0)))
+        train_w.append(float(cfg.sampler_weight(name)))
         # The GSD jitter range in the config is a *request*; what a store can
         # actually deliver is bounded by its own extent, because v3 moved to
         # picking the crop in source pixels first (see dwdata/augment.py).  A
@@ -209,7 +222,7 @@ def build_loaders(cfg, spec, rank: int = 0, world_size: int = 1,
     # -- validation ------------------------------------------------------
     val_store, val_name = None, None
     for name in names:
-        sp = _VAL_SPLIT.get(name)
+        sp = val_split_of(name)
         if sp and (st := _open(root, name, sp)) is not None:
             val_store, val_name = st, name
             break
@@ -218,6 +231,26 @@ def build_loaders(cfg, spec, rank: int = 0, world_size: int = 1,
         val_store, val_name = train_sets[0].store, train_sets[0].src
         print(f"[data] no dedicated val split; using a slice of {val_name}/train")
 
+    dl_va, full, n_val = _val_loader(cfg, spec, val_store, val_name,
+                                     gpu_aug, is_main)
+    print(f"[data] val: {n_val} tiles from {val_name} "
+          f"({_how(n_val, len(val_store))})  "
+          f"({len(dl_tr)} train steps/epoch)")
+    return dl_tr, dl_va, full
+
+
+def _how(n_val: int, n_store: int) -> str:
+    return ("all" if n_val >= n_store
+            else f"first {n_val} of {n_store}, prefix not sample")
+
+
+def _val_loader(cfg, spec, val_store, val_name: str, gpu_aug: bool,
+                is_main: bool):
+    """One val DataLoader + its full-tile twin, for any store.
+
+    Factored out of `build_loaders` so the same recipe can serve the primary val
+    set *and* the secondary out-of-domain ones (`build_aux_val_loaders`).
+    """
     # `TileDataset`/`FullTileDataset` both index with `ti = i % len(store)`, so
     # a length of N selects the **first N tiles in sorted-stem order** — a
     # prefix, not a random sample.  That is deliberately left alone: v1-v4 were
@@ -239,7 +272,7 @@ def build_loaders(cfg, spec, rank: int = 0, world_size: int = 1,
     # single-process path are unchanged.
     n_val_workers = min(4, cfg.num_workers) if is_main else 0
     _prime(val_store, spec, cfg, f"{val_name}/val", is_main)
-    dl_va = DataLoader(
+    dl = DataLoader(
         TileDataset(cfg, val_store, spec, val_name, train=False, length=n_val,
                     gpu_augment=gpu_aug),
         # Eval is inference-only: no activations are kept, so it fits a much
@@ -251,11 +284,44 @@ def build_loaders(cfg, spec, rank: int = 0, world_size: int = 1,
         persistent_workers=False,
         prefetch_factor=cfg.prefetch_factor if n_val_workers else None,
     )
-    how = "all" if n_val >= len(val_store) else f"first {n_val} of {len(val_store)}, prefix not sample"
-    print(f"[data] val: {n_val} tiles from {val_name} ({how})  "
-          f"({len(dl_tr)} train steps/epoch)")
     full = FullTileDataset(cfg, val_store, spec, val_name, length=n_val)
-    return dl_tr, dl_va, full
+    return dl, full, n_val
+
+
+def build_aux_val_loaders(cfg, spec, primary: str, is_main: bool = True,
+                          gpu_aug: bool | None = None) -> dict:
+    """Every *other* prepared val store named in `--datasets`, keyed by source.
+
+    The primary val set is whichever source comes first in `--datasets` and has
+    a val split, and with `gamus` first that stays GAMUS — which is the point:
+    v1-v4 are all scored on the same 400-tile GAMUS prefix and that comparison
+    is the only yardstick the project has.  But GAMUS is US *aerial* imagery,
+    so it cannot answer the question the deliverable actually turns on, which is
+    how the model does on satellite imagery it was not trained to fit.  DFC23
+    Track 2 can, and reporting it next to GAMUS is what makes the dataset-mix
+    question decidable: "v4 beat v4-2 on GAMUS val" is partly just v4 having
+    trained on nothing but the val domain.
+
+    These are reported, never selected on — `best.pt` stays tied to the primary.
+    """
+    root = Path(cfg.data_root)
+    if gpu_aug is None:
+        gpu_aug = bool(getattr(cfg, "gpu_augment", False)) and _cuda()
+    out = {}
+    for name in cfg.labeled_sources():
+        if name == primary:
+            continue
+        sp = val_split_of(name)
+        if not sp:
+            continue
+        st = _open(root, name, sp)
+        if st is None:
+            continue
+        dl, full, n_val = _val_loader(cfg, spec, st, name, gpu_aug, is_main)
+        out[name] = (dl, full)
+        print(f"[data] val+ : {n_val} tiles from {name} "
+              f"({_how(n_val, len(st))})  — reported, not selected on")
+    return out
 
 
 def _cuda() -> bool:

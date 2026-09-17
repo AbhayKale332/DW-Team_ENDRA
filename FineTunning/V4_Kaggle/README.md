@@ -284,10 +284,24 @@ train/val split is by **scene**, not by tile — tiles from one raster are
 near-duplicates and splitting them at random would leak.
 
 ```bash
-python prepare_data.py --datasets india_labeled --india_dir ~/dfc23_newdelhi
-python train.py --datasets gamus,synrs3d,india_labeled \
+python prepare_data.py --datasets india_labeled --india_dir ~/indian_pairs
+python train.py --datasets gamus,synrs3d_g05,india_labeled \
                 --sampler_weights gamus:1,synrs3d:1,india_labeled:3
 ```
+
+For DFC23 Track 2 specifically use `--datasets dfc23 --dfc23_dir …` instead
+(§5.11): its rgb/ and dsm/ rasters share filenames and differ only by parent
+directory, which the stem-suffix pairing above cannot see.
+
+Adding a source touches five places and there is no plugin registry:
+`config.py`'s `datasets` docstring and `sampler_weights` default;
+`prepare_data.py`'s dispatch chain and argparse; `dwdata/loaders.py`'s
+`_VAL_SPLIT` / `val_split_of` (a missing entry does not mean "no val set" — it
+means a slice of the first *train* store gets scored as one); and
+`run_kaggle.sh`'s `link` whitelist (a name absent there is silently skipped).
+Sources packed one store per GSD family arrive suffixed (`synrs3d_g05`,
+`dfc23_g050`); both the val-split and the sampler-weight lookups fall back from
+the store name to the base source, so `dfc23:2` covers every `dfc23_*` family.
 
 **(b) Unlabelled, via mean-teacher domain adaptation** — the lever that works
 without labels, and the one the plan schedules for the finals. An EMA teacher
@@ -882,6 +896,101 @@ replacement for it.
 
 ---
 
+### 5.10 The `v4-2` run, and what came out of it
+
+`outputs/v4-2/` scored **3.804 m** sliding+TTA against `outputs/v4/`'s **3.441 m**
+on the *same* 400-tile GAMUS prefix. The `hilly` count going 60 → 0 between them
+is the intended `eval/landscape.py` relief fix, not a different val set:
+`sparse`/`forested` are 21/20 in both, and 299 urban + 60 hilly = v4-2's 359
+urban. It is a real regression, and the post-mortem produced most of what
+follows.
+
+**The LR cosine was cut off at 81 %.** `train.py` drives the schedule off
+`max(epoch fraction, elapsed / max_minutes)`, so `--max_minutes` is the budget
+the anneal is *sized for*, not a safety cap. v4-2 went out as `--max_minutes 600
+--epochs 16` with `--session_minutes 480` and `--save_full_state false`: the
+session cap fired (`run.log`: `session cap 480 min hit`) with the LR still at
+5.09e-05, where v4 had annealed to 8.32e-06 — and with no `last_full.pt` the
+remaining three epochs could not be recovered. `config.validate()` now warns on
+that exact combination and `train.py` prints a `[sched]` line at startup saying
+where the cosine will actually stop. The committed profile is a two-session
+`--epochs 24 --max_minutes 960 --session_minutes 480 --save_full_state true`,
+identical in both sessions, with only `--resume` added to the second.
+
+**`--w_seg 0` had gone stale.** It was reasoned from the GAMUS PNG mirror
+shipping no class rasters, which was true while GAMUS was the only source.
+SynRS3D ships them (`[data]` prints `seg=yes`), so v4-2 computed a real
+segmentation CE on every mixed batch and multiplied it by zero; the `seg=2.13`
+in the step lines is the raw unweighted value, never in the gradient. The weight
+is back at `config.py`'s 0.2, which also restores `flatness_loss`'s
+ground/road/water restriction.
+
+**SynRS3D's GSD table was wrong, though not in a way that bit this run.**
+`_SYN_GSD` read `{"g005": 0.3, "g05": 0.7}`. The dataset card
+(<https://huggingface.co/datasets/JTRNEO/SynRS3D>) publishes *ranges*:
+`g005` 0.05–0.30 m, `g05` 0.30–0.60 m, `g1` 0.60–1.00 m. So 0.3 was the ceiling
+of g005 rather than anything representative and 0.7 was outside g05 altogether.
+The hardcoded 0.5 m the packer actually used is inside g05's real range, so the
+one archive v4-2 trained on was labelled about right by accident — but pooling
+archives under one nominal is a 3–10× scale lie the moment a second family is
+added, and `dataset.py` turns `store.gsd_m` straight into the crop's effective
+GSD. Families are now packed into **separate stores** (`synrs3d_g005`,
+`synrs3d_g05`, `synrs3d_g1`) at the midpoint of their published range.
+
+That also fixed a claim this file used to make. `SYNRS3D_ARCHIVES` was ordered
+"coarse-GSD family first (they give the model the >0.66 m scale range that
+GAMUS's 1024 px tiles physically cannot reach)" — but it started with g05, which
+tops out at 0.60 m, and contained no `g1` archive at all. The g1 family is 5,537
+images and is the only thing in the mix that reaches past GAMUS's ceiling; it is
+now the first three entries, and `run_kaggle.sh prepare` takes
+`--synrs3d_archives 4` (all of g1, plus the g05 archive v4-2 used).
+
+### 5.11 DFC23 Track 2
+
+The first source in the mix that is actually the deployment domain: real 0.5 m
+(SuperView-1) and 0.8 m (Gaofen-2) satellite optical with a real nDSM reference.
+GAMUS is US *aerial*, SynRS3D is synthetic, GeoNRW's nDSM is a DEM proxy.
+
+```bash
+python prepare_data.py --data_root $DATA --datasets dfc23 \
+       --dfc23_dir /kaggle/input/<ds>/track2/train
+python train.py --datasets gamus,synrs3d_g05,synrs3d_g1,dfc23_g050
+```
+
+Three things about it are deliberate.
+
+**SAR is ignored.** Track 2 ships a co-registered SAR band, but the packed store
+is 3-channel (`dwdata/packed.py`) and DINOv3's patch embedding is `Conv2d(3, …)`,
+so fusing it means a store-format change *and* encoder surgery — for a signal a
+Cartosat-class single-view optical deployment does not have at inference.
+
+**The val split is carved by scene, not by tile**, for the same reason
+`prepare_india_labeled`'s is: tiles cut from one scene are near-duplicates, so a
+tile-level split leaks the val set into training. `track2/val` and
+`track2_test_data` ship no reference nDSM (the contest withheld it), so the only
+usable labels are under `track2/train` and the holdout has to come from there.
+
+**It is reported, never selected on.** `build_loaders` takes the first source in
+`--datasets` with a val split as the primary, so with `gamus` first the primary
+stays the 400-tile GAMUS prefix every run since v1 has been scored on, and that
+is what `best.pt` tracks. Every other prepared val store is scored alongside it
+(`build_aux_val_loaders`) and written into `metrics.json` as `val_<source>`.
+That second number is the point: "v4 beat v4-2 on GAMUS val" is partly just v4
+having trained on nothing but the val domain, and with one in-domain number
+there is no way to tell that apart from real generalisation.
+
+The pairing needed one new piece. DFC23 discriminates optical from height by
+**parent directory** (`rgb/P_0199.tif`, `dsm/P_0199.tif`, identical filenames),
+while `dwdata.india.pair_rasters` keys on filename *suffix* — handed that tree
+directly it claims whichever file it walks first as the RGB and every scene comes
+out unlabelled. `prepare_dfc23` pairs across the directories and symlinks into
+the `<stem>_rgb` / `<stem>_ndsm` convention; everything after that is
+`pack_labeled`, unchanged. `prepare_data.py` prints a `HEIGHT CHECK` per store —
+DFC23 ships an nDSM, so the median belongs near 0, and a median metres above zero
+is an absolute DSM that would poison the target silently.
+
+---
+
 ## 6. Reading the results
 
 `metrics.json` carries `final_plain`, `final_tta` **and** `final_sliding_tta`.
@@ -925,7 +1034,19 @@ Watch six numbers, not one:
   so a near-zero `hilly` count on GAMUS is expected, and is itself the finding.
 * **GAMUS 1024² tiles cannot supply a GSD coarser than 0.66 m** at a 512 tile.
   That is geometry, not a setting; coarse-GSD robustness comes from the SynRS3D
-  mix.
+  `g1` family (0.6–1.0 m) and from DFC23's 0.8 m Gaofen-2 scenes. Note the
+  `g05` family the mix used to rest on tops out at 0.60 m and never covered it
+  (§5.10).
+* **A GSD family is a range, and `index.json` holds one scalar.** SynRS3D
+  publishes GSD per *folder* — there is no per-image GSD anywhere in the
+  archives — so a `g05` tile carries its family's 0.45 m midpoint and is still
+  up to ±33 % off its own true GSD. Splitting the families into separate stores
+  bounds that; it does not remove it.
+* **DFC23 is one contest's imagery, not a neutral satellite benchmark.** It is
+  the honest out-of-domain number available today and it is reported next to
+  GAMUS rather than in place of it — but seventeen contest cities are not
+  Cartosat, and the second val column should be read as "generalises off GAMUS",
+  not as an ISRO number.
 * **GeoNRW's nDSM is a proxy** (`DEM − smoothed large-window minimum`). Auxiliary
   supervision, not a target you quote against. Off by default.
 * **v4 has not been trained yet.** Everything here is verified by 113 tests, by a
@@ -940,12 +1061,27 @@ Watch six numbers, not one:
 | DINOv3 ViT-L/16 SAT-493M | Meta DINOv3 licence | commercial use permitted with conditions |
 | GAMUS | see the HF dataset card | gated |
 | SynRS3D | see the HF dataset card | NeurIPS'24 |
+| DFC23 Track 2 | IEEE GRSS contest terms | **attribution is mandatory** — see below |
 | three.js r128 | MIT | vendored in `viewer/vendor/`, notice retained |
 | Copernicus DEM GLO-30 | free, attribution required | ESA / Copernicus |
 | DA-V2 **Small** | Apache-2.0 | Base/Large/Giant are CC-BY-NC-4.0 — do **not** use them |
 
 Ship this table with the deliverable. A licence challenge on a government
 deliverable is cheap to prevent and expensive to lose.
+
+The DFC23 terms are not a formality — they require, verbatim, in any publication
+using the data:
+
+> "[REF. NO.] 2023 IEEE GRSS Data Fusion Contest. Online:
+> www.grss-ieee.org/technical-committees/image-analysis-and-data-fusion/"
+
+plus an *Acknowledgement* section thanking the IEEE GRSS Image Analysis and Data
+Fusion Technical Committee, the Aerospace Information Research Institute of the
+Chinese Academy of Sciences, Universität der Bundeswehr München and GEOVIS Earth
+Technology Co., Ltd. for organizing the Data Fusion Contest, and a citation of
+Huang et al., 2022, *Urban Building Classification (UBC) — A Dataset for
+Individual Building Detection and Classification from Satellite Imagery*,
+CVPR 2022, pp. 1413–1421. See `CompetitionContext/DFC23_Building_Classification.md`.
 
 ```bash
 python -m pytest -q        # 113 passed

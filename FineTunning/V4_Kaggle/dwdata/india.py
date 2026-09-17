@@ -166,7 +166,8 @@ def _grid(h: int, w: int, tile: int, stride: int):
 # ---------------------------------------------------------------------
 def pack_labeled(src_dir: Path, out_dir: Path, tile_px: int, gsd_m: float,
                  max_tiles: int = 0, force: bool = False,
-                 dsm_is_absolute: bool = False) -> dict | None:
+                 dsm_is_absolute: bool = False,
+                 label: str = "india/labeled") -> dict | None:
     """Paired Indian rasters -> a packed store the trainer can sample directly.
 
     `dsm_is_absolute=True` says the height raster is elevation above sea level
@@ -175,14 +176,14 @@ def pack_labeled(src_dir: Path, out_dir: Path, tile_px: int, gsd_m: float,
     auxiliary-grade — say so in the report if you use it).
     """
     if store_exists(out_dir) and not force:
-        print(f"[india/labeled] already prepared -> {out_dir}")
+        print(f"[{label}] already prepared -> {out_dir}")
         return None
     recs = [r for r in pair_rasters(src_dir) if r["hgt"] is not None]
     if not recs:
-        print(f"[india/labeled] no rgb+height pairs under {src_dir} — nothing packed. "
+        print(f"[{label}] no rgb+height pairs under {src_dir} — nothing packed. "
               f"Expected e.g. delhi_001_rgb.tif + delhi_001_ndsm.tif")
         return None
-    print(f"[india/labeled] {len(recs)} pairs under {src_dir} -> {out_dir}")
+    print(f"[{label}] {len(recs)} pairs under {src_dir} -> {out_dir}")
 
     w = ShardWriter(out_dir, tile_px=tile_px, gsd_m=gsd_m, shard_tiles=128)
     n = 0
@@ -219,11 +220,11 @@ def pack_labeled(src_dir: Path, out_dir: Path, tile_px: int, gsd_m: float,
                 if max_tiles and n >= max_tiles:
                     break
         except Exception as e:  # noqa: BLE001
-            print(f"[india/labeled] skip {rec['stem']}: {e}")
+            print(f"[{label}] skip {rec['stem']}: {e}")
         if max_tiles and n >= max_tiles:
             break
     idx = w.finalise()
-    print(f"[india/labeled] packed {idx['n']} tiles @ {tile_px}px / {gsd_m} m")
+    print(f"[{label}] packed {idx['n']} tiles @ {tile_px}px / {gsd_m} m")
     return idx
 
 
