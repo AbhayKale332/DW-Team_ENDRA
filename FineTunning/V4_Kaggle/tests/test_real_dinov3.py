@@ -33,16 +33,59 @@ def small_dinov3():
     DINOv3Encoder.BUILDER = prev
 
 
-def test_v2_name_lookup_really_does_fail():
-    """Pin the root cause so nobody 'simplifies' the finder back."""
+def test_v2_name_lookup_is_not_something_you_can_rely_on():
+    """Pin the root cause so nobody 'simplifies' the finder back.
+
+    This used to assert that *no* name (`layer` / `layers` / `blocks`) resolves on
+    a `DINOv3ViTModel`, which held for the transformers build it was written
+    against and fails on others: on the Kaggle image
+    `DINOv3ViTModel.layer` is a real `ModuleList` of `DINOv3ViTLayer`, and the
+    test failed there while passing locally on transformers 5.17.
+
+    Which is the point, and a sharper version of it than the original assertion
+    made. The attribute name is a private detail of whichever transformers
+    version happens to be installed, so a name lookup is not something the
+    encoder can be built on — not because the name is always absent, but because
+    whether it is present is not ours to decide. The finder therefore locates the
+    block list structurally (`models/encoder.py:_find_blocks`, by ModuleList
+    length against `num_hidden_layers`), and what is asserted here is the
+    property that actually has to hold: it finds the right list whatever the
+    attribute is called, including when it is called nothing recognisable.
+    """
+    import transformers
     from transformers import DINOv3ViTConfig, DINOv3ViTModel
 
     m = DINOv3ViTModel(DINOv3ViTConfig(
         hidden_size=64, num_hidden_layers=6, num_attention_heads=4,
         intermediate_size=128, patch_size=16, image_size=64))
-    for attr in ("layer", "layers", "blocks"):
-        enc = getattr(m, "encoder", m)
-        assert getattr(enc, attr, None) is None and getattr(m, attr, None) is None
+    enc = getattr(m, "encoder", m)
+    names = {a: getattr(enc, a, None) is not None or getattr(m, a, None) is not None
+             for a in ("layer", "layers", "blocks")}
+    # Informational, never asserted — it is exactly the thing that moves between
+    # versions, and printing it is what makes a future surprise diagnosable.
+    print(f"[test] transformers {transformers.__version__} exposes {names}")
+
+    from models.encoder import DINOv3Encoder
+
+    finder = DINOv3Encoder._find_blocks
+    probe = type("P", (), {"model": m, "n_layers": 6})()
+    found = finder(probe)
+    assert found is not None
+    assert len(found) == 6, f"structural finder got {len(found)} blocks, want 6"
+
+    # …and still, with every name it could have keyed on removed.
+    import torch.nn as nn
+
+    class Renamed(nn.Module):
+        def __init__(self, inner):
+            super().__init__()
+            self.trunk_stack = inner        # the one name nothing looks for
+
+    inner = found
+    probe2 = type("P", (), {"model": Renamed(inner), "n_layers": 6})()
+    found2 = finder(probe2)
+    assert found2 is not None and len(found2) == 6, \
+        "the finder is keying on a name again — it must locate blocks by shape"
 
 
 def test_v3_finds_the_blocks_structurally(small_dinov3):

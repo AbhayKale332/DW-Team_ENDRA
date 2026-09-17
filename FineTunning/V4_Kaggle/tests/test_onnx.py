@@ -99,7 +99,7 @@ def test_onnx_adapter_plugs_into_the_engine(tmp_path, monkeypatch):
         undo()
 
 
-def test_sidecar_records_the_opset_the_graph_actually_has(tmp_path):
+def test_sidecar_records_the_opset_the_graph_actually_has(tmp_path, monkeypatch):
     """`opset_version=` is a request, not a guarantee.
 
     The dynamo exporter emits at its own native opset and then asks onnxscript
@@ -111,13 +111,18 @@ def test_sidecar_records_the_opset_the_graph_actually_has(tmp_path):
     lies to whoever deploys it.
     """
     onnx = pytest.importorskip("onnx")
-    ckpt, spec, undo = _ckpt(tmp_path)
+    undo = use_stub(hidden=32, patch=16, layers=8)
     try:
+        ck, net, spec = _ckpt(tmp_path)
+        import dwdata.preprocess as pp
+
+        monkeypatch.setattr(pp, "resolve_encoder_stats",
+                            lambda *a, **k: (pp.DINOV3_SAT_MEAN, pp.DINOV3_SAT_STD))
         from infer.export_onnx import export
 
         out = tmp_path / "m.onnx"
         try:
-            export(str(ckpt), str(out), opset=17, check=False)
+            export(str(ck), str(out), opset=17, check=False)
         except Exception as e:  # noqa: BLE001
             pytest.skip(f"torch.onnx export unavailable: {e}")
 
@@ -134,18 +139,24 @@ def test_sidecar_records_the_opset_the_graph_actually_has(tmp_path):
         undo()
 
 
-def test_external_weight_files_are_reported_so_they_can_be_shipped(tmp_path, capsys):
+def test_external_weight_files_are_reported_so_they_can_be_shipped(
+        tmp_path, capsys, monkeypatch):
     """A 300 M-parameter model that serialises to a few MB has put its weights
     in sibling `.data` files; `depthwizard.onnx` alone then loads nothing, and
     with `--make_zip false` nothing else bundles the directory."""
     pytest.importorskip("onnx")
-    ckpt, spec, undo = _ckpt(tmp_path)
+    undo = use_stub(hidden=32, patch=16, layers=8)
     try:
+        ck, net, spec = _ckpt(tmp_path)
+        import dwdata.preprocess as pp
+
+        monkeypatch.setattr(pp, "resolve_encoder_stats",
+                            lambda *a, **k: (pp.DINOV3_SAT_MEAN, pp.DINOV3_SAT_STD))
         from infer.export_onnx import export
 
         out = tmp_path / "m.onnx"
         try:
-            export(str(ckpt), str(out), opset=17, check=False)
+            export(str(ck), str(out), opset=17, check=False)
         except Exception as e:  # noqa: BLE001
             pytest.skip(f"torch.onnx export unavailable: {e}")
         printed = capsys.readouterr().out
