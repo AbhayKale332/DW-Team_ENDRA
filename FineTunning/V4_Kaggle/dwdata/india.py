@@ -168,7 +168,8 @@ def pack_labeled(src_dir: Path, out_dir: Path, tile_px: int, gsd_m: float,
                  max_tiles: int = 0, force: bool = False,
                  dsm_is_absolute: bool = False,
                  label: str = "india/labeled",
-                 max_height_m: float = 0.0) -> dict | None:
+                 max_height_m: float = 0.0,
+                 black_rgb_is_nodata: bool = True) -> dict | None:
     """Paired Indian rasters -> a packed store the trainer can sample directly.
 
     `dsm_is_absolute=True` says the height raster is elevation above sea level
@@ -206,6 +207,16 @@ def pack_labeled(src_dir: Path, out_dir: Path, tile_px: int, gsd_m: float,
             if hgt.shape[:2] != rgb.shape[:2]:
                 from .preprocess import resize
 
+                # Survivable, but never silent.  On a paired product the two
+                # rasters share a grid (DFC23: 1773 of 1773 scenes share a
+                # geotransform exactly), so a mismatch means the pairing is
+                # wrong far more often than it means the height product is
+                # coarser — and a bilinear resize turns that into targets that
+                # look plausible and are not.
+                print(f"[{label}] {rec['stem']}: height raster "
+                      f"{hgt.shape[1]}x{hgt.shape[0]} does not match RGB "
+                      f"{rgb.shape[1]}x{rgb.shape[0]} — resizing onto the RGB "
+                      f"grid; check the pairing")
                 hgt = resize(hgt, rgb.shape[:2], "bilinear")
             if dsm_is_absolute:
                 hgt = ndsm_from_absolute(hgt)
@@ -218,6 +229,17 @@ def pack_labeled(src_dir: Path, out_dir: Path, tile_px: int, gsd_m: float,
 
                 seg = resize(seg, rgb.shape[:2], "nearest")
             valid = np.isfinite(hgt) & (hgt > -2.0) & (hgt < 500.0)
+            # No image means no supervision.  Where the tile falls outside the
+            # optical footprint the RGB is pure black and the height raster
+            # under it reads exactly 0.0 — a legitimate-looking flat-ground
+            # label that `isfinite & > -2 & < 500` has no way to reject.  That
+            # is the 41 %-black-padding-at-0 m failure this module's docstring
+            # opens with, and it is present in DFC23: 12 of 1773 train scenes
+            # carry all-black RGB, the worst (`SV_Berlin_52.4902_13.5090`) over
+            # 53 % of the tile, 73 % of it labelled 0 m.  Costs nothing on a
+            # fully imaged tile, where no pixel is black in all three bands.
+            if black_rgb_is_nodata and rgb.ndim == 3:
+                valid &= ~(rgb == 0).all(axis=-1)
             # `max_height_m` marks anything above it INVALID rather than
             # clipping it: a stereo blunder is not a building of the ceiling
             # height, it is an unknown, and clipping would train the ceiling as

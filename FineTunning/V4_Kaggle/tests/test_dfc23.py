@@ -257,3 +257,100 @@ def test_max_height_off_by_default_leaves_the_target_untouched(tmp_path):
     st = PackedStore(out / "dfc23_g050" / "train")
     _, h, _, val = st.get(0)
     assert float(np.asarray(h)[np.asarray(val, bool)].max()) == pytest.approx(150.0, abs=0.1)
+
+
+def _scene_with_black_padding(root, stem, black_frac=0.6, h=512, w=512):
+    """A real DFC23 scene shape: part of the tile is outside the optical
+    footprint, so the RGB is pure black there — and the nDSM under it reads
+    exactly 0.0, indistinguishable from flat ground.
+
+    Measured over all 1773 train scenes: 12 carry all-black RGB, worst
+    `SV_Berlin_52.4902_13.5090` at 53.09 % of the tile, 73.4 % of whose black
+    pixels are labelled exactly 0 m.  `valid = isfinite & > -2 & < 500` calls
+    every one of them a supervised 0 m ground sample.  This is the failure that
+    put 41 % black-padding-at-zero into v2 — see `dwdata/india.py`'s docstring.
+    """
+    (root / "rgb").mkdir(parents=True, exist_ok=True)
+    (root / "dsm").mkdir(parents=True, exist_ok=True)
+    rng = np.random.default_rng(abs(hash(stem)) % 2 ** 31)
+    rgb = (rng.random((h, w, 3)) * 200 + 30).astype(np.uint8)
+    cut = int(w * black_frac)
+    rgb[:, :cut] = 0                       # outside the optical footprint
+    _tif(root / "rgb" / f"{stem}.tif", rgb)
+    nd = np.zeros((h, w), np.float32)
+    nd[200:300, 400:500] = 14.0            # a real building, in the imaged part
+    _tif(root / "dsm" / f"{stem}.tif", nd)
+
+
+def test_black_rgb_is_not_supervised_as_flat_ground(tmp_path):
+    """No image means no supervision.  A pixel with no optical data cannot be
+    a 0 m ground sample, and `valid` is the only thing that says so."""
+    src = tmp_path / "track2" / "train"
+    for i in range(5):
+        _scene_with_black_padding(src, f"P_{i:04d}", black_frac=0.3)
+    out = tmp_path / "out"
+    prepare_dfc23(out, _Args(dfc23_dir=str(src), dfc23_val_frac=0.0,
+                             dfc23_tile=512))
+    st = PackedStore(out / "dfc23_g050" / "train")
+    rgb, _, _, val = st.get(0)
+    rgb, val = np.asarray(rgb), np.asarray(val, bool)
+    black = (rgb == 0).all(-1)
+    assert black.any(), "the fixture should have produced black padding"
+    assert not val[black].any(), "black RGB was supervised as 0 m ground"
+    assert val[:, 400:].all(), "the imaged part must stay supervised"
+
+
+def test_a_mostly_black_scene_is_dropped_entirely(tmp_path):
+    """`pack_labeled` already drops a tile under 50 % valid.  That gate is dead
+    on DFC23 — no NaN, no nodata tag, min 0.0 over all 1773 scenes, so
+    `valid.mean()` is exactly 1.000 everywhere.  Counting black RGB as invalid
+    is what gives it something to fire on."""
+    src = tmp_path / "track2" / "train"
+    for i in range(5):
+        _scene_with_black_padding(src, f"P_{i:04d}", black_frac=0.6)
+    out = tmp_path / "out"
+    prepare_dfc23(out, _Args(dfc23_dir=str(src), dfc23_val_frac=0.0,
+                             dfc23_tile=512))
+    assert len(PackedStore(out / "dfc23_g050" / "train")) == 0, \
+        "a 60 %-black scene was packed as 60 % supervised ground"
+
+
+def test_a_resized_height_raster_says_so(tmp_path, capsys):
+    """`pack_labeled` resizes a height raster that does not match the RGB grid
+    onto it, silently.  Over all 1773 DFC23 train scenes rgb/ and dsm/ share a
+    geotransform exactly, so a mismatch here means the pairing is wrong, not
+    that the product is coarser — and a silent bilinear resize turns that into
+    plausible-looking targets.  Survivable, but it has to be visible."""
+    src = tmp_path / "track2" / "train"
+    _scene(src, "P_0000", h=512, w=512)
+    (src / "dsm" / "P_0000.tif").unlink()
+    _tif(src / "dsm" / "P_0000.tif", np.zeros((256, 256), np.float32), 1.0)
+    prepare_dfc23(tmp_path / "out", _Args(dfc23_dir=str(src),
+                                          dfc23_val_frac=0.0, dfc23_tile=256))
+    out = capsys.readouterr().out
+    assert "resiz" in out.lower(), out
+    assert "256" in out and "512" in out, out
+
+
+def test_the_height_check_samples_the_whole_store_not_just_the_front(tmp_path,
+                                                                    capsys):
+    """The border/interior verdict is a prevalence claim, so it has to be read
+    off the whole store.  It used to read the first 64 tiles: on the real split
+    that sample caught `GF2_NewDelhi_28.5557_77.1194` and almost none of the
+    Rio/New York high-rise scenes, and printed `[!] concentrated at the tile
+    border` — the opposite of the whole-split answer, where >100 m mass is 0.64x
+    as dense in the border band as in the interior over all 1773 scenes.  A
+    wrong verdict here is what would put `--dfc23_max_height_m 100` on by
+    default and delete 214,540 px of genuine high-rise target."""
+    src = tmp_path / "track2" / "train"
+    for i in range(5):                       # blunder scenes, sorted first
+        _scene_with_border_blunder(src, f"A_{i:04d}")
+    for i in range(75):                      # ordinary scenes, sorted after
+        _scene(src, f"B_{i:04d}", h=512, w=512)
+    prepare_dfc23(tmp_path / "out", _Args(dfc23_dir=str(src),
+                                          dfc23_val_frac=0.0, dfc23_tile=512))
+    out = capsys.readouterr().out
+    line = [ln for ln in out.splitlines() if "HEIGHT CHECK" in ln
+            and "/train" in ln][0]
+    # 80 scenes, one of which prepare_dfc23 always holds out for val
+    assert "(over 79 tiles)" in line, line
