@@ -672,9 +672,24 @@ def _dfc23_height_check(out: Path, label: str, tall_m: float = 100.0,
     from dwdata.packed import PackedStore
 
     st = PackedStore(out)
-    n = min(len(st), 64)
+    # The border/interior line is a *prevalence* claim, so it has to be read off
+    # the whole store.  Reading the first 64 tiles is how this check reported
+    # `[!] concentrated at the tile border` on the real 1506-tile train store:
+    # that front slice caught GF2_NewDelhi_28.5557_77.1194 and almost none of
+    # the Rio / New York high-rise scenes, whereas over all 1773 scenes >100 m
+    # mass is 0.64x as *dense* in the border band as in the interior.  Sample
+    # the whole store, strided, and say how many tiles the numbers came from.
+    # Exact for any store this packer builds (DFC23 train is 1506 tiles, ~30 s
+    # to read back); the stride only guards a pathologically large store, and a
+    # strided sample still misses the handful of scenes that carry most of the
+    # tall mass — over the real split the five tallest Rio tiles hold 137k of
+    # the 214k pixels above 100 m.
+    cap = 4096
+    step = max(1, len(st) // cap)
+    idx = list(range(0, len(st), step))[:cap]
+    n = len(idx)
     vals, n_edge, n_inner, px_edge, px_inner = [], 0, 0, 0, 0
-    for i in range(n):
+    for i in idx:
         _, h, _, v = st.get(i)
         h = np.asarray(h, np.float32)
         v = np.asarray(v, bool)
