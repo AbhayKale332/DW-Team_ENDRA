@@ -21,9 +21,11 @@ FineTunning/
 │   └── utils/install_dependency.py
 ├── v2/ ...                      # copy v1/ to start a new version
 ├── v4/                          # the deliverable, tuned for 1x H100 (run_lightning.sh)
-└── V4_Kaggle/                   # v4 + DDP + full-state resume, for GPU T4 x2
-    ├── run_kaggle.sh            # check | prepare | link | smoke | train | finalize
-    └── kaggle_train.ipynb       # the four notebook cells
+├── V4_Kaggle/                   # v4 + DDP + full-state resume, for GPU T4 x2
+│   ├── run_kaggle.sh            # check | prepare | link | smoke | train | finalize
+│   └── kaggle_train.ipynb       # the four notebook cells
+└── V4_modal/                    # glue only — runs V4_Kaggle/ on a Modal H100
+    └── modal_app.py             # check | prepare | smoke | train | finalize
 ```
 
 **On Kaggle's free GPU T4 x2, use `V4_Kaggle/`, not `v4/`.** It is a full copy of
@@ -50,6 +52,29 @@ accept its license and add an `HF_TOKEN` Kaggle Secret first
 - `main.py` is equivalent: **Step 1** installs `requirements-kaggle.txt`, **Step 2**
   runs `train.run()` → `kaggle_phase0.main()`. Flags `--skip-install`,
   `--install-only`; any other `--flag` is forwarded to `kaggle_phase0`.
+
+## Run on Modal (1x H100, ~$14 a run)
+
+**`V4_modal/` duplicates no code** — its image mounts `V4_Kaggle/` verbatim and
+shells out to it, so it inherits every fix that tree carries and a change there
+needs no rebuild. One container, one H100, real bf16, and a persistent Volume
+instead of a symlink farm over a read-only mount.
+
+```bash
+cd FineTunning && uv sync && .venv/bin/modal setup
+modal secret create dw-hf      HF_TOKEN=hf_...
+modal secret create dw-kaggle  KAGGLE_USERNAME=... KAGGLE_KEY=...
+
+cd V4_modal
+modal run modal_app.py::show_tuning        # $0 — flags + cost, no container
+modal run modal_app.py::check              # image + 166 tests
+modal run --detach modal_app.py::prepare   # build the packed store, once
+modal run modal_app.py::smoke              # ~10 min on the real card
+modal run --detach modal_app.py::train     # the real run
+```
+
+See [`V4_modal/README.md`](V4_modal/README.md) for the cost table, the flag
+profile and what to watch in the log.
 
 ## Local dev
 

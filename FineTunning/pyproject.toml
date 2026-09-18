@@ -7,10 +7,14 @@ requires-python = ">=3.12"
 authors = [
     { name = "Akash Chaudhari", email = "akashchaudhari1012@gmail.com" }
 ]
-# Kept empty on purpose: the real deps live in vN/requirements-kaggle.txt and are
-# installed into the Kaggle runtime by vN/main.py. Add here only for local dev.
+# Deliberately thin: the real training deps live in vN/requirements.txt and are
+# installed into the *remote* runtime (Kaggle's image, or the Modal image built by
+# V4_modal/modal_app.py). Add here only what local dev actually runs.
 dependencies = [
     "ruff>=0.16.6",
+    # The Modal CLI, for V4_modal/. Local-only: it submits jobs and never
+    # imports torch, so `uv sync` stays light.
+    "modal>=1.0",
 ]
 
 [tool.uv]
