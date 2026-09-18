@@ -229,3 +229,11 @@ data/gamus/
 *.onnx
 imele_outputs/
 viewer_sample/
+
+# Credentials and executed notebooks — cell 1 of the Modal notebooks holds
+# GITHUB_PAT / HF_TOKEN / KAGGLE_* verbatim once run, so an executed copy is a
+# secret, not an artifact. Keep them out of the index entirely.
+kaggle.json
+**/kaggle.json
+*_ececuted.ipynb
+*_executed.ipynb

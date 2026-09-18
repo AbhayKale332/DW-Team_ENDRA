@@ -176,7 +176,7 @@ def _gamus_file_list(repo: str, token, staged: Path, pre: str, suf: str) -> list
 
 def prepare_gamus(root: Path, split: str, n_tiles: int, token, force: bool,
                   repo: str, workers: int = 12) -> None:
-    from huggingface_hub import HfApi, hf_hub_download
+    from huggingface_hub import snapshot_download
 
     out = root / "gamus" / split
     if store_exists(out) and not force:
@@ -187,6 +187,18 @@ def prepare_gamus(root: Path, split: str, n_tiles: int, token, force: bool,
 
     tmp = root / "_dl" / f"gamus_{split}"
     tmp.mkdir(parents=True, exist_ok=True)
+
+    # Stage the whole split in ONE transfer.  This used to call hf_hub_download
+    # once per file (~13 200 requests), earn a CAS 429 partway through, and
+    # swallow each failure as `skip: ...` -- which is how v3 wrote a gamus/val
+    # holding 129 of 400 tiles and still reported success.  snapshot_download
+    # batches, retries and resumes; afterwards every tile resolves off local
+    # disk, so the pack loop touches the network zero times.
+    print(f"[gamus/{split}] staging images+heights+classes -> {tmp}", flush=True)
+    snapshot_download(repo, repo_type="dataset", token=token, local_dir=str(tmp),
+                      allow_patterns=[f"{sub_}/{split}/*"
+                                      for sub_ in ("images", "heights", "classes")],
+                      max_workers=workers)
 
     pre, suf = f"images/{split}/", "_RGB.h5"
     files = _gamus_file_list(repo, token, tmp, pre, suf)
@@ -200,17 +212,17 @@ def prepare_gamus(root: Path, split: str, n_tiles: int, token, force: bool,
     print(f"[gamus/{split}] packing {len(stems)} tiles -> {out}")
 
     def fetch(stem: str):
+        """Resolve one tile out of the staged copy.  No network."""
         paths = {}
-        for key, (sub, tag) in {"rgb": ("images", "RGB"), "hgt": ("heights", "AGL"),
-                                "cls": ("classes", "CLS")}.items():
-            rel = f"{sub}/{split}/{stem}_{tag}.h5"
-            try:
-                paths[key] = hf_hub_download(repo, rel, repo_type="dataset",
-                                             local_dir=str(tmp), token=token)
-            except Exception:  # noqa: BLE001 — classes/ is optional
-                if key != "cls":
-                    raise
+        for key, (sub_, tag) in {"rgb": ("images", "RGB"), "hgt": ("heights", "AGL"),
+                                 "cls": ("classes", "CLS")}.items():
+            f = tmp / sub_ / split / f"{stem}_{tag}.h5"
+            if f.exists():
+                paths[key] = str(f)
+            elif key == "cls":          # a repo without classes/ still packs
                 paths[key] = None
+            else:
+                raise FileNotFoundError(f)
         return stem, paths
 
     def read_h5(p):
@@ -252,6 +264,12 @@ def prepare_gamus(root: Path, split: str, n_tiles: int, token, force: bool,
     idx = writer.finalise()
     shutil.rmtree(tmp, ignore_errors=True)
     print(f"[gamus/{split}] packed {idx['n']} tiles into {len(idx['shards'])} shards")
+    # v3 shipped a gamus/val holding 129 of 400 tiles because every per-tile
+    # failure was a printed `skip:` and nothing summed them.  Sum them.
+    if idx["n"] < 0.99 * len(stems):
+        raise RuntimeError(
+            f"[gamus/{split}] packed {idx['n']} of {len(stems)} staged tiles — "
+            f"fix the staging rather than train on a short store.")
     if n_cls == done and done:
         print(f"[gamus/{split}] semantic labels: {n_cls}/{done} tiles OK")
     elif n_cls:

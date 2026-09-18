@@ -276,7 +276,9 @@ class Config:
     # ----- eval / io -------------------------------------------------
     eval_every: int = 2
     tta: bool = True
-    tta_scales: tuple = (1.0,)              # dihedral only by default; add 1.25 for +scale
+    # 0.5 m / 1.25 = 0.4 m effective, inside the trained 0.33-0.66 m jitter band.
+    # Final-eval only; best.pt is still selected on plain no-TTA centre-crop.
+    tta_scales: tuple = (1.0, 1.25)         # parse_config skips tuples -> edit here, not CLI
     final_sliding_eval: bool = True         # full-tile sliding-window eval at the end
     per_class_metrics: bool = True
     per_landscape_metrics: bool = True      # urban / sparse / hilly / forested
