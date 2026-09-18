@@ -98,3 +98,43 @@ def test_short_pack_raises(tmp_path, staged):
 
     with pytest.raises(RuntimeError, match="of 5 staged tiles"):
         prepare_gamus(tmp_path, "val", 0, None, False, "earthflow/GAMUS", workers=2)
+
+
+def test_stage_resumes_after_rate_limit(monkeypatch, staged, tmp_path):
+    """A 429 here is about the shared egress IP, not the request.
+
+    HF's Xet backend mints a per-file `/xet-read-token/<hash>` before each
+    transfer, and on a Modal container that endpoint limits the whole IP while
+    the token is perfectly valid -- the 429 body even talks about anonymous
+    callers, so it reads as an auth failure.  Waiting is the only useful
+    response, and `snapshot_download` resumes into `local_dir`, so a retry must
+    not restart the ~51 GiB from zero.
+    """
+    import prepare_data
+
+    calls, slept = [], []
+    def flaky(*a, **k):
+        calls.append(k.get("max_workers"))
+        if len(calls) < 3:
+            raise RuntimeError("429 Client Error: Too Many Requests")
+        return "ok"
+
+    hub = sys.modules["huggingface_hub"]
+    monkeypatch.setattr(hub, "snapshot_download", flaky, raising=False)
+    monkeypatch.setattr(prepare_data.time, "sleep", lambda s: slept.append(s))
+
+    prepare_data._stage("r", "tok", tmp_path, ["images/val/*"], 4)
+    assert len(calls) == 3, "must retry until it succeeds"
+    assert slept == [60, 120], f"exponential backoff, got {slept}"
+
+
+def test_stage_gives_up_and_raises(monkeypatch, staged, tmp_path):
+    import prepare_data
+
+    hub = sys.modules["huggingface_hub"]
+    monkeypatch.setattr(hub, "snapshot_download",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("429")),
+                        raising=False)
+    monkeypatch.setattr(prepare_data.time, "sleep", lambda s: None)
+    with pytest.raises(RuntimeError, match="429"):
+        prepare_data._stage("r", "tok", tmp_path, ["images/val/*"], 4, tries=3)

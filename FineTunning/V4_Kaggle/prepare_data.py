@@ -28,6 +28,7 @@ import argparse
 import os
 import shutil
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -36,6 +37,13 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+# HF's Xet backend mints a per-file read token (`/xet-read-token/<hash>`) before
+# each transfer.  On a shared-egress host -- a Modal container, CI, anything
+# behind NAT -- that endpoint rate-limits the *IP* long before the bytes do, and
+# returns a 429 whose text ("make sure you pass a HF_TOKEN") is about anonymous
+# callers and so reads as an auth failure even when the token is fine.  The
+# classic CDN path has no per-file call.  setdefault, so an explicit choice wins.
+os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 
 from dwdata.packed import NO_LABEL, ShardWriter, store_exists  # noqa: E402
 
@@ -174,6 +182,32 @@ def _gamus_file_list(repo: str, token, staged: Path, pre: str, suf: str) -> list
         return local
 
 
+def _stage(repo: str, token, tmp: Path, patterns: list[str], workers: int,
+           tries: int = 6) -> None:
+    """Bulk-download with backoff.
+
+    ~51 GiB over a shared egress IP will meet a 429 that is about the IP, not the
+    request, so the only useful response is to wait and carry on.
+    `snapshot_download` resumes into `local_dir`, so every retry starts from what
+    already landed rather than from zero -- and so does re-running the whole cell.
+    """
+    from huggingface_hub import snapshot_download
+
+    for i in range(tries):
+        try:
+            snapshot_download(repo, repo_type="dataset", token=token,
+                              local_dir=str(tmp), allow_patterns=patterns,
+                              max_workers=workers)
+            return
+        except Exception as e:  # noqa: BLE001 — 429/5xx/connection resets alike
+            if i == tries - 1:
+                raise
+            wait = min(60 * 2 ** i, 900)
+            print(f"[hf] {type(e).__name__} on attempt {i + 1}/{tries}; resuming "
+                  f"in {wait}s (partial download is kept): {str(e)[:120]}", flush=True)
+            time.sleep(wait)
+
+
 def prepare_gamus(root: Path, split: str, n_tiles: int, token, force: bool,
                   repo: str, workers: int = 12) -> None:
     from huggingface_hub import snapshot_download
@@ -195,10 +229,9 @@ def prepare_gamus(root: Path, split: str, n_tiles: int, token, force: bool,
     # batches, retries and resumes; afterwards every tile resolves off local
     # disk, so the pack loop touches the network zero times.
     print(f"[gamus/{split}] staging images+heights+classes -> {tmp}", flush=True)
-    snapshot_download(repo, repo_type="dataset", token=token, local_dir=str(tmp),
-                      allow_patterns=[f"{sub_}/{split}/*"
-                                      for sub_ in ("images", "heights", "classes")],
-                      max_workers=workers)
+    _stage(repo, token, tmp,
+           [f"{sub_}/{split}/*" for sub_ in ("images", "heights", "classes")],
+           min(workers, 4))
 
     pre, suf = f"images/{split}/", "_RGB.h5"
     files = _gamus_file_list(repo, token, tmp, pre, suf)
