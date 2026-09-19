@@ -51,12 +51,13 @@ def staged(monkeypatch):
     return box
 
 
-def _write(tmp, split, stems, subs=_SUBS):
+def _write(tmp, split, stems, subs=_SUBS, img_tag="RGB"):
     for sub, tag, dt, v in subs:
         (tmp / sub / split).mkdir(parents=True, exist_ok=True)
         for s in stems:
             shape = (TILE, TILE, 3) if sub == "images" else (TILE, TILE)
-            with h5py.File(tmp / sub / split / f"{s}_{tag}.h5", "w") as f:
+            name = f"{s}_{img_tag if sub == 'images' else tag}.h5"
+            with h5py.File(tmp / sub / split / name, "w") as f:
                 f["image"] = np.full(shape, v, dt)
 
 
@@ -266,3 +267,39 @@ def test_test_split_is_opt_in(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "argv", argv + ["--gamus_test", "0"])
     prepare_data.main()
     assert seen[-1] == ("test", 0), seen
+
+
+def test_img_and_rgb_tiles_both_pack(tmp_path, staged):
+    """GAMUS names its images two ways and only one of them was matched.
+
+    `suf = "_RGB.h5"` dropped every `_IMG.h5` tile: 1167 of 5004 in train and
+    1000 of 2861 in test, all NYC.  It hid for so long because val has no `_IMG`
+    files at all, so the split everyone checks read a clean 859/859 -- and the
+    `< 0.99` yield guard could not see it either, because the dropped tiles
+    never entered `stems` and the store looked complete against a short target.
+    """
+    from prepare_data import prepare_gamus
+
+    tmp = tmp_path / "_dl" / "gamus_train"
+    _write(tmp, "train", ["JAX_01_10", "JAX_02_10"], img_tag="RGB")
+    _write(tmp, "train", ["NYC_22835", "NYC_22836", "NYC_22837"], img_tag="IMG")
+    staged["dir"] = str(tmp)
+
+    prepare_gamus(tmp_path, "train", 0, None, False, "earthflow/GAMUS", workers=2)
+
+    idx = json.loads((tmp_path / "gamus/train/index.json").read_text())
+    assert idx["n"] == 5, "both naming conventions must reach the store"
+    assert idx["has_seg"] is True
+
+
+def test_unknown_image_tag_is_fatal(tmp_path, staged):
+    """A third convention must stop the run, not quietly shrink the dataset."""
+    from prepare_data import prepare_gamus
+
+    tmp = tmp_path / "_dl" / "gamus_train"
+    _write(tmp, "train", ["JAX_01_10"], img_tag="RGB")
+    _write(tmp, "train", ["JAX_09_10"], img_tag="PAN")     # invented
+    staged["dir"] = str(tmp)
+
+    with pytest.raises(RuntimeError, match="match none of"):
+        prepare_gamus(tmp_path, "train", 0, None, False, "earthflow/GAMUS", workers=2)

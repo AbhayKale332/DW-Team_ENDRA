@@ -51,6 +51,10 @@ os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 from dwdata.packed import NO_LABEL, ShardWriter, store_exists  # noqa: E402
 
 GAMUS_GSD_M = 0.33
+# GAMUS names its RGB rasters two ways -- `_RGB.h5` for most tiles and `_IMG.h5`
+# for the NYC ones.  Heights and classes are always `_AGL`/`_CLS`; only images/
+# is inconsistent.
+_GAMUS_IMG_TAGS = ("RGB", "IMG")
 GEONRW_GSD_M = 1.0
 
 # SynRS3D GSD families.  The `gNNN` token in a folder name is a *range*, not a
@@ -367,9 +371,30 @@ def prepare_gamus(root: Path, split: str, n_tiles: int, token, force: bool,
     subs = ("images", "heights", "classes")
     revision, tree = _repo_tree(repo, token, [f"{s}/{split}" for s in subs], tmp)
 
-    pre, suf = f"images/{split}/", "_RGB.h5"
-    stems = sorted(f[len(pre):-len(suf)] for f in tree
-                   if f.startswith(pre) and f.endswith(suf))
+    # Match BOTH image naming conventions.  `suf = "_RGB.h5"` dropped every
+    # `_IMG.h5` tile -- 1167 of 5004 in train and 1000 of 2861 in test, all of
+    # them NYC.  It stayed invisible because val, the one split anybody checks,
+    # has no `_IMG` files at all and so always read a clean 859/859.  The yield
+    # check below could not catch it either: the dropped tiles never entered
+    # `stems`, so the store measured 100 % complete against a target that was
+    # already 23 % short.  Hence the hard error on an unrecognised tag -- a
+    # third convention must stop the run, not quietly shrink the dataset.
+    pre = f"images/{split}/"
+    img_tag, strange = {}, []
+    for f in tree:
+        if not f.startswith(pre):
+            continue
+        stem, _, tag = f[len(pre):].removesuffix(".h5").rpartition("_")
+        if stem and tag in _GAMUS_IMG_TAGS:
+            img_tag[stem] = tag
+        else:
+            strange.append(f)
+    if strange:
+        raise RuntimeError(
+            f"[gamus/{split}] {len(strange)} file(s) under {pre} match none of "
+            f"{_GAMUS_IMG_TAGS}, e.g. {strange[:3]}. Add the tag to "
+            f"_GAMUS_IMG_TAGS rather than letting them drop out of `stems`.")
+    stems = sorted(img_tag)
     if not stems:
         raise RuntimeError(f"no GAMUS tiles under {pre} in {repo}")
     if n_tiles and n_tiles < len(stems):
@@ -378,9 +403,11 @@ def prepare_gamus(root: Path, split: str, n_tiles: int, token, force: bool,
 
     # Only the tiles being packed.  Staging the whole split for a `--gamus_train
     # 4000` run buys nothing but requests against the limit that broke this.
-    tags = {"images": "RGB", "heights": "AGL", "classes": "CLS"}
+    tags = {"heights": "AGL", "classes": "CLS"}
     rels = [r for s in stems for r in
-            (f"{sub}/{split}/{s}_{tags[sub]}.h5" for sub in subs) if r in tree]
+            ([f"images/{split}/{s}_{img_tag[s]}.h5"]
+             + [f"{sub}/{split}/{s}_{t}.h5" for sub, t in tags.items()])
+            if r in tree]
     print(f"[gamus/{split}] staging {len(rels)} files -> {tmp}", flush=True)
     _stage(repo, token, tmp, rels, tree, revision, max(1, min(workers, 4)))
 
@@ -389,7 +416,8 @@ def prepare_gamus(root: Path, split: str, n_tiles: int, token, force: bool,
     def fetch(stem: str):
         """Resolve one tile out of the staged copy.  No network."""
         paths = {}
-        for key, (sub_, tag) in {"rgb": ("images", "RGB"), "hgt": ("heights", "AGL"),
+        for key, (sub_, tag) in {"rgb": ("images", img_tag[stem]),
+                                 "hgt": ("heights", "AGL"),
                                  "cls": ("classes", "CLS")}.items():
             f = tmp / sub_ / split / f"{stem}_{tag}.h5"
             if f.exists():
