@@ -152,6 +152,20 @@ def test_no_trainable_param_is_unreachable_after_unfreeze(small_dinov3):
     the reduction never finished and the next forward died in
     `_rebuild_buckets`.  The 2xT4 run reported them as indices `1 413 414`, one
     step after the unfreeze at epoch 3.
+
+    WHICH tensors those are is not part of the contract, and this test must not
+    assert it.  `_freeze_unreachable` finds them by probing -- one forward and
+    backward, and whatever comes back with `grad is None` is unreachable by
+    definition -- precisely so it survives an HF refactor that a name list does
+    not.  It earned that: on transformers as packaged in the Modal H100 image
+    the backbone's trailing LayerNorm IS on the path to the taps, the probe
+    correctly leaves `norm.weight`/`norm.bias` trainable, and asserting them
+    frozen failed a suite that was describing a different version of the
+    library rather than a broken model.
+
+    So assert the invariant the probe exists to guarantee, which is the one DDP
+    actually cares about: after the unfreeze, nothing that wants a gradient is
+    starved of one.
     """
     from models.heads import DepthWizardNet
 
@@ -159,9 +173,10 @@ def test_no_trainable_param_is_unreachable_after_unfreeze(small_dinov3):
     net.encoder.set_frozen(False)
 
     enc = net.encoder.model
+    # `mask_token` is structural, not version-dependent: the backbone reads it
+    # only when `bool_masked_pos` is passed, and `_hidden_states` never passes
+    # it, so no forward this project runs can reach it.
     assert enc.embeddings.mask_token.requires_grad is False
-    assert enc.norm.weight.requires_grad is False
-    assert enc.norm.bias.requires_grad is False
     # ...and the probe is not simply switching the whole backbone off
     assert sum(p.numel() for p in enc.parameters() if p.requires_grad) > 0
 

@@ -128,10 +128,14 @@ class DINOv3Encoder(nn.Module):
           * `embeddings.mask_token` — masked-image-modelling only.  It is read
             solely when `bool_masked_pos` is passed to the backbone, and
             `_hidden_states` never passes it.
-          * `norm.weight` / `norm.bias` — `DINOv3ViTModel` applies its final
-            LayerNorm to `last_hidden_state` on the way out.  The taps come
-            from `hidden_states`, which are the *pre-norm* block outputs, so
-            that LayerNorm's result is thrown away.
+          * `norm.weight` / `norm.bias` — on some `transformers` releases
+            `DINOv3ViTModel` applies its final LayerNorm to `last_hidden_state`
+            on the way out, while the taps come from `hidden_states`, the
+            *pre-norm* block outputs, so that LayerNorm's result is thrown
+            away.  On others the last tapped hidden state is post-norm and the
+            gradient does reach it.  Which one you are on is not knowable from
+            here, and it is exactly why the probe below decides rather than the
+            name list — measured both ways on transformers >= 4.56.
 
         On one GPU those are three tensors AdamW steps with a `None` gradient,
         i.e. nothing.  Under DDP with `find_unused_parameters=False` they are a
