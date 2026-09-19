@@ -219,7 +219,9 @@ def prepare(datasets: str = "gamus,synrs3d,dfc23", force: bool = False) -> None:
     Path(SCRATCH).mkdir(parents=True, exist_ok=True)
     if any(Path(DATA).glob("*/*/index.json")):
         print("[dw] resuming from what is already on the volume")
-        sh(["rsync", "-a", f"{DATA}/", f"{SCRATCH}/"], cwd="/")
+        # /_dl/ is raw staging, never a store -- see push() in 01_data_prep.
+        sh(["rsync", "-a", "--exclude", "/_dl/", f"{DATA}/", f"{SCRATCH}/"],
+           cwd="/")
     fl = ["--force"] if force else []
 
     if "gamus" in want:
@@ -259,7 +261,11 @@ def prepare(datasets: str = "gamus,synrs3d,dfc23", force: bool = False) -> None:
     # soft and recomputes in-process otherwise, which is a silent per-epoch tax.
     sh([sys.executable, "-c", _PRIME])
     stores(SCRATCH)
-    sh(["rsync", "-a", "--info=progress2", f"{SCRATCH}/", f"{DATA}/"], cwd="/")
+    # --exclude /_dl/: prepare_data.py stages raw downloads into
+    # {data_root}/_dl, which is INSIDE SCRATCH. Without this the throwaway
+    # .h5 files land on a billed Volume and nothing ever reads them back.
+    sh(["rsync", "-a", "--info=progress2", "--exclude", "/_dl/",
+        f"{SCRATCH}/", f"{DATA}/"], cwd="/")
     data_vol.commit()
     stores(DATA)
     print("\n[dw] expect: gamus/train ~3453  gamus/val ~859  synrs3d_g1  synrs3d_g05"
@@ -296,7 +302,8 @@ def _go(**ov: str) -> None:
     # ~45/s over ~36 GB. That is what Logs/v3/gpu_disk_guard.log calls STARVED
     # when it is served off a network mount, and a Volume is FUSE-backed.
     if os.environ.get("DW_NO_AUTOSTAGE") != "1":
-        sh(["rsync", "-a", "--info=progress2", f"{DATA}/", f"{SCRATCH}/"], cwd="/")
+        sh(["rsync", "-a", "--info=progress2", "--exclude", "/_dl/",
+            f"{DATA}/", f"{SCRATCH}/"], cwd="/")
         if not stores(SCRATCH):
             raise RuntimeError(f"[dw] nothing staged from {DATA} — run `prepare` first")
 
