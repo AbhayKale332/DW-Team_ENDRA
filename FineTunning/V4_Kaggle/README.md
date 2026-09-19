@@ -1132,6 +1132,46 @@ Watch six numbers, not one:
   not as an ISRO number.
 * **GeoNRW's nDSM is a proxy** (`DEM − smoothed large-window minimum`). Auxiliary
   supervision, not a target you quote against. Off by default.
+* **torch's oneDNN CPU convolution returns NaN on gVisor/AMD containers, and it
+  is not our arithmetic.** On a Modal gVisor box (43-core `AuthenticAMD`,
+  `Model name: unknown`, family 191) `torch 2.10.0+cpu` dispatches oneDNN
+  v3.7.1's AVX-512 kernels and `F.conv2d` intermittently returns NaN *from
+  finite inputs and finite weights*. Caught in `GatedFusion.gate[0]`
+  (`Conv2d(34, 8, 3, padding=1, bias=False)`): gate input finite, `absmax 57.7`;
+  weights finite, `absmax 0.057`; output 7688/8192 NaN. Replaying the captured
+  tensors in a fresh process is clean, so the trigger is process state, not
+  data. It is not confined to inference — a bare `net(t)` on one tile fails, so
+  training sees it too as skipped non-finite gradient steps.
+
+  The rate tracks vector width, which is the tell:
+
+  | oneDNN setting | non-finite forwards |
+  |---|---|
+  | `mkldnn.enabled = False` | 0 / 3000 |
+  | `ONEDNN_MAX_CPU_ISA=SSE41` | 0 / 3000 |
+  | `ONEDNN_MAX_CPU_ISA=AVX2` | 8 / 3000 |
+  | `ONEDNN_MAX_CPU_ISA=AVX512_CORE` | 37 / 3000 |
+  | default (AVX-512 + VNNI) | 32 / 2000 |
+
+  The CPU advertises `avx512_vp2intersect` while reporting `AuthenticAMD` — a
+  combination that does not exist on real AMD silicon — so this is gVisor's
+  synthetic CPUID leading oneDNN to pick kernels the host does not actually
+  honour. Export `ONEDNN_MAX_CPU_ISA=SSE41` when running on such a container;
+  with it the suite is 169 passed, and the only remaining failures are the
+  torchvision pin note below. No source guard is carried for this: the defect is in
+  the container, and a host-sniffing workaround in the model would be wrong on
+  real Zen 4/5 hardware, where AVX-512 oneDNN is correct and fast.
+
+* **`torchvision`/`torchaudio` can be ABI-mismatched against `torch`, which
+  silently unplugs the real encoder tests.** `requirements.txt` deliberately
+  does not pin torch (§5), so an image can end up with `torchvision 0.23.0+cu129`
+  (which pairs with torch 2.8) beside `torch 2.10.0+cpu`. Then
+  `transformers.modeling_layers` raises `operator torchvision::nms does not
+  exist`, `tests/test_real_dinov3.py` reports 5 errors + 1 failure, and the real
+  DINOv3 path — the one a GPU run actually uses — goes unexercised while the
+  stub-encoder tests stay green. Check `torchvision.__version__` matches the
+  torch build before trusting a green suite.
+
 * **v4 has not been trained yet.** Everything here is verified by 113 tests, by a
   real end-to-end CLI run, by a real GeoTIFF round trip, and by driving the
   viewer in a headless browser against a real prediction directory — but the
