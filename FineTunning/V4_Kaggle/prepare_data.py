@@ -4,6 +4,7 @@ Run this once per Lightning studio (the studio disk is persistent, so a later
 training run starts instantly).  Training never touches the network afterwards.
 
     python prepare_data.py --datasets gamus --gamus_train 4000 --gamus_val 400
+    python prepare_data.py --datasets gamus --gamus_test 0   # + the held-out split
     python prepare_data.py --datasets synrs3d --synrs3d_archives 3
     python prepare_data.py --datasets geonrw            # 32 GB tar, slowest
 
@@ -953,6 +954,18 @@ def main() -> None:
     ap.add_argument("--data_root", default=str(Path(__file__).resolve().parent / "data"))
     ap.add_argument("--gamus_train", type=int, default=4000, help="0 = all")
     ap.add_argument("--gamus_val", type=int, default=400)
+    # GAMUS ships a third split, 2861 tiles with full height AND class ground
+    # truth, that nothing has ever been scored on.  It is worth packing because
+    # `gamus/val` is doing double duty: train.py:901 selects `best.pt` on it and
+    # train.py:957 then reports `final_plain`/`final_tta` on the same tiles, so
+    # the headline number is measured on the set the checkpoint was picked on.
+    # Packed to `gamus/test`, which nothing opens -- loaders.py reads
+    # `root/<name>/train` for training and `val_split_of("gamus") == "val"` for
+    # validation, and neither globs.  So this is inert until something is
+    # deliberately pointed at it.
+    ap.add_argument("--gamus_test", type=int, default=-1,
+                    help="-1 = skip (default), 0 = all, N = N tiles. Held-out; "
+                         "packs to gamus/test and is never trained or selected on.")
     ap.add_argument("--synrs3d_archives", type=int, default=2)
     ap.add_argument("--geonrw_max", type=int, default=2500)
     ap.add_argument("--gamus_repo", default="earthflow/GAMUS")
@@ -1005,11 +1018,15 @@ def main() -> None:
     tok = _token(a.hf_token)
     names = [d.strip() for d in a.datasets.split(",") if d.strip()]
     if not tok and "gamus" in names:
-        print("[warn] no HF token — GAMUS is gated and will 401")
+        print("[warn] no HF token — earthflow/GAMUS reads fine without one, "
+              "but anonymous requests hit the rate limit far sooner")
 
     if "gamus" in names:
         prepare_gamus(root, "val", a.gamus_val, tok, a.force, a.gamus_repo, a.workers)
         prepare_gamus(root, "train", a.gamus_train, tok, a.force, a.gamus_repo, a.workers)
+        if a.gamus_test >= 0:
+            prepare_gamus(root, "test", a.gamus_test, tok, a.force, a.gamus_repo,
+                          a.workers)
     # `synrs3d` prepares every family the requested archives cover; the
     # per-family store names (synrs3d_g05, …) are what --datasets takes at
     # *train* time, and naming one of them here means the same thing.

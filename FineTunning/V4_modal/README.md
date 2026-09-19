@@ -92,9 +92,10 @@ rasters — `has_seg=no`, so `seg_ce_loss` was 0.0 every step.
 ## Read `prepare`'s tile counts
 
 v3 wrote a `gamus/val` holding 129 of 400 tiles and still reported success.
-Expect `gamus/train ~5004`, `gamus/val ~859`, `synrs3d_g1`, `synrs3d_g05`,
-`dfc23_g050/train ~1506`, `dfc23_g050/val ~266` — every line saying `bounds`,
-not `NO-BOUNDS`.
+Expect `gamus/train ~5004`, `gamus/val ~859`, `gamus/test ~2861`, `synrs3d_g1`,
+`synrs3d_g05`, `dfc23_g050/train ~1506`, `dfc23_g050/val ~266` — every line
+saying `bounds`, not `NO-BOUNDS`. `gamus/test` is held out: packed, but nothing
+trains or selects on it until something is deliberately pointed at it.
 
 ## Watch in the log
 

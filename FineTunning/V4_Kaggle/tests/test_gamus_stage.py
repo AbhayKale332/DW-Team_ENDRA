@@ -220,3 +220,49 @@ def test_stage_gives_up_and_raises(monkeypatch, staged, tmp_path):
         prepare_data._stage("r", "tok", tmp_path, rels, {rels[0]: 2}, "sha",
                             workers=1, tries=3)
     assert not (tmp_path / rels[0]).exists()
+
+
+def test_test_split_packs_to_its_own_store(tmp_path, staged):
+    """GAMUS's third split, packed but inert.
+
+    It exists because `gamus/val` is doing double duty -- `best.pt` is selected
+    on it (train.py:901) and `final_plain`/`final_tta` are then reported on the
+    same tiles (train.py:957), so the headline number is measured on the set the
+    checkpoint was picked on.  2861 held-out tiles with height and class ground
+    truth fix that, but only while nothing trains or selects on them: loaders.py
+    opens `root/<name>/train` for training and `val_split_of("gamus") == "val"`
+    for validation, and neither globs the store directory.
+    """
+    from prepare_data import prepare_gamus
+
+    stems = [f"JAX_{i:02d}_10" for i in range(3)]
+    tmp = tmp_path / "_dl" / "gamus_test"
+    _write(tmp, "test", stems)
+    staged["dir"] = str(tmp)
+
+    prepare_gamus(tmp_path, "test", 0, None, False, "earthflow/GAMUS", workers=2)
+
+    idx = json.loads((tmp_path / "gamus/test/index.json").read_text())
+    assert idx["n"] == 3 and idx["has_seg"] is True
+    assert not (tmp_path / "gamus/val").exists(), "must not land in the val store"
+    assert not (tmp_path / "gamus/train").exists(), "must never reach training"
+
+
+def test_test_split_is_opt_in(monkeypatch, tmp_path):
+    """Default must be skip: adding this flag cannot make an existing prepare
+    command start pulling 23 GiB more."""
+    import prepare_data
+
+    seen = []
+    monkeypatch.setattr(prepare_data, "prepare_gamus",
+                        lambda root, split, n, *a, **k: seen.append((split, n)))
+
+    argv = ["prepare_data.py", "--data_root", str(tmp_path), "--datasets", "gamus"]
+    monkeypatch.setattr(sys, "argv", argv)
+    prepare_data.main()
+    assert [sp for sp, _ in seen] == ["val", "train"], seen
+
+    seen.clear()
+    monkeypatch.setattr(sys, "argv", argv + ["--gamus_test", "0"])
+    prepare_data.main()
+    assert seen[-1] == ("test", 0), seen
