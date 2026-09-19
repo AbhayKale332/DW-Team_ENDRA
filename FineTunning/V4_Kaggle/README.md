@@ -1170,7 +1170,14 @@ Watch six numbers, not one:
   exist`, `tests/test_real_dinov3.py` reports 5 errors + 1 failure, and the real
   DINOv3 path — the one a GPU run actually uses — goes unexercised while the
   stub-encoder tests stay green. Check `torchvision.__version__` matches the
-  torch build before trusting a green suite.
+  torch build before trusting a green suite. The mismatch has a second face: on
+  a Modal container with `torch 2.10.0+cu128` the import itself dies as
+  `partially initialized module 'torchvision' has no attribute 'extension'`
+  before any op is looked up. Install the pair in one resolve off the pytorch
+  index and neither face appears — `uv pip install torch==2.10.0 torchvision
+  --index-url .../whl/cu128`, with torchvision left unpinned so the torch pin
+  selects its matching build. `--extra-index-url` is the wrong flag here: it
+  leaves PyPI in play for the other half of the pair.
 
 * **v4 has not been trained yet.** Everything here is verified by 113 tests, by a
   real end-to-end CLI run, by a real GeoTIFF round trip, and by driving the
