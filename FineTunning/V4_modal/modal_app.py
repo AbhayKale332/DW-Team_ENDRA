@@ -6,7 +6,7 @@ from that tree, and its DDP code short-circuits at world_size==1, so we run a
 plain `python train.py` — no torchrun.
 
     modal run modal_app.py::show_tuning        # $0
-    modal run modal_app.py::check              # image + 166 tests
+    modal run modal_app.py::check              # image + 175 tests
     modal run --detach modal_app.py::prepare   # build the pack, once
     modal run modal_app.py::smoke              # ~10 min
     modal run --detach modal_app.py::train
@@ -68,6 +68,14 @@ FLAGS = {
     "max_minutes": "150", "session_minutes": "0",
     "save_full_state": "true", "full_state_every": "5",
     "make_zip": "false",                 # build_zip duplicates ~4 GB onto a billed volume
+    # The held-out split: 2861 gamus/test tiles, deliberately absent from
+    # "datasets" above so no epoch and no in-training eval touches them. Scored
+    # once at the end with best.pt frozen -> metrics.json test_gamus_test_*.
+    # Every final_* number is scored on the gamus/val prefix best.pt was
+    # SELECTED on; this is the one that is not. See V4_modal/README.md.
+    "test_sources": "gamus:test",
+    "test_tiles": "0",                   # 0 = all 2861, centre crop plain + TTA
+    "test_sliding_tiles": "400",         # sliding+TTA is ~6 s/tile
 }
 
 CROPS_PER_EPOCH = 12000                  # config.py:91
@@ -75,9 +83,14 @@ IMG_PER_S = 45.0                         # v3 on an H100; replace from `calibrat
 RATE = 3.95 + 12 * 0.0472 + 48 * 0.0080  # $/h: H100 + 12 cores + 48 GiB
 
 
+# Two sliding+TTA passes now, not one: 400 val tiles and 400 held-out
+# gamus/test tiles, plus a batched centre-crop sweep over all 2861 test tiles.
+FINAL_H = 1.5
+
+
 def cost(epochs: int) -> tuple[float, float]:
-    """(hours, dollars) for one run. +0.7 h for the final sliding+TTA eval."""
-    h = epochs * CROPS_PER_EPOCH / IMG_PER_S / 3600 + 0.7
+    """(hours, dollars) for one run, including the final eval stage."""
+    h = epochs * CROPS_PER_EPOCH / IMG_PER_S / 3600 + FINAL_H
     return h, h * RATE
 
 
@@ -168,7 +181,7 @@ def stores(root: str) -> int:
 # --- functions ------------------------------------------------------------
 @app.function(gpu="T4", cpu=4.0, memory=16384, timeout=1800)
 def check() -> None:
-    """Cheapest proof the image is sane: imports, flags, the 166 offline tests."""
+    """Cheapest proof the image is sane: imports, flags, the 175 offline tests."""
     import shutil
     sh([sys.executable, "-c", _HW])
     print(f"[dw] /dev/shm {shutil.disk_usage('/dev/shm').total / 2**30:.1f} GiB, "

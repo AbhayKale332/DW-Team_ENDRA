@@ -28,7 +28,7 @@ Cheapest first. Nothing runs an H100 until the two above it pass.
 
 ```bash
 modal run modal_app.py::show_tuning            # $0     flags + cost, no container
-modal run modal_app.py::check                  # ~$0.15 image, flags, 166 tests
+modal run modal_app.py::check                  # ~$0.15 image, flags, 175 tests
 modal run --detach modal_app.py::prepare       # ~$1.30 build the pack, ONCE
 modal run modal_app.py::smoke                  # ~$1    ~10 min
 modal run --detach modal_app.py::train --epochs 3 --extra '--max_minutes 20'
@@ -89,13 +89,43 @@ train, HEAD then GET) and re-spend them on every resume, so it never got past a
 ranged GET, skipping what is already complete. The mirror's cost was the class
 rasters — `has_seg=no`, so `seg_ce_loss` was 0.0 every step.
 
+## Pre-flight before the H100
+
+`pre_flight.ipynb` is a CPU notebook that checks every assumption
+`02_train.ipynb` makes, for well under a dollar: the `index.json` counts, the
+shards themselves, the held-out contract (`gamus/test` disjoint from train and
+val, `--test_sources gamus:val` *rejected*), the 175 offline tests, a val-vs-test
+distribution comparison, and a full `train.main()` end to end on the real
+Volume with a stub encoder. It ends in one verdict line. Run it first.
+
 ## Read `prepare`'s tile counts
 
 v3 wrote a `gamus/val` holding 129 of 400 tiles and still reported success.
 Expect `gamus/train ~5004`, `gamus/val ~859`, `gamus/test ~2861`, `synrs3d_g1`,
 `synrs3d_g05`, `dfc23_g050/train ~1506`, `dfc23_g050/val ~266` — every line
-saying `bounds`, not `NO-BOUNDS`. `gamus/test` is held out: packed, but nothing
-trains or selects on it until something is deliberately pointed at it.
+saying `bounds`, not `NO-BOUNDS`. `gamus/test` is held out: it is packed, it is
+never in `--datasets`, and no epoch or in-training eval touches it.
+
+## The held-out test split
+
+`02_train.ipynb` passes `--test_sources gamus:test`. Nothing else changes: the
+sampler, the val loader and the `best.pt` decision are exactly what v4 ran, so
+the run-to-run comparison survives. What is added is one pass at the very end,
+after the checkpoint is frozen — `test_gamus_test_plain` and `_tta` over all
+2861 tiles, `_sliding_tta` over the first 400 (`--test_sliding_tiles`, because
+sliding+TTA is ~6 s/tile and the whole store would be ~4.8 unattended H100
+hours).
+
+**Quote a `test_*` number, not a `final_*` one.** `best.pt` is selected on the
+first 400 `gamus/val` tiles and `final_plain` / `final_tta` /
+`final_sliding_tta` are reported on those same 400 — the v4 headline was
+measured on the set that chose the checkpoint. `final_*` stays in `metrics.json`
+because it is the only thing comparable with v1–v4.
+
+`--test_sources` is checked at parse time: a split the run also trains or
+validates on (`gamus:train`, `gamus:val`) is rejected rather than reported as
+held out, and a store that is named but absent raises instead of quietly
+leaving the val number as the headline.
 
 ## Watch in the log
 

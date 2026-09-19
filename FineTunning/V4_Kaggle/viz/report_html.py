@@ -87,6 +87,16 @@ def _table(headers, rows) -> str:
 
 # ---------------------------------------------------------------------
 def _pick_result(metrics: dict) -> tuple[str, dict]:
+    # A held-out test result outranks every val result: `best.pt` was selected
+    # on the val prefix, so a `final_*` headline is scored on the set that
+    # picked the checkpoint.  `test_*` is not.
+    for suffix, label in (("_sliding_tta", "held-out test — sliding window + TTA, native GSD"),
+                          ("_tta", "held-out test — centre crop + TTA"),
+                          ("_plain", "held-out test — centre crop")):
+        for key in metrics:
+            if key.startswith("test_") and key.endswith(suffix) and metrics[key]:
+                store = key[len("test_"):-len(suffix)].replace("_", "/", 1)
+                return f"{label} ({store})", metrics[key]
     for key, label in (("final_sliding_tta", "full-tile sliding window + TTA, native GSD"),
                        ("final_tta", "centre crop + TTA"),
                        ("final_plain", "centre crop")):

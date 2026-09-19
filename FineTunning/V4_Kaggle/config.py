@@ -280,6 +280,25 @@ class Config:
     # Final-eval only; best.pt is still selected on plain no-TTA centre-crop.
     tta_scales: tuple = (1.0, 1.25)         # parse_config skips tuples -> edit here, not CLI
     final_sliding_eval: bool = True         # full-tile sliding-window eval at the end
+
+    # ----- held-out test sets ----------------------------------------
+    # Stores that are scored ONCE, at the very end, with best.pt already loaded
+    # — never during training, never part of the best.pt decision.  That is the
+    # whole point: `val_tiles` selects the first 400 GAMUS val tiles, best.pt is
+    # selected on them (train.py), and `final_plain`/`final_tta`/
+    # `final_sliding_tta` are then reported on those same tiles, so the headline
+    # number is measured on the set the checkpoint was picked on.  A store named
+    # here is measured on tiles the run never saw.
+    #
+    # "<store>:<split>", comma separated; a bare "<store>" means "<store>:test".
+    # A split that the run also trains or validates on is rejected in validate()
+    # rather than quietly reported as held out.
+    test_sources: str = ""                  # e.g. "gamus:test"
+    test_tiles: int = 0                     # 0 -> the whole store (no prefix)
+    # Sliding+TTA is the honest protocol but costs ~6 s/tile; 400 keeps the test
+    # sliding number the same size as the val one it sits next to.  0 -> all.
+    # Skipped entirely when final_sliding_eval is false.
+    test_sliding_tiles: int = 400
     per_class_metrics: bool = True
     per_landscape_metrics: bool = True      # urban / sparse / hilly / forested
     dump_class_stats: bool = True
@@ -329,6 +348,7 @@ class Config:
         self.eval_every = 1
         self.n_qualitative = 2
         self.final_sliding_eval = False
+        self.test_tiles = 4
         self.ema_decay = 0.0
         self.consistency_rampup_epochs = 1
         self.export_onnx = False
@@ -345,6 +365,19 @@ class Config:
         # A floor above the initial scale would pin the scale there and defeat
         # the backoff the scaler exists to perform.
         assert 0.0 < self.amp_min_scale <= self.amp_init_scale
+        # A "held-out" split that the run trains or validates on is not held
+        # out, and reporting it as a test number would be worse than reporting
+        # nothing.  Caught here, at parse time, rather than three hours in.
+        from dwdata.loaders import test_split_pairs, val_split_of
+        for _name, _split in test_split_pairs(self):
+            if _name not in self.labeled_sources():
+                continue
+            if _split == "train" or _split == val_split_of(_name):
+                raise AssertionError(
+                    f"--test_sources {_name}:{_split} is the same split this run "
+                    f"{'trains' if _split == 'train' else 'validates'} on — it is "
+                    f"not held out. Use a split no other cell touches "
+                    f"(e.g. gamus:test).")
         # The cosine is driven by max(epoch fraction, elapsed/max_minutes)
         # (train.py), so `max_minutes` is the budget the schedule is SIZED for,
         # not a safety cap.  If this session stops before that budget is spent

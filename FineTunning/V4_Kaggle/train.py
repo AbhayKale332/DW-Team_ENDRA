@@ -977,9 +977,59 @@ def main() -> None:
                 core, full_ds, cfg, spec, device, tta=cfg.tta)
             print(f"[final] sliding+TTA {format_line(final['final_sliding_tta'])}")
             print("        ^ full val tiles at native GSD through the inference "
-                  "path — this is the number to quote")
+                  "path")
         except Exception:  # noqa: BLE001
             print(f"[final] sliding eval failed:\n{traceback.format_exc()}")
+
+    # ---- held-out test sets -------------------------------------------
+    # Everything above this line is measured on `dl_va` / `full_ds`, i.e. the
+    # same GAMUS val prefix `best.pt` was selected on three lines up.  That
+    # keeps the v1-v4 comparison, but it is not a generalisation number.  The
+    # stores named in `--test_sources` are opened here for the first and only
+    # time, after the checkpoint is frozen.
+    if cfg.test_sources:
+        try:
+            from dwdata.loaders import build_test_loaders
+
+            tests = build_test_loaders(cfg, spec, is_main=True)
+        except Exception:  # noqa: BLE001
+            tests = {}
+            print(f"[test] could not open test stores:\n{traceback.format_exc()}")
+        for key, (t_dl, t_full) in tests.items():
+            tag = f"test_{key.replace('/', '_')}"
+            for suffix, fn in (
+                ("plain", lambda d=t_dl: evaluate(core, d, cfg, device,
+                                                  use_tta=False, gpu_prep=gpu_prep)),
+                ("tta", (lambda d=t_dl: evaluate(core, d, cfg, device,
+                                                 use_tta=True, gpu_prep=gpu_prep))
+                 if cfg.tta else None),
+            ):
+                if fn is None:
+                    continue
+                try:
+                    final[f"{tag}_{suffix}"] = fn()
+                    print(f"[test] {tag}_{suffix:<6} "
+                          f"{format_line(final[f'{tag}_{suffix}'])}")
+                except Exception:  # noqa: BLE001
+                    print(f"[test] {tag}_{suffix} failed:\n{traceback.format_exc()}")
+            if not cfg.final_sliding_eval:
+                continue
+            try:
+                from eval.sliding import sliding_eval
+
+                # max_tiles caps this one: sliding+TTA is ~6 s/tile, and
+                # gamus/test is 2861 of them — four unattended H100 hours if it
+                # ran over the whole store.  The prefix is the same size as the
+                # val sliding number it sits next to, so the two are comparable.
+                final[f"{tag}_sliding_tta"] = sliding_eval(
+                    core, t_full, cfg, spec, device, tta=cfg.tta,
+                    max_tiles=int(getattr(cfg, "test_sliding_tiles", 0) or 0))
+                print(f"[test] {tag}_sliding_tta "
+                      f"{format_line(final[f'{tag}_sliding_tta'])}")
+                print("       ^ held-out tiles, full-tile sliding window at "
+                      "native GSD — THIS is the number to quote")
+            except Exception:  # noqa: BLE001
+                print(f"[test] {tag} sliding eval failed:\n{traceback.format_exc()}")
 
     samples = []
     try:
@@ -1030,7 +1080,16 @@ def main() -> None:
           f"({(time.time() - t0) / 60:.0f} min)")
     fs = final.get("final_sliding_tta")
     if fs:
-        print(f"       quote this: sliding+TTA {format_line(fs)}")
+        print(f"       val  sliding+TTA {format_line(fs)}")
+    # A held-out number, when there is one, is the number that goes in the
+    # write-up — it is the only one measured on tiles no decision was made on.
+    for _suffix in ("_sliding_tta", "_tta", "_plain"):
+        _hit = next((k for k in final
+                     if k.startswith("test_") and k.endswith(_suffix) and final[k]),
+                    None)
+        if _hit:
+            print(f"       quote this: {_hit} {format_line(final[_hit])}")
+            break
     print(f"       artefacts -> {out_dir}")
     print("=" * 64)
 

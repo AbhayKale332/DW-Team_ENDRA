@@ -1067,8 +1067,18 @@ is an absolute DSM that would poison the target silently.
 ## 6. Reading the results
 
 `metrics.json` carries `final_plain`, `final_tta` **and** `final_sliding_tta`.
-Quote the last one: it scores every pixel of every val tile at native GSD through
-the same code the demo runs.
+Of the three, quote the last: it scores every pixel of every val tile at native
+GSD through the same code the demo runs.
+
+All three, though, are scored on the **val** tiles — and `best.pt` is selected
+on those same tiles (`val_tiles` takes the first 400 in sorted-stem order), so a
+`final_*` number is measured on the set that chose the checkpoint. Run with
+`--test_sources gamus:test` and `metrics.json` also carries
+`test_gamus_test_plain` / `_tta` / `_sliding_tta`, scored once at the end on a
+split no epoch and no eval ever touched. When those exist, they are the numbers
+to quote, and the HTML report headlines them automatically; `final_*` stays for
+the v1–v4 comparison. `--test_tiles` sizes the centre-crop sweep (0 = all) and
+`--test_sliding_tiles` caps the sliding one (~6 s/tile).
 
 One thing to know before you read those three against each other — on v3 they
 came out **2.715 / 2.605 / 2.723 m**, so the sliding number was the *worst* of

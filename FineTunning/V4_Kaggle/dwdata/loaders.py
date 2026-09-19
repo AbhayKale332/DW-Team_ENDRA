@@ -245,11 +245,13 @@ def _how(n_val: int, n_store: int) -> str:
 
 
 def _val_loader(cfg, spec, val_store, val_name: str, gpu_aug: bool,
-                is_main: bool):
+                is_main: bool, n_tiles: int | None = None):
     """One val DataLoader + its full-tile twin, for any store.
 
     Factored out of `build_loaders` so the same recipe can serve the primary val
-    set *and* the secondary out-of-domain ones (`build_aux_val_loaders`).
+    set, the secondary out-of-domain ones (`build_aux_val_loaders`) *and* the
+    held-out test stores (`build_test_loaders`), which score every tile rather
+    than a 400-tile prefix and so pass their own `n_tiles`.
     """
     # `TileDataset`/`FullTileDataset` both index with `ti = i % len(store)`, so
     # a length of N selects the **first N tiles in sorted-stem order** — a
@@ -258,7 +260,8 @@ def _val_loader(cfg, spec, val_store, val_name: str, gpu_aug: bool,
     # silently break the only yardstick we have (v3's 2.723 m).  `--val_tiles 0`
     # scores the whole store instead, which is the honest number to report
     # alongside it.
-    n_val = len(val_store) if cfg.val_tiles <= 0 else min(cfg.val_tiles, len(val_store))
+    budget = cfg.val_tiles if n_tiles is None else n_tiles
+    n_val = len(val_store) if budget <= 0 else min(budget, len(val_store))
     # Val runs every `eval_every` epochs, so it does not need — and must not
     # hold — a second full set of persistent workers: with num_workers sized for
     # the GPU (16+) that doubled the process count and had the two pools
@@ -321,6 +324,68 @@ def build_aux_val_loaders(cfg, spec, primary: str, is_main: bool = True,
         out[name] = (dl, full)
         print(f"[data] val+ : {n_val} tiles from {name} "
               f"({_how(n_val, len(st))})  — reported, not selected on")
+    return out
+
+
+# `--test_sources` entries may be written bare; this is the split they mean.
+_TEST_DEFAULT_SPLIT = "test"
+
+
+def test_split_pairs(cfg) -> list[tuple[str, str]]:
+    """`--test_sources` parsed into (store, split) pairs.
+
+    Deliberately NOT routed through `val_split_of`: a test store is named with
+    its split spelled out precisely so nothing about it is inferred from a table
+    that the training path also reads.  `gamus` and `gamus:test` mean the same
+    thing; anything else must say its split.
+    """
+    out: list[tuple[str, str]] = []
+    for part in str(getattr(cfg, "test_sources", "") or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        name, _, split = part.partition(":")
+        name, split = name.strip(), split.strip()
+        if name:
+            out.append((name, split or _TEST_DEFAULT_SPLIT))
+    return out
+
+
+def build_test_loaders(cfg, spec, is_main: bool = True,
+                       gpu_aug: bool | None = None) -> dict:
+    """Held-out test stores, keyed by "<store>/<split>".
+
+    These are built for the post-training stage only and iterated exactly once,
+    with `best.pt` already loaded.  They never reach `build_loaders`, so there
+    is no path by which a tile in here is sampled into an epoch, and no path by
+    which one moves the best.pt decision — which is the entire reason the split
+    exists.  `gamus/test` is 2861 tiles the run has never seen; `gamus/val` is
+    both the selection set and the set `final_*` is reported on.
+
+    A missing store is a hard error, not a skipped line.  A val store that is
+    absent costs a reported number; a *test* store that is absent silently
+    turns the run's headline back into the number it was meant to replace.
+    """
+    root = Path(cfg.data_root)
+    if gpu_aug is None:
+        gpu_aug = bool(getattr(cfg, "gpu_augment", False)) and _cuda()
+    n_tiles = int(getattr(cfg, "test_tiles", 0) or 0)
+    out = {}
+    for name, split in test_split_pairs(cfg):
+        st = _open(root, name, split)
+        if st is None:
+            raise RuntimeError(
+                f"--test_sources names {name}:{split} but no store exists at "
+                f"{root / name / split}. Prepare it (01_data_prep.ipynb packs "
+                f"gamus/test with --gamus_test 0) or drop it from the flag — "
+                f"do not let a held-out number go quietly missing.")
+        key = f"{name}/{split}"
+        dl, full, n = _val_loader(cfg, spec, st, key, gpu_aug, is_main,
+                                  n_tiles=n_tiles)
+        out[key] = (dl, full)
+        print(f"[data] test: {n} tiles from {key} ({_how(n, len(st))}) "
+              f"seg={'yes' if st.has_seg else 'NO'} — held out: scored once at "
+              f"the end, never selected on")
     return out
 
 
