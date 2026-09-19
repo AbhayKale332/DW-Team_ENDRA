@@ -28,9 +28,11 @@ import argparse
 import os
 import shutil
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from urllib.parse import quote
 
 import numpy as np
 
@@ -144,31 +146,100 @@ def _token(explicit: str = "") -> str | None:
 # ---------------------------------------------------------------------
 # GAMUS
 # ---------------------------------------------------------------------
-def _gamus_file_list(repo: str, token, staged: Path, pre: str, suf: str) -> list[str]:
-    """Repo file listing, from the Hub or — failing that — from the staged copy.
+_HF_ENDPOINT = os.environ.get("HF_ENDPOINT", "https://huggingface.co").rstrip("/")
 
-    `list_repo_files` is an API call, so with `HF_HUB_OFFLINE=1` it raises and
-    takes the whole offline pack down with it.  That matters because offline is
-    the *point* of the two-stage runbook: staging every tile with one bulk
-    `snapshot_download` and then packing without touching the network is what
-    avoids ~13 000 individual requests, the 429s they earn partway through, and
-    the "skip: No such file" lines that let v3 write a gamus/val store holding
-    129 of 400 tiles and still call it done.
 
-    So when the Hub is unreachable — offline, rate-limited, or simply down — fall
-    back to listing what the staging directory actually holds.  A pack built
-    from that is a pack of exactly the tiles on disk, which is the honest answer
-    to "what do we have", and `prepare_data.sh` gates the READY stamp on the
-    resulting yield.
+class _Cooldown:
+    """A 429 window shared by every worker thread.
+
+    The limit HF enforces is on the *IP*, not the request, so the moment one
+    thread meets it every other thread has too.  Backing off per-thread just
+    re-spends the exhausted budget `workers` times over and keeps the window
+    from ever expiring; parking all of them on one deadline is what lets it.
+    """
+
+    def __init__(self, floor: float = 30.0, ceil: float = 900.0):
+        self._lock = threading.Lock()
+        self._until = 0.0
+        self._streak = 0
+        self._floor, self._ceil = floor, ceil
+
+    def wait(self) -> None:
+        while True:
+            with self._lock:
+                left = self._until - time.monotonic()
+            if left <= 0:
+                return
+            time.sleep(min(left, 5.0))
+
+    def hit(self, retry_after: float | None = None) -> None:
+        with self._lock:
+            self._streak += 1
+            wait = retry_after or min(self._floor * 2 ** (self._streak - 1), self._ceil)
+            if self._until - time.monotonic() < wait:
+                self._until = time.monotonic() + wait
+                print(f"[hf] 429 — pausing every worker for {wait:.0f}s "
+                      f"(finished files are kept)", flush=True)
+
+    def ok(self) -> None:
+        with self._lock:
+            self._streak = 0
+
+
+def _retry_after(resp) -> float | None:
+    try:
+        return max(1.0, float(resp.headers.get("Retry-After", "")))
+    except (TypeError, ValueError):
+        return None
+
+
+def _complete(dest: Path, size: int | None) -> bool:
+    """Is `dest` already the whole file?  Answered off disk, with no request."""
+    try:
+        return dest.stat().st_size == size if size else dest.stat().st_size > 0
+    except OSError:
+        return False
+
+
+def _repo_tree(repo: str, token, prefixes: list[str], staged: Path,
+               ) -> tuple[str, dict[str, int]]:
+    """`(revision, {path: size})` for everything under `prefixes`.
+
+    Two things come out of the tree listing that the old `list_repo_files` call
+    did not give us, and both are what make the download survive a rate limit:
+    the *size* of every file, so a resume can tell "already complete" from disk
+    alone and spend no request on it, and a pinned commit *sha*, so a repo that
+    moves mid-run cannot mix revisions into one store.  It costs a handful of
+    paginated requests for the whole split.
+
+    The Hub being unreachable — offline, rate-limited, or down — is not fatal:
+    fall back to listing what the staging directory actually holds, which is the
+    honest answer to "what do we have".  A pack built from that is a pack of
+    exactly the tiles on disk, and the yield check at the end of `prepare_gamus`
+    is what decides whether that is enough.
     """
     from huggingface_hub import HfApi
 
-    def from_disk() -> list[str]:
-        rels = (str(q.relative_to(staged)) for q in staged.rglob(f"*{suf}"))
-        return sorted(r for r in rels if r.startswith(pre))
+    def from_disk() -> dict[str, int]:
+        out = {}
+        for p in prefixes:
+            for q in (staged / p).rglob("*"):
+                if q.is_file() and q.suffix != ".part":
+                    out[str(q.relative_to(staged))] = q.stat().st_size
+        return out
 
+    api = HfApi(token=token)
     try:
-        return list(HfApi(token=token).list_repo_files(repo, repo_type="dataset"))
+        tree: dict[str, int] = {}
+        for p in prefixes:
+            for e in api.list_repo_tree(repo, path_in_repo=p, repo_type="dataset",
+                                        recursive=True):
+                size = getattr(e, "size", None)     # folders have none
+                if size is not None:
+                    tree[e.path] = int(size)
+        if not tree:
+            raise RuntimeError(f"nothing under {prefixes} in {repo}")
+        return api.repo_info(repo, repo_type="dataset").sha or "main", tree
     except Exception as e:  # noqa: BLE001
         local = from_disk()
         if not local:
@@ -178,40 +249,103 @@ def _gamus_file_list(repo: str, token, staged: Path, pre: str, suf: str) -> list
                 f"HF_HUB_OFFLINE to list the repo online."
             ) from e
         print(f"[gamus] hub listing unavailable ({type(e).__name__}) — using the "
-              f"{len(local)} tiles staged under {staged}")
-        return local
+              f"{len(local)} files staged under {staged}", flush=True)
+        return "main", local
 
 
-def _stage(repo: str, token, tmp: Path, patterns: list[str], workers: int,
-           tries: int = 6) -> None:
-    """Bulk-download with backoff.
+def _fetch_one(session, url: str, headers: dict, dest: Path, size: int | None,
+               cool: _Cooldown, tries: int = 8) -> None:
+    """One file, one GET, resumable by byte range.
 
-    ~51 GiB over a shared egress IP will meet a 429 that is about the IP, not the
-    request, so the only useful response is to wait and carry on.
-    `snapshot_download` resumes into `local_dir`, so every retry starts from what
-    already landed rather than from zero -- and so does re-running the whole cell.
+    `hf_hub_download` — and so `snapshot_download`, which is a loop over it —
+    spends a HEAD on every file before its GET, to learn the etag it names the
+    blob after.  For GAMUS train that is ~15 000 extra requests against the very
+    endpoint that rate-limits, and it spends them *again on every resume*, for
+    files already sitting complete on disk.  That is why the old retry loop made
+    no progress: each attempt re-paid for the whole split in HEADs, earned the
+    429 before transferring a byte, slept, and did it again.
+
+    The tree listing already told us every size, so there is nothing a HEAD adds
+    here.  One request per file, half-downloaded files resume with `Range`, and
+    a file whose size already matches costs zero requests to skip — which makes
+    every retry strictly forward progress.
     """
-    from huggingface_hub import snapshot_download
-
-    for i in range(tries):
+    part = dest.with_name(dest.name + ".part")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    last = None
+    for _ in range(tries):
+        cool.wait()
+        have = part.stat().st_size if part.exists() else 0
+        h = dict(headers)
+        if have:
+            h["Range"] = f"bytes={have}-"
         try:
-            snapshot_download(repo, repo_type="dataset", token=token,
-                              local_dir=str(tmp), allow_patterns=patterns,
-                              max_workers=workers)
-            return
-        except Exception as e:  # noqa: BLE001 — 429/5xx/connection resets alike
-            if i == tries - 1:
-                raise
-            wait = min(60 * 2 ** i, 900)
-            print(f"[hf] {type(e).__name__} on attempt {i + 1}/{tries}; resuming "
-                  f"in {wait}s (partial download is kept): {str(e)[:120]}", flush=True)
-            time.sleep(wait)
+            with session.get(url, headers=h, stream=True, timeout=(15, 120)) as r:
+                if r.status_code in (429, 503):
+                    cool.hit(_retry_after(r))
+                    continue
+                if have and r.status_code == 200:      # Range ignored — start over
+                    have = 0
+                r.raise_for_status()
+                cool.ok()
+                with open(part, "ab" if have else "wb") as f:
+                    for chunk in r.iter_content(1 << 20):
+                        f.write(chunk)
+        except Exception as e:  # noqa: BLE001 — resets, timeouts, short reads
+            last = e
+            time.sleep(5.0)
+            continue
+        if size and part.stat().st_size != size:
+            last = RuntimeError(f"{part.stat().st_size} of {size} bytes")
+            continue                                    # resumes from what landed
+        part.replace(dest)
+        return
+    raise RuntimeError(f"{url}: gave up after {tries} attempts ({last})")
+
+
+def _stage(repo: str, token, tmp: Path, rels: list[str], sizes: dict[str, int],
+           revision: str, workers: int, tries: int = 8) -> None:
+    """Fetch `rels` into `tmp`.  Idempotent, and resumable at file granularity.
+
+    Nothing here re-downloads what is already on disk at the right size, so
+    re-running the cell after any failure — rate limit, preempted container,
+    kernel restart — picks up exactly where it stopped.
+    """
+    todo = [r for r in rels if not _complete(tmp / r, sizes.get(r))]
+    have = len(rels) - len(todo)
+    if not todo:                    # a fully staged split never touches the net
+        print(f"[hf] all {len(rels)} files already staged", flush=True)
+        return
+    want = sum(sizes.get(r, 0) for r in todo) / 2 ** 30
+    print(f"[hf] {len(todo)} files to fetch ({want:.1f} GiB); {have} already on disk",
+          flush=True)
+
+    import requests
+
+    from huggingface_hub.utils import build_hf_headers
+
+    headers = build_hf_headers(token=token)
+    base = f"{_HF_ENDPOINT}/datasets/{repo}/resolve/{revision}/"
+    session = requests.Session()
+    session.mount("https://", requests.adapters.HTTPAdapter(
+        pool_connections=workers, pool_maxsize=workers, max_retries=0))
+    cool = _Cooldown()
+    n = [0]
+
+    def one(rel: str):
+        _fetch_one(session, base + quote(rel), headers, tmp / rel,
+                   sizes.get(rel), cool, tries)
+        n[0] += 1
+        if n[0] % 500 == 0:
+            print(f"  [hf] {n[0]}/{len(todo)}", flush=True)
+
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        list(ex.map(one, todo))
+    session.close()
 
 
 def prepare_gamus(root: Path, split: str, n_tiles: int, token, force: bool,
                   repo: str, workers: int = 12) -> None:
-    from huggingface_hub import snapshot_download
-
     out = root / "gamus" / split
     if store_exists(out) and not force:
         print(f"[gamus/{split}] already prepared -> {out}")
@@ -222,26 +356,33 @@ def prepare_gamus(root: Path, split: str, n_tiles: int, token, force: bool,
     tmp = root / "_dl" / f"gamus_{split}"
     tmp.mkdir(parents=True, exist_ok=True)
 
-    # Stage the whole split in ONE transfer.  This used to call hf_hub_download
-    # once per file (~13 200 requests), earn a CAS 429 partway through, and
-    # swallow each failure as `skip: ...` -- which is how v3 wrote a gamus/val
-    # holding 129 of 400 tiles and still reported success.  snapshot_download
-    # batches, retries and resumes; afterwards every tile resolves off local
-    # disk, so the pack loop touches the network zero times.
-    print(f"[gamus/{split}] staging images+heights+classes -> {tmp}", flush=True)
-    _stage(repo, token, tmp,
-           [f"{sub_}/{split}/*" for sub_ in ("images", "heights", "classes")],
-           min(workers, 4))
+    # List first, fetch second, pack third.  The listing is a handful of
+    # requests and gives every file's size, which is what lets the fetch skip
+    # what is already on disk instead of re-HEADing 15 000 files on every
+    # resume.  Afterwards every tile resolves off local disk, so the pack loop
+    # touches the network zero times — and a failed tile is a hard error rather
+    # than the printed `skip:` that let v3 write a gamus/val holding 129 of 400
+    # tiles and still report success.
+    subs = ("images", "heights", "classes")
+    revision, tree = _repo_tree(repo, token, [f"{s}/{split}" for s in subs], tmp)
 
     pre, suf = f"images/{split}/", "_RGB.h5"
-    files = _gamus_file_list(repo, token, tmp, pre, suf)
-    stems = sorted(f[len(pre):-len(suf)] for f in files
+    stems = sorted(f[len(pre):-len(suf)] for f in tree
                    if f.startswith(pre) and f.endswith(suf))
     if not stems:
         raise RuntimeError(f"no GAMUS tiles under {pre} in {repo}")
     if n_tiles and n_tiles < len(stems):
         rng = np.random.default_rng(0)
         stems = sorted(np.asarray(stems)[rng.permutation(len(stems))[:n_tiles]].tolist())
+
+    # Only the tiles being packed.  Staging the whole split for a `--gamus_train
+    # 4000` run buys nothing but requests against the limit that broke this.
+    tags = {"images": "RGB", "heights": "AGL", "classes": "CLS"}
+    rels = [r for s in stems for r in
+            (f"{sub}/{split}/{s}_{tags[sub]}.h5" for sub in subs) if r in tree]
+    print(f"[gamus/{split}] staging {len(rels)} files -> {tmp}", flush=True)
+    _stage(repo, token, tmp, rels, tree, revision, max(1, min(workers, 4)))
+
     print(f"[gamus/{split}] packing {len(stems)} tiles -> {out}")
 
     def fetch(stem: str):

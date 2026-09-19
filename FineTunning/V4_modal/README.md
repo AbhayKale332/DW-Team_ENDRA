@@ -82,15 +82,17 @@ truncated v4-2's cosine at 81% and cost 0.36 m. One container has no 12 h
 session to survive. `--max_minutes` still *sizes* the cosine, so `::train
 --epochs N` re-derives it — never move one without the other.
 
-**GAMUS comes from the Kaggle PNG mirror**, not the gated HF repo, which issues
-~13 200 requests and swallows the 429s per tile. Cost: no class rasters, so
-`gamus` has `has_seg=no`. Re-upload it with `classes/` and `prepare --force`
-picks them up.
+**GAMUS comes from the gated HF repo**, not the Kaggle PNG mirror. The mirror
+existed because the fetch used to spend two requests per file (~30 000 for
+train, HEAD then GET) and re-spend them on every resume, so it never got past a
+429; `prepare_data.py` now lists the tree once and fetches each file with one
+ranged GET, skipping what is already complete. The mirror's cost was the class
+rasters — `has_seg=no`, so `seg_ce_loss` was 0.0 every step.
 
 ## Read `prepare`'s tile counts
 
 v3 wrote a `gamus/val` holding 129 of 400 tiles and still reported success.
-Expect `gamus/train ~3453`, `gamus/val ~859`, `synrs3d_g1`, `synrs3d_g05`,
+Expect `gamus/train ~5004`, `gamus/val ~859`, `synrs3d_g1`, `synrs3d_g05`,
 `dfc23_g050/train ~1506`, `dfc23_g050/val ~266` — every line saying `bounds`,
 not `NO-BOUNDS`.
 

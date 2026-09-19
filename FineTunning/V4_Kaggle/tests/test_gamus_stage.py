@@ -32,13 +32,18 @@ _SUBS = (("images", "RGB", np.uint8, 7), ("heights", "AGL", np.float32, 3.5),
 
 @pytest.fixture
 def staged(monkeypatch):
-    """Stub the Hub: `snapshot_download` is a no-op, listing falls back to disk."""
+    """Stub the Hub: the tree listing fails, so everything comes off disk."""
     box = {}
     hub = types.ModuleType("huggingface_hub")
-    hub.snapshot_download = lambda *a, **k: box.get("dir", "")
 
-    class _Api:                      # forces _gamus_file_list onto from_disk()
-        def list_repo_files(self, *a, **k):
+    class _Api:                      # forces _repo_tree onto from_disk()
+        def __init__(self, *a, **k):
+            pass
+
+        def list_repo_tree(self, *a, **k):
+            raise RuntimeError("offline")
+
+        def repo_info(self, *a, **k):
             raise RuntimeError("offline")
 
     hub.HfApi = _Api
@@ -100,41 +105,118 @@ def test_short_pack_raises(tmp_path, staged):
         prepare_gamus(tmp_path, "val", 0, None, False, "earthflow/GAMUS", workers=2)
 
 
-def test_stage_resumes_after_rate_limit(monkeypatch, staged, tmp_path):
-    """A 429 here is about the shared egress IP, not the request.
+def _fake_requests(monkeypatch, handler):
+    """A `requests` module whose GET is `handler(url, headers)`."""
+    class _Resp:
+        def __init__(self, status, body=b"", retry_after=None):
+            self.status_code = status
+            self._body = body
+            self.headers = {"Retry-After": str(retry_after)} if retry_after else {}
 
-    HF's Xet backend mints a per-file `/xet-read-token/<hash>` before each
-    transfer, and on a Modal container that endpoint limits the whole IP while
-    the token is perfectly valid -- the 429 body even talks about anonymous
-    callers, so it reads as an auth failure.  Waiting is the only useful
-    response, and `snapshot_download` resumes into `local_dir`, so a retry must
-    not restart the ~51 GiB from zero.
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise RuntimeError(f"HTTP {self.status_code}")
+
+        def iter_content(self, n):
+            yield self._body
+
+    class _Session:
+        def get(self, url, headers=None, **k):
+            return _Resp(*handler(url, headers or {}))
+
+        def mount(self, *a, **k):
+            pass
+
+        def close(self):
+            pass
+
+    mod = types.ModuleType("requests")
+    mod.Session = _Session
+    mod.adapters = types.SimpleNamespace(HTTPAdapter=lambda **k: None)
+    utils = types.ModuleType("huggingface_hub.utils")
+    utils.build_hf_headers = lambda token=None: {"Authorization": f"Bearer {token}"}
+    monkeypatch.setitem(sys.modules, "requests", mod)
+    monkeypatch.setitem(sys.modules, "huggingface_hub.utils", utils)
+    return _Resp
+
+
+def _fake_clock(monkeypatch, prepare_data):
+    """A clock that only moves when the code sleeps, so backoff is instant."""
+    now = [0.0]
+    slept = []
+
+    def sleep(s):
+        slept.append(s)
+        now[0] += s
+
+    monkeypatch.setattr(prepare_data.time, "sleep", sleep)
+    monkeypatch.setattr(prepare_data.time, "monotonic", lambda: now[0])
+    return slept
+
+
+def test_stage_skips_what_is_already_on_disk(monkeypatch, staged, tmp_path):
+    """The bug that made every retry pointless.
+
+    `snapshot_download` HEADs all ~15 000 files before transferring a byte, and
+    does it again on each resume -- so a run that died at file 300 re-spent the
+    whole request budget, met the 429 again, and never got further.  A file that
+    is already the right size must cost zero requests.
     """
     import prepare_data
 
-    calls, slept = [], []
-    def flaky(*a, **k):
-        calls.append(k.get("max_workers"))
-        if len(calls) < 3:
-            raise RuntimeError("429 Client Error: Too Many Requests")
-        return "ok"
+    got = []
+    _fake_requests(monkeypatch, lambda u, h: got.append(u) or (200, b"xy"))
+    (tmp_path / "images/val").mkdir(parents=True)
+    (tmp_path / "images/val/a_RGB.h5").write_bytes(b"xy")      # complete
+    (tmp_path / "images/val/b_RGB.h5").write_bytes(b"x")       # truncated
 
-    hub = sys.modules["huggingface_hub"]
-    monkeypatch.setattr(hub, "snapshot_download", flaky, raising=False)
-    monkeypatch.setattr(prepare_data.time, "sleep", lambda s: slept.append(s))
+    rels = ["images/val/a_RGB.h5", "images/val/b_RGB.h5", "images/val/c_RGB.h5"]
+    prepare_data._stage("r", "tok", tmp_path, rels, dict.fromkeys(rels, 2),
+                        "deadbeef", workers=1)
 
-    prepare_data._stage("r", "tok", tmp_path, ["images/val/*"], 4)
+    assert [u.rsplit("/", 1)[1] for u in got] == ["b_RGB.h5", "c_RGB.h5"]
+    assert all(u.startswith("https://huggingface.co/datasets/r/resolve/deadbeef/")
+               for u in got), "the revision has to be pinned, not 'main'"
+    assert (tmp_path / "images/val/c_RGB.h5").read_bytes() == b"xy"
+
+
+def test_stage_waits_out_a_429_then_resumes(monkeypatch, staged, tmp_path):
+    """A 429 here is about the shared egress IP, not the request, so the only
+    useful response is to park every worker on one deadline and carry on."""
+    import prepare_data
+
+    calls = []
+
+    def handler(url, headers):
+        calls.append(url)
+        return (429, b"", 7) if len(calls) < 3 else (200, b"xy")
+
+    _fake_requests(monkeypatch, handler)
+    slept = _fake_clock(monkeypatch, prepare_data)
+
+    rels = ["images/val/a_RGB.h5"]
+    prepare_data._stage("r", "tok", tmp_path, rels, {rels[0]: 2}, "sha", workers=1)
+
     assert len(calls) == 3, "must retry until it succeeds"
-    assert slept == [60, 120], f"exponential backoff, got {slept}"
+    assert slept and all(s <= 7 for s in slept), f"honours Retry-After, got {slept}"
+    assert (tmp_path / rels[0]).read_bytes() == b"xy"
 
 
 def test_stage_gives_up_and_raises(monkeypatch, staged, tmp_path):
+    """A file that never lands is an error.  Packing a short store is worse."""
     import prepare_data
 
-    hub = sys.modules["huggingface_hub"]
-    monkeypatch.setattr(hub, "snapshot_download",
-                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("429")),
-                        raising=False)
-    monkeypatch.setattr(prepare_data.time, "sleep", lambda s: None)
-    with pytest.raises(RuntimeError, match="429"):
-        prepare_data._stage("r", "tok", tmp_path, ["images/val/*"], 4, tries=3)
+    _fake_requests(monkeypatch, lambda u, h: (429, b"", 1))
+    _fake_clock(monkeypatch, prepare_data)
+
+    rels = ["images/val/a_RGB.h5"]
+    with pytest.raises(RuntimeError, match="gave up"):
+        prepare_data._stage("r", "tok", tmp_path, rels, {rels[0]: 2}, "sha",
+                            workers=1, tries=3)
+    assert not (tmp_path / rels[0]).exists()
