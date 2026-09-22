@@ -1,0 +1,25 @@
+# DepthWizard DAV2/V1.  Lightning AI / Kaggle images already ship torch + CUDA;
+# torch is intentionally not pinned here so the host's CUDA build is kept.
+
+transformers>=4.56.0        # DepthAnythingForDepthEstimation + Dinov2Backbone
+huggingface_hub>=0.34.0
+h5py>=3.10.0                # GAMUS ships one HDF5 per tile
+tifffile>=2024.1.30         # SynRS3D tiles
+rasterio>=1.3.0             # GeoTIFF read/write + CRS handling
+safetensors>=0.4.3
+opencv-python-headless>=4.9.0  # SIMD resize in the DataLoader; PIL is the fallback
+scipy>=1.13.0
+matplotlib>=3.9.0
+pytest>=7.4.0
+
+# --- standalone deployment ---------------------------------------------------
+# No fastapi/uvicorn: this variant ships the training + evaluation path only
+# (`serve/`, `geo/` and `viewer/` stay in V4_Kaggle).
+onnx>=1.16.0                # standalone CPU deployment (no torch, no HF token)
+onnxscript>=0.1.0           # required by torch>=2.5's dynamo ONNX exporter
+onnxruntime>=1.18.0
+
+# transformers>=5 imports sklearn/pandas eagerly; these floors are the first
+# numpy-2-ABI releases and are no-ops on older numpy-1.x images.
+scikit-learn>=1.5.0
+pandas>=2.2.2
