@@ -116,32 +116,48 @@ PY
     ;;
 
   link)
-    # cfg.data_root is a single root, but a pack prepared in two notebook runs
-    # arrives as two /kaggle/input paths.  Symlinks cost nothing and keep the
-    # layout byte-identical to a local v4 tree: <root>/<source>/<split>/.
+    # cfg.data_root is a single root laid out <root>/<source>/<split>/index.json,
+    # but the packed stores arrive as separate Kaggle datasets mounted as
+    #   $KIN/datasets/abhaydkale232/depthwizard-gamus/train/train/index.json
+    #   $KIN/datasets/abhaydkale232/depthwizard-synrs3d-g05/train/index.json
+    # (Kaggle zips a folder and nests it once more, hence train/train).  So we
+    # find every index.json, take <split> from the directory holding it and
+    # <source> from the path component that names the dataset
+    # (depthwizard-synrs3d-g05 -> synrs3d_g05), and symlink per split.  Also
+    # still accepts the old <slug>/dwdata/<source>/<split>/ output layout.
+    # Symlinks cost nothing; the stores already ship stretch_bounds_2_98.npy, so
+    # nothing ever needs to write into the read-only mount.
     mkdir -p "$DATA"
     n=0
-    for d in "$KIN"/*/dwdata/* "$KIN"/*/*; do
-      [ -d "$d" ] || continue
-      name="$(basename "$d")"
-      # Sources packed one store per GSD family arrive suffixed
-      # (synrs3d_g05, dfc23_g050), so those patterns are globs.  A store whose
-      # name is not matched here is silently skipped and train.py then reports
-      # it as "not prepared" — check this list first when a source goes missing.
-      case "$name" in
-        gamus|geonrw|synrs3d|synrs3d_*|dfc23|dfc23_*|india_labeled|india_unlabeled) ;;
-        *) continue ;;
-      esac
-      [ -n "$(find "$d" -name index.json -print -quit 2>/dev/null)" ] || continue
-      rm -rf "${DATA:?}/$name"
-      ln -s "$d" "$DATA/$name"
-      echo "  $DATA/$name -> $d"
+    LIST="$DATA/.stores"
+    find -L "$KIN" -maxdepth 8 -name index.json 2>/dev/null | sort > "$LIST"
+    while IFS= read -r idx; do
+      store="$(dirname "$idx")"
+      split="$(basename "$store")"
+      case "$split" in train|val|test) ;; *) continue ;; esac
+      name=""
+      for comp in $(echo "${store#"$KIN"/}" | tr '/' ' '); do
+        c="$(echo "${comp#depthwizard-}" | tr '-' '_')"
+        # Sources packed one store per GSD family arrive suffixed (synrs3d_g05,
+        # dfc23_g050), so those patterns are globs.  A store whose name is not
+        # matched here is silently skipped and train.py then reports it as
+        # "not prepared" — check this list first when a source goes missing.
+        case "$c" in
+          gamus|geonrw|synrs3d|synrs3d_g*|dfc23|dfc23_g*|india_labeled|india_unlabeled) name="$c" ;;
+        esac
+      done
+      [ -n "$name" ] || continue
+      mkdir -p "$DATA/$name"
+      rm -rf "${DATA:?}/$name/$split"
+      ln -s "$store" "$DATA/$name/$split"
+      echo "  $DATA/$name/$split -> $store"
       n=$((n + 1))
-    done
+    done < "$LIST"
+    rm -f "$LIST"
     if [ "$n" -eq 0 ]; then
       echo "no packed store found under $KIN — attach the prepared dataset first"; exit 1
     fi
-    find "$DATA"/ -name index.json | sed 's/^/  /'
+    find -L "$DATA"/ -name index.json | sed 's/^/  /'
     ;;
 
   smoke)
