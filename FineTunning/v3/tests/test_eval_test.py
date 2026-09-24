@@ -120,3 +120,24 @@ def test_refuses_a_checkpoint_that_does_not_fit(test_store, monkeypatch):
               "--data_root", str(test_store / "data"), "--sliding_tiles", "0",
               "--num_workers", "0", "--batch_size", "2",
               "--out", str(test_store / "out2")], monkeypatch)
+
+
+def test_fit_keys_bridges_the_dinov3_layout_change():
+    """The v3 best.pt (transformers 5.x) saved blocks as encoder.model.model.layer.*;
+    Kaggle's 4.x builds encoder.model.layer.*, and all 408 came back missing."""
+    from eval_test import fit_keys
+
+    old = {"encoder.model.embeddings.cls_token": 0,
+           "encoder.model.model.layer.0.norm1.weight": 1,
+           "encoder.model.norm.weight": 2, "head.w": 3}
+    new = {"encoder.model.embeddings.cls_token", "encoder.model.layer.0.norm1.weight",
+           "encoder.model.norm.weight", "head.w"}
+    sd, n = fit_keys(old, new)
+    assert (n, set(sd), sd["encoder.model.layer.0.norm1.weight"]) == (1, new, 1)
+    # ...and back, for a checkpoint saved under the newer layout.
+    sd, n = fit_keys({"encoder.model.layer.3.mlp.w": 5},
+                     {"encoder.model.model.layer.3.mlp.w"})
+    assert (n, sd) == (1, {"encoder.model.model.layer.3.mlp.w": 5})
+    # A name the model does not have is left alone for the missing-key guard.
+    sd, n = fit_keys({"encoder.model.model.layer.0.x": 1}, {"decoder.y"})
+    assert (n, sd) == (0, {"encoder.model.model.layer.0.x": 1})

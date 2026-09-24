@@ -59,6 +59,35 @@ _SKIP = {"output_dir", "resume", "data_root", "datasets", "make_zip", "smoke",
          "num_workers", "prefetch_factor", "batch_size", "epochs", "max_minutes"}
 
 
+# DINOv3ViTModel's blocks sit at `layer.N` in transformers 4.56/4.57 and at
+# `model.layer.N` in 5.x.  v3 trained under 5.x, so best.pt holds
+# `encoder.model.model.layer.N.*`; Kaggle's image ships 4.x (which v3's
+# `transformers>=4.56` accepts) and builds `encoder.model.layer.N.*`.  Same
+# tensors, one prefix level apart — without this all 24 blocks come back
+# "missing" (408 tensors) and the guard below refuses.
+_KEY_ALIASES = (("encoder.model.model.layer.", "encoder.model.layer."),
+                ("encoder.model.layer.", "encoder.model.model.layer."))
+
+
+def fit_keys(sd: dict, want) -> tuple[dict, int]:
+    """Rename checkpoint keys across `_KEY_ALIASES`, in either direction.
+
+    Only onto a name the model actually has and the checkpoint does not, so a
+    genuinely different network still reaches the missing-key guard below.
+    """
+    want = set(want)
+    out, n = {}, 0
+    for k, v in sd.items():
+        if k not in want:
+            for old, new in _KEY_ALIASES:
+                nk = new + k[len(old):]
+                if k.startswith(old) and nk in want and nk not in sd:
+                    k, n = nk, n + 1
+                    break
+        out[k] = v
+    return out, n
+
+
 def _own_args(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
     p = argparse.ArgumentParser(add_help=False)
     p.add_argument("--ckpt", required=True, help="the frozen checkpoint to score")
@@ -160,7 +189,10 @@ def main() -> None:
     if cfg.channels_last and n_gpu:
         model = model.to(memory_format=torch.channels_last)
     ck = torch.load(a.ckpt, map_location=device, weights_only=False)
-    sd = ck.get("model", ck)
+    sd, renamed = fit_keys(ck.get("model", ck), model.state_dict().keys())
+    if renamed:
+        print(f"[ckpt] {renamed} encoder keys renamed across the transformers "
+              f"DINOv3 layout change (4.x layer.N <-> 5.x model.layer.N)")
     # Both failure modes below mean the same thing — this config describes a
     # different network from the one that was trained — and both would otherwise
     # produce a plausible-looking bad score instead of an error.  A shape clash
