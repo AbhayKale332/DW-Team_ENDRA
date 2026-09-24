@@ -141,3 +141,38 @@ def test_fit_keys_bridges_the_dinov3_layout_change():
     # A name the model does not have is left alone for the missing-key guard.
     sd, n = fit_keys({"encoder.model.model.layer.0.x": 1}, {"decoder.y"})
     assert (n, sd) == (0, {"encoder.model.model.layer.0.x": 1})
+
+
+def test_replicated_splits_the_batch_and_keeps_autocast():
+    """Two-GPU eval must score exactly what one GPU does.  Autocast and grad
+    mode are thread-local, so the worker threads have to re-enter both — a
+    replica silently running fp32 (or building a graph) is the failure."""
+    from eval_test import Replicated
+
+    class Net(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv = torch.nn.Conv2d(3, 2, 1)
+            self.seen = []
+
+        def forward(self, x):
+            self.seen.append((torch.get_autocast_dtype("cpu"),
+                              torch.is_autocast_enabled("cpu"), torch.is_grad_enabled()))
+            y = self.conv(x)
+            return {"fused": y[:, :1], "seg": y, "b_logits": y}
+
+    net = Net().eval()
+    rep = Replicated(net, [torch.device("cpu")] * 2)
+    x = torch.randn(5, 3, 8, 8)
+    with torch.no_grad():
+        ref = net(x)
+        out = rep(x)
+        assert set(out) == {"fused", "seg"}      # b_logits never comes back
+        for k in out:
+            assert torch.allclose(out[k], ref[k]), k
+        assert rep(x[:1])["fused"].shape[0] == 1  # batch smaller than devices
+        with torch.autocast("cpu", dtype=torch.bfloat16):
+            rep(x)
+    seen = rep.replicas[0].seen + rep.replicas[1].seen
+    assert (torch.bfloat16, True, False) in seen
+    assert all(not grad for *_, grad in seen)

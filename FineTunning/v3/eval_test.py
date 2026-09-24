@@ -34,9 +34,11 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import copy
 import json
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import torch
@@ -86,6 +88,47 @@ def fit_keys(sd: dict, want) -> tuple[dict, int]:
                     break
         out[k] = v
     return out, n
+
+
+class Replicated(torch.nn.Module):
+    """One frozen copy of the network per device; every batch is split across them.
+
+    Eval only, and a drop-in for the bare model: every call site (plain eval,
+    TTA, the sliding window) just does `model(x)[key]`, so all three stages use
+    every card.  nn.DataParallel would split the same way but re-broadcasts all
+    ~1.2 GB of ViT-L weights from cuda:0 on *every* forward; nothing changes
+    here, so each card gets its copy once.  Its parallel_apply also carries only
+    whether autocast is on, not the dtype (autocast state is thread-local), so
+    the workers below re-enter grad mode and autocast with both captured.
+    Only the outputs eval reads come back — b_logits alone is (B, 96, 256, 256).
+    """
+
+    KEYS = ("fused", "seg")
+
+    def __init__(self, model: torch.nn.Module, devices: list[torch.device]):
+        super().__init__()
+        self.devices = list(devices)
+        self.replicas = torch.nn.ModuleList(
+            [model] + [copy.deepcopy(model).to(d) for d in self.devices[1:]])
+        self._pool = ThreadPoolExecutor(len(self.devices))
+
+    def forward(self, x: torch.Tensor) -> dict:
+        chunks = x.chunk(len(self.devices))   # fewer than n when the batch is
+        dev = self.devices[0].type            # smaller than the device count
+        grad = torch.is_grad_enabled()
+        amp, amp_dt = torch.is_autocast_enabled(dev), torch.get_autocast_dtype(dev)
+
+        def run(i: int) -> dict:
+            d = self.devices[i]
+            on_dev = torch.cuda.device(d) if d.type == "cuda" else contextlib.nullcontext()
+            with on_dev, torch.set_grad_enabled(grad), \
+                    torch.autocast(d.type, dtype=amp_dt, enabled=amp):
+                out = self.replicas[i](chunks[i].to(d))
+            return {k: out[k] for k in self.KEYS}
+
+        outs = list(self._pool.map(run, range(len(chunks))))
+        return {k: torch.cat([o[k].to(self.devices[0]) for o in outs])
+                for k in self.KEYS}
 
 
 def _own_args(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
@@ -188,7 +231,9 @@ def main() -> None:
     model = DepthWizardNetV3(cfg).to(device)
     if cfg.channels_last and n_gpu:
         model = model.to(memory_format=torch.channels_last)
-    ck = torch.load(a.ckpt, map_location=device, weights_only=False)
+    # To host RAM, not cuda:0: best.pt is 2.5 GB and `ck` would otherwise sit on
+    # the first card for the whole run, beside the model it was copied into.
+    ck = torch.load(a.ckpt, map_location="cpu", weights_only=False)
     sd, renamed = fit_keys(ck.get("model", ck), model.state_dict().keys())
     if renamed:
         print(f"[ckpt] {renamed} encoder keys renamed across the transformers "
@@ -209,7 +254,11 @@ def main() -> None:
     if miss:
         raise SystemExit(f"checkpoint does not fit this config — missing "
                          f"{len(miss)} parameters, first few: {miss[:8]}")
+    del ck, sd
     model.eval()
+    if n_gpu > 1:
+        model = Replicated(model, [torch.device(f"cuda:{i}") for i in range(n_gpu)])
+        print(f"[env] one model copy per GPU — every batch split {n_gpu} ways")
 
     res: dict = {"checkpoint": str(a.ckpt), "store": str(d), "tiles_scored": n,
                  "store_tiles": len(store), "config": safe_config_dict(cfg),
