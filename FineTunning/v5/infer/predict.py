@@ -69,6 +69,9 @@ def load_model(ckpt: str, device, hf_token: str = ""):
 
     cfg = parse_config([])
     for k, v in (ck.get("config") or {}).items():
+        # paths of the machine that trained it (/results/v5 on Modal), not this one
+        if k in ("output_dir", "data_root"):
+            continue
         if hasattr(cfg, k) and not isinstance(getattr(cfg, k), tuple):
             setattr(cfg, k, v)
     cfg.hf_token = hf_token or cfg.hf_token

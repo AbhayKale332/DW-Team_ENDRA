@@ -33,7 +33,7 @@ cd "$(dirname "$0")"
 CMD="${1:-train}"
 if [ $# -gt 0 ]; then shift; fi   # `shift || true` is fatal in dash
 
-OUT="${DW_OUTPUT_DIR:-/kaggle/working/outputs/v4}"
+OUT="${DW_OUTPUT_DIR:-/kaggle/working/outputs/v5}"
 # `/kaggle/input` is a read-only network mount and random 512 px crops out of it
 # are small random reads — exactly the access pattern v3's guard log called
 # "STARVED".  `link` builds a symlink farm under $DATA so cfg.data_root stays a
@@ -149,6 +149,15 @@ PY
     ;;
 
   train)
+    # v5: the flags below are the V4_Kaggle T4 profile.  v5's profile
+    # (detail_branch, coarse labels, Cartosat augs, the v3 reverts) lives in
+    # ../V4_modal/v5_flags.py and has only been sized for an H100.
+    if [ -z "${DW_V4_PROFILE:-}" ]; then
+      echo "run_kaggle.sh train is the v4 T4 profile; v5 trains on Modal:"
+      echo "  cd ../V4_modal && DW_CODE=v5 modal run --detach modal_app.py::train"
+      echo "Set DW_V4_PROFILE=1 to run the v4 profile from this tree anyway."
+      exit 1
+    fi
     # ---- what the 2025-09-15 run measured, and what changed because of it ----
     # That run trained for 452 min and got 3.947 m.  Its log shows why that is
     # not the number this profile is capable of:

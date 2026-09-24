@@ -1064,15 +1064,21 @@ def main() -> None:
             if not cfg.final_sliding_eval:
                 continue
             try:
+                from torch.utils.data import Subset
+
+                from dwdata.loaders import sample_indices
                 from eval.sliding import sliding_eval
 
                 # max_tiles caps this one: sliding+TTA is ~6 s/tile, and
                 # gamus/test is 2861 of them — four unattended H100 hours if it
-                # ran over the whole store.  The prefix is the same size as the
-                # val sliding number it sits next to, so the two are comparable.
+                # ran over the whole store.  Same size as the val sliding number
+                # it sits next to, and (val_sample_seed >= 0) a seeded sample of
+                # the store, not its sorted-stem prefix — the prefix is one city.
+                k = int(getattr(cfg, "test_sliding_tiles", 0) or 0)
+                idx = sample_indices(len(t_full), k, cfg.val_sample_seed) if k else None
                 final[f"{tag}_sliding_tta"] = sliding_eval(
-                    core, t_full, cfg, spec, device, tta=cfg.tta,
-                    max_tiles=int(getattr(cfg, "test_sliding_tiles", 0) or 0))
+                    core, t_full if idx is None else Subset(t_full, idx.tolist()),
+                    cfg, spec, device, tta=cfg.tta, max_tiles=k)
                 print(f"[test] {tag}_sliding_tta "
                       f"{format_line(final[f'{tag}_sliding_tta'])}")
                 print("       ^ held-out tiles, full-tile sliding window at "

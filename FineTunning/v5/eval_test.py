@@ -17,7 +17,7 @@
 
 Ported from `v3/eval_test.py`; same protocol, so the numbers sit in one table
 with v4's `test_gamus_test_*`: every tile centre-crop plain + TTA, then sliding
-window + TTA over the first `--sliding_tiles`.
+window + TTA over a seeded sample of `--sliding_tiles` (seed 42).
 
 **Why `--model_code`.**  v4 changed Head B numerically (RMS-normalised pooled
 feature, fp32 width softmax, floored widths) without renaming a parameter, so a
@@ -402,7 +402,7 @@ def compare_table(results: list[tuple[str, dict]], tag: str | None = None) -> st
         tag = keys[0][: -len("_plain")] if keys else "test_gamus_test"
     L = [f"# Cross-version comparison — `{tag}`", "",
          "Same protocol for every column: all tiles centre-crop plain + TTA, sliding "
-         "window + TTA over the first N tiles (eval_test.py).", "",
+         "window + TTA over a seeded sample of N tiles (eval_test.py).", "",
          "| | " + " | ".join(n for n, _ in results) + " |",
          "|---|" + "---|" * len(results)]
 
@@ -624,9 +624,14 @@ def main(argv=None) -> None:
 
     if a.sliding_tiles:
         t0 = time.time()
+        # A seeded sample, not the sorted-stem prefix (one city).  Picked here,
+        # not in sliding_eval, because `--model_code ../v3` runs v3's own copy of
+        # that; seed 42 = v5's val_sample_seed, so train.py draws the same tiles.
+        k = min(a.sliding_tiles, n)
+        idx = np.sort(np.random.default_rng(42).permutation(n)[:k]).tolist()
         res[f"{tag}_sliding_tta"] = sliding_eval(
-            model, full, cfg, spec, device, tta=cfg.tta,
-            max_tiles=min(a.sliding_tiles, n))
+            model, torch.utils.data.Subset(full, idx), cfg, spec, device,
+            tta=cfg.tta, max_tiles=k)
         print(f"[test] {tag}_sliding_tta {format_line(res[f'{tag}_sliding_tta'])}"
               f"  ({time.time() - t0:.0f}s)")
 

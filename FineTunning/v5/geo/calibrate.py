@@ -437,7 +437,8 @@ def refine_with_gcps_decomposed(dtm_m: np.ndarray, ndsm_m: np.ndarray, gcps, *,
 
     an offset (plus a tilt when >= 4 points allow it) on the terrain, and a scale
     on the structures only.  Point counts decide how much is fitted: 1 -> offset;
-    2-3 -> offset + scale; >= 4 -> offset + tilt + scale.  RANSAC over minimal
+    >= 4 adds the tilt; >= 2 adds the scale, but only when the points span > 0.5 m
+    of nDSM (ground-only GCPs cannot measure it).  RANSAC over minimal
     sets, then least squares on the consensus.  `gcps`: (row, col, elevation_m).
     """
     H, W = dtm_m.shape
@@ -453,15 +454,19 @@ def refine_with_gcps_decomposed(dtm_m: np.ndarray, ndsm_m: np.ndarray, gcps, *,
     y = z - t - h                                  # what is left to explain
     n = len(pts)
     xn, yn = c / max(W - 1, 1), r / max(H - 1, 1)
+    names, cols, parts = ["offset_m"], [np.ones(n)], ["offset"]
     if n >= 4:
-        A = np.stack([np.ones(n), xn, yn, h], 1)
-        kind = "offset+tilt+scale"
-    elif n >= 2 and np.ptp(h) > 0.5:
-        A = np.stack([np.ones(n), h], 1)
-        kind = "offset+scale"
-    else:
-        A = np.ones((n, 1))
-        kind = "offset"
+        names += ["tilt_x_m", "tilt_y_m"]
+        cols += [xn, yn]
+        parts.append("tilt")
+    # A scale needs structure under the points: GCPs on roads (nDSM ~ 0) fit
+    # it on survey noise and shrink or blow up every building.
+    if n >= 2 and np.ptp(h) > 0.5:
+        names.append("scale_minus_1")
+        cols.append(h)
+        parts.append("scale")
+    A = np.stack(cols, 1)
+    kind = "+".join(parts)
     m = A.shape[1]
     rng = np.random.default_rng(seed)
     best = np.ones(n, bool)
@@ -474,9 +479,7 @@ def refine_with_gcps_decomposed(dtm_m: np.ndarray, ndsm_m: np.ndarray, gcps, *,
             if inl.sum() > best_n:
                 best, best_n = inl, int(inl.sum())
     sol, *_ = np.linalg.lstsq(A[best], y[best], rcond=None)
-    coef = dict(zip(["offset_m", "tilt_x_m", "tilt_y_m", "scale_minus_1"]
-                    if m == 4 else (["offset_m", "scale_minus_1"] if m == 2 else ["offset_m"]),
-                    [float(v) for v in sol]))
+    coef = dict(zip(names, [float(v) for v in sol]))
     off = coef.get("offset_m", 0.0)
     bx, by = coef.get("tilt_x_m", 0.0), coef.get("tilt_y_m", 0.0)
     ds = coef.get("scale_minus_1", 0.0)

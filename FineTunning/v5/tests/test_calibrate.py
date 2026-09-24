@@ -139,3 +139,14 @@ def test_decomposed_gcps_scale_structures_not_terrain():
     assert abs(info["structure_scale"] - 1.1) < 1e-3
     assert abs(info["offset_m"] - 2.0) < 1e-2
     assert np.abs(dsm - true).max() < 0.05
+
+
+def test_ground_only_gcps_leave_building_heights_alone():
+    dtm, ndsm, _ = _scene()
+    rng = np.random.default_rng(1)
+    pts = [(10, 10), (150, 20), (30, 170), (240, 240), (130, 230)]   # all on ground
+    gcps = [(r, c, float(dtm[r, c] + 2.0 + rng.normal(0, 0.3))) for r, c in pts]
+    dsm, info = refine_with_gcps_decomposed(dtm, ndsm, gcps)
+    assert info["gcp"] == "offset+tilt"
+    assert info["structure_scale"] == 1.0
+    assert abs((dsm - dtm)[90, 90] - 32.0) < 1.0       # the 30 m tower keeps 30 m
