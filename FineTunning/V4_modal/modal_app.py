@@ -12,6 +12,9 @@ plain `python train.py` — no torchrun.
     modal run --detach modal_app.py::train
     modal run --detach modal_app.py::finalize  # exports only, from metrics.json
 
+    # v5: same functions, the v5 tree and flag profile (V4_modal/v5_flags.py)
+    DW_CODE=v5 DW_AUDIT=../v5/outputs/audit/audit.json modal run modal_app.py::smoke
+
 Secrets (you create these):
     modal secret create dw-hf      HF_TOKEN=hf_...
     modal secret create dw-kaggle  KAGGLE_USERNAME=... KAGGLE_KEY=...
@@ -38,7 +41,12 @@ ENCODER = "facebook/dinov3-vitl16-pretrain-sat493m"
 TORCH = "2.10.0"
 TORCH_INDEX = "https://download.pytorch.org/whl/cu128"
 
-_LOCAL = Path(__file__).parent.parent / "V4_Kaggle"
+# Which code tree the image mounts.  Default V4_Kaggle (unchanged for every v4
+# notebook); `DW_CODE=v5` (a sibling directory name, or a path) mounts
+# FineTunning/v5 instead — set it before importing this module.
+_LOCAL = Path(os.environ.get("DW_CODE", "V4_Kaggle"))
+if not _LOCAL.is_absolute():
+    _LOCAL = Path(__file__).parent.parent / _LOCAL
 _REQS = [
     ln.split("#")[0].strip()
     for ln in (_LOCAL / "requirements.txt").read_text().splitlines()
@@ -77,6 +85,23 @@ FLAGS = {
     "test_tiles": "0",                   # 0 = all 2861, centre crop plain + TTA
     "test_sliding_tiles": "400",         # sliding+TTA is ~6 s/tile
 }
+
+# --- the v5 profile --------------------------------------------------------
+# `DW_CODE=v5` swaps the whole flag profile for v5_flags.FLAGS (a full
+# replacement, not an overlay; see that file), with the Step 0 audit applied
+# when `DW_AUDIT=<audit.json>` is set.  The container re-imports this module
+# WITHOUT the caller's environment, so the resolved profile is baked into the
+# image as DW_PROFILE and read back there — otherwise `train` would run v5
+# code under the v4 profile above.
+_PROFILE_ENV: dict = {}
+if os.environ.get("DW_PROFILE"):                       # inside the container
+    FLAGS = json.loads(os.environ["DW_PROFILE"])
+elif _LOCAL.name == "v5":
+    sys.path.insert(0, str(Path(__file__).parent))
+    from v5_flags import with_audit
+
+    FLAGS = {"data_root": SCRATCH, **with_audit()}
+    _PROFILE_ENV = {"DW_PROFILE": json.dumps(FLAGS)}
 
 CROPS_PER_EPOCH = 12000                  # config.py:91
 IMG_PER_S = 45.0                         # v3 on an H100; replace from `calibrate`
@@ -132,7 +157,7 @@ image = (
     .uv_pip_install(*_REQS, "kaggle>=1.6.0")
     .env({"HF_HOME": "/root/hf", "HF_HUB_DISABLE_PROGRESS_BARS": "1",
           "TOKENIZERS_PARALLELISM": "false",
-          "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"})
+          "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True", **_PROFILE_ENV})
     .run_function(_bake, secrets=[hf])
     .add_local_dir(_LOCAL, CODE, ignore=["**/__pycache__", "outputs", "data", "*.pt"])
 )
@@ -331,7 +356,8 @@ def _go(**ov: str) -> None:
 @app.function(**GPU_FN)
 def smoke(extra: str = "") -> None:
     """24 crops, 2 epochs, batch 2 (config.py:313-334). ~10 min. Do not skip it."""
-    _go(output_dir=f"{RESULTS}/smoke_v4m", extra=f"--smoke {extra}")
+    tag = "v5" if FLAGS["output_dir"].rstrip("/").endswith("v5") else "v4m"
+    _go(output_dir=f"{RESULTS}/smoke_{tag}", extra=f"--smoke {extra}")
 
 
 @app.function(**GPU_FN)

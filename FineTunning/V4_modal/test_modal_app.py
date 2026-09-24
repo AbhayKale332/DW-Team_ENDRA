@@ -74,6 +74,42 @@ def test_store_name_is_the_store_not_the_split():
         assert idx.parents[1].name == "dfc23_g050"
 
 
+def _import_with(env: dict) -> dict:
+    """FLAGS / _PROFILE_ENV as a fresh import sees them under `env`."""
+    import os
+    import subprocess
+
+    code = ("import json, modal_app as m; "
+            "print(json.dumps({'flags': m.FLAGS, 'env': m._PROFILE_ENV}))")
+    e = {k: v for k, v in os.environ.items() if k not in ("DW_CODE", "DW_PROFILE", "DW_AUDIT")}
+    r = subprocess.run([sys.executable, "-c", code], cwd=Path(__file__).parent,
+                       env={**e, **env}, capture_output=True, text=True, check=True)
+    return json.loads(r.stdout.strip().splitlines()[-1])
+
+
+def test_v5_profile_reaches_the_container():
+    # Local import with DW_CODE=v5: the v5 profile, and the same dict baked into
+    # the image env -- the container re-imports this module WITHOUT DW_CODE.
+    loc = _import_with({"DW_CODE": "v5"})
+    f = loc["flags"]
+    assert f["output_dir"] == "/results/v5" and f["detail_branch"] == "true"
+    assert f["data_root"] == m.SCRATCH and f["batch_size"] == "16"
+    assert json.loads(loc["env"]["DW_PROFILE"]) == f
+    # ...and inside the container the baked profile wins over the v4 default
+    rem = _import_with({"DW_PROFILE": loc["env"]["DW_PROFILE"]})
+    assert rem["flags"] == f and rem["env"] == {}
+    # v4 stays byte-identical: no env, no profile
+    assert _import_with({})["env"] == {} and m.FLAGS["output_dir"].endswith("/v4m")
+
+
+def test_v5_audit_overrides_only_step0_keys():
+    with tempfile.TemporaryDirectory() as d:
+        a = Path(d) / "audit.json"
+        a.write_text(json.dumps({"flags": {"coarse_pool": "8", "epochs": "99"}}))
+        f = _import_with({"DW_CODE": "v5", "DW_AUDIT": str(a)})["flags"]
+    assert f["coarse_pool"] == "8" and f["epochs"] == "26"
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_"):

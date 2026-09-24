@@ -4,7 +4,10 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+#Hidden Folders
 Research-Paper/
+cartosat_2S_Sample/
+
 # C extensions
 *.so
 
