@@ -8,10 +8,12 @@ teacher, epoch, elapsed time, `best` and `history`, and a second run pointed at
 it has to pick all of that up instead of starting over.
 """
 import json
+import shutil
 import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 import torch
 
 from config import Config
@@ -241,3 +243,234 @@ def test_val_split_lookup_is_prefix_aware(tmp_path):
     assert val_split_of("synrs3d_g05") is None
     assert val_split_of("synrs3d") is None
     assert val_split_of("nonesuch") is None
+
+
+
+# ---------------------------------------------------------------------
+# Numbered training phases.  Run 1 finished all 24 epochs with the cosine at
+# its floor, and every obvious way to continue it was broken: a plain --resume
+# trained nothing, raising --epochs spiked the LR ~40x with no warmup, and the
+# fresh session's output_dir had no best.pt.  These are the gates on the fix.
+# ---------------------------------------------------------------------
+def _log(cfg) -> str:
+    """run.log, not capsys: train.py's Tee writes to sys.__stdout__."""
+    return (Path(cfg.output_dir) / "run.log").read_text()
+
+
+def _full(cfg):
+    return torch.load(Path(cfg.output_dir) / "last_full.pt", map_location="cpu",
+                      weights_only=False)
+
+
+def _floor_lr(ck, mult):
+    return float(ck["base_lrs"][0]) * mult / 1e2
+
+
+def test_phase_progress_and_lr_maths():
+    from train import lr_scale, phase_progress
+
+    # Phase 1 is the old formula exactly.
+    for ep, st, n, epochs, el, mm in [(1, 0, 10, 24, 0.0, 960.0),
+                                      (5, 3, 10, 24, 100.0, 960.0),
+                                      (24, 9, 10, 24, 470.0, 480.0),
+                                      (3, 0, 7, 24, 900.0, 480.0)]:
+        old = max((ep - 1 + st / n) / epochs, el / mm)
+        assert phase_progress(ep, st, n, 1, epochs, el, mm) == pytest.approx(old)
+
+    # Phase 2 of run 1: e25..e40, 800 steps an epoch, 0.3x the 3e-4 peak.
+    base, mult, warm = 3e-4, 0.3, 0.05
+    p0 = phase_progress(25, 0, 800, 25, 40, 0.0, 480.0)
+    assert p0 == 0.0
+    assert base * mult * lr_scale(p0, warm) == pytest.approx(9e-7)
+    # 5 % of 16 epochs is 0.8 of an epoch: step 640 of e25 is the peak.
+    pw = phase_progress(25, 640, 800, 25, 40, 5.0, 480.0)
+    assert pw == pytest.approx(warm)
+    assert base * mult * lr_scale(pw, warm) == pytest.approx(9e-5)
+    # ...and it falls from there, to the floor at the end of e40.
+    mid = base * mult * lr_scale(
+        phase_progress(30, 0, 800, 25, 40, 90.0, 480.0), warm)
+    assert 9e-7 < mid < 9e-5
+    end = phase_progress(40, 800, 800, 25, 40, 270.0, 480.0)
+    assert end == pytest.approx(1.0)
+    assert base * mult * lr_scale(end, warm) == pytest.approx(9e-7)
+    # What run 1 would have done with --epochs 40 and no phase: a jump.
+    spike = base * lr_scale(phase_progress(25, 0, 800, 1, 40, 0.0, 960.0), 0.05)
+    assert spike > 30 * 3e-6
+
+
+def test_phase_two_starts_a_fresh_warmup_instead_of_spiking(
+        tmp_path, store, monkeypatch):
+    undo = use_stub(hidden=32, patch=14, layers=8)
+    try:
+        data_root = Path(store.dir).parents[1]
+        cfg = _tiny_cfg(tmp_path, data_root, out_name="p1")
+        _run(cfg, monkeypatch)
+        ck = _full(cfg)
+        assert ck["phase"]["id"] == 1 and ck["phase"]["start_epoch"] == 1
+        assert ck["phase"]["progress"] >= 1.0 - 1e-6, "phase 1 did not finish"
+        assert all("lr_start" in h and "lr_end" in h for h in ck["history"])
+
+        cfg2 = _tiny_cfg(tmp_path, data_root, out_name="p2")
+        cfg2.epochs = 4
+        cfg2.phase = 2
+        cfg2.resume = str(Path(cfg.output_dir) / "last_full.pt")
+        _run(cfg2, monkeypatch)
+        ck2 = _full(cfg2)
+
+        assert ck2["phase"]["id"] == 2
+        assert ck2["phase"]["start_epoch"] == 3
+        assert ck2["phase"]["lr_mult"] == cfg2.phase_lr_mult
+        h = ck2["history"]
+        assert [r["epoch"] for r in h] == [1, 2, 3, 4]
+        # e3's first step is at the phase-2 floor, not wherever the old
+        # cosine's epoch fraction would have put it.
+        assert h[2]["phase"] == 2
+        # (rel, because the phase clock has ticked a few ms by step 0.)
+        assert h[2]["lr_start"] == pytest.approx(
+            _floor_lr(ck, cfg2.phase_lr_mult), rel=0.1)
+        assert "[phase] 2 starts at epoch 3 of 4" in _log(cfg2)
+    finally:
+        undo()
+
+
+def test_rerunning_the_same_phase_continues_it(tmp_path, store, monkeypatch):
+    """A crashed phase 2, re-run with the same command, must not re-warm."""
+    undo = use_stub(hidden=32, patch=14, layers=8)
+    try:
+        data_root = Path(store.dir).parents[1]
+        cfg = _tiny_cfg(tmp_path, data_root, out_name="c1")
+        _run(cfg, monkeypatch)
+
+        # Phase 2 over e3..e5, killed by the session cap one step into e3.
+        cfg2 = _tiny_cfg(tmp_path, data_root, out_name="c2")
+        cfg2.epochs = 5
+        cfg2.phase = 2
+        cfg2.session_minutes = 1e-9
+        cfg2.resume = str(Path(cfg.output_dir) / "last_full.pt")
+        _run(cfg2, monkeypatch)
+        ck2 = _full(cfg2)
+        assert ck2["epoch"] == 3 and ck2["phase"]["start_epoch"] == 3
+
+        # Same phase, same epochs: a continuation.
+        cfg3 = _tiny_cfg(tmp_path, data_root, out_name="c3")
+        cfg3.epochs = 5
+        cfg3.phase = 2
+        cfg3.resume = str(Path(cfg2.output_dir) / "last_full.pt")
+        _run(cfg3, monkeypatch)
+        ck3 = _full(cfg3)
+        assert ck3["phase"]["id"] == 2
+        assert ck3["phase"]["start_epoch"] == 3, "phase 2 restarted"
+        assert [r["epoch"] for r in ck3["history"]] == [1, 2, 3, 4, 5]
+        # e4 is a third of the way down phase 2's cosine, well off the floor.
+        assert ck3["history"][3]["lr_start"] > \
+            10 * _floor_lr(ck2, cfg3.phase_lr_mult)
+        assert "continuing phase 2" in _log(cfg3)
+        assert "starts at epoch" not in _log(cfg3)
+
+        # And going backwards is refused outright.
+        cfg4 = _tiny_cfg(tmp_path, data_root, out_name="c4")
+        cfg4.epochs = 6
+        cfg4.phase = 1
+        cfg4.resume = str(Path(cfg3.output_dir) / "last_full.pt")
+        with pytest.raises(SystemExit, match="already in phase 2"):
+            _run(cfg4, monkeypatch)
+    finally:
+        undo()
+
+
+def test_extending_an_annealed_run_without_phase_auto_bumps(
+        tmp_path, store, monkeypatch):
+    """Run 1's exact situation: --epochs raised, --phase not passed.
+
+    Covered twice: a new checkpoint (records its progress) and a run-1 style
+    one (no "phase" block, detected off the optimiser's last LR instead).
+    """
+    undo = use_stub(hidden=32, patch=14, layers=8)
+    try:
+        data_root = Path(store.dir).parents[1]
+        cfg = _tiny_cfg(tmp_path, data_root, out_name="a1")
+        _run(cfg, monkeypatch)
+        src = Path(cfg.output_dir) / "last_full.pt"
+
+        # Run-1 style: no phase block, optimiser LR at the floor.
+        legacy = torch.load(src, map_location="cpu", weights_only=False)
+        del legacy["phase"]
+        for g, b in zip(legacy["opt"]["param_groups"], legacy["base_lrs"]):
+            g["lr"] = b / 1e2
+        leg_dir = tmp_path / "legacy"
+        leg_dir.mkdir()
+        torch.save(legacy, leg_dir / "last_full.pt")
+
+        for tag, resume in (("new", src), ("old", leg_dir / "last_full.pt")):
+            c = _tiny_cfg(tmp_path, data_root, out_name=f"a2_{tag}")
+            c.epochs = 3
+            c.resume = str(resume)
+            assert c.phase == 1
+            _run(c, monkeypatch)
+            ck = _full(c)
+            log = _log(c)
+            assert "[phase] !!" in log and "already annealed" in log, tag
+            assert ck["phase"]["id"] == 2, tag
+            assert ck["phase"]["start_epoch"] == 3, tag
+            assert ck["history"][2]["lr_start"] == \
+                pytest.approx(_floor_lr(legacy, c.phase_lr_mult), rel=0.1), tag
+    finally:
+        undo()
+
+
+def test_resume_into_a_fresh_dir_carries_best_pt(tmp_path, store, monkeypatch):
+    """No later epoch beats `best` -> best.pt still exists, with the old epoch."""
+    undo = use_stub(hidden=32, patch=14, layers=8)
+    try:
+        data_root = Path(store.dir).parents[1]
+        cfg = _tiny_cfg(tmp_path, data_root, out_name="b1")
+        _run(cfg, monkeypatch)
+        old_best = torch.load(Path(cfg.output_dir) / "best.pt",
+                              map_location="cpu", weights_only=False)
+
+        # An unbeatable `best`, so the resumed epochs cannot write best.pt.
+        ck = _full(cfg)
+        ck["best"] = 0.0
+        src = tmp_path / "prev"
+        src.mkdir()
+        torch.save(ck, src / "last_full.pt")
+        shutil.copy2(Path(cfg.output_dir) / "best.pt", src / "best.pt")
+
+        cfg2 = _tiny_cfg(tmp_path, data_root, out_name="b2")
+        cfg2.epochs = 3
+        cfg2.phase = 2
+        cfg2.resume = str(src / "last_full.pt")
+        _run(cfg2, monkeypatch)
+
+        dst = Path(cfg2.output_dir) / "best.pt"
+        assert dst.is_file(), "best.pt was not carried into the new output_dir"
+        got = torch.load(dst, map_location="cpu", weights_only=False)
+        assert got["epoch"] == old_best["epoch"]
+        assert "[resume] carried best.pt" in _log(cfg2)
+    finally:
+        undo()
+
+
+def test_resume_past_the_last_epoch_says_nothing_to_train(
+        tmp_path, store, monkeypatch):
+    undo = use_stub(hidden=32, patch=14, layers=8)
+    try:
+        data_root = Path(store.dir).parents[1]
+        cfg = _tiny_cfg(tmp_path, data_root, out_name="n1")
+        _run(cfg, monkeypatch)
+        before = _full(cfg)
+
+        cfg2 = _tiny_cfg(tmp_path, data_root, out_name="n2")
+        cfg2.resume = str(Path(cfg.output_dir) / "last_full.pt")   # epochs == 2
+        _run(cfg2, monkeypatch)
+
+        log = _log(cfg2)
+        assert "nothing to train" in log
+        assert "--phase 2" in log
+        assert "[phase]" not in log, "a finished run must not auto-bump"
+        after = json.loads((Path(cfg2.output_dir) / "metrics.json").read_text())
+        assert [h["epoch"] for h in after["history"]] == \
+               [h["epoch"] for h in before["history"]]
+        assert "final_plain" in after
+    finally:
+        undo()

@@ -88,10 +88,14 @@ def build_unlabeled_loader(cfg, spec, rank: int = 0, world_size: int = 1,
     root = Path(cfg.data_root)
     st = _open(root, cfg.unlabeled_source, "train")
     if st is None:
-        if cfg.unlabeled_source in cfg.dataset_list():
-            print(f"[data] --datasets asked for {cfg.unlabeled_source!r} but no store "
-                  f"exists under {root / cfg.unlabeled_source}; consistency branch off. "
-                  f"See `python prepare_data.py --datasets india --help`")
+        # Always said, not only when --datasets names the source: run 1 had
+        # w_consistency=1.0, no store, and not one line saying the branch was
+        # off.
+        if is_main:
+            print(f"[data] w_consistency={cfg.w_consistency:g} but no "
+                  f"{cfg.unlabeled_source} store under {root / cfg.unlabeled_source} "
+                  f"— mean-teacher OFF.  See `python prepare_data.py --datasets "
+                  f"india --help`")
         return None
     bs = max(1, int(round(cfg.batch_size * cfg.unlabeled_batch_frac)))
     _prime(st, spec, cfg, f"{cfg.unlabeled_source}/train", is_main)

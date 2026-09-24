@@ -325,7 +325,10 @@ class Config:
     make_figures: bool = True               # viz/figures.py at the end of the run
     make_report: bool = True                # viz/report_html.py validation report
     export_onnx: bool = True                # infer/export_onnx.py at the end of the run
-    onnx_opset: int = 17
+    # 18, not 17: the dynamo exporter emits Resize at 18 and has no adapter
+    # down to 17, so a request for 17 printed a traceback and fell back to 18
+    # anyway (run-1 log).  Asking for what it produces keeps the log clean.
+    onnx_opset: int = 18
 
     # ----- misc ------------------------------------------------------
     hf_token: str = ""
@@ -345,7 +348,22 @@ class Config:
     # `max_minutes` is the *total* training budget across all sessions and is
     # what drives the cosine; `session_minutes` caps *this* session only.
     # A two-session run is --max_minutes 960 --session_minutes 480 in both.
+    # In phase > 1 (below) `max_minutes` is THAT PHASE's budget, measured from
+    # the phase's own start, not the all-sessions total.
     session_minutes: float = 0.0            # 0 -> unlimited (single session)
+
+    # ----- numbered training phases ----------------------------------
+    # Each phase is its own warmup + cosine over epochs [phase start, epochs].
+    # Resuming with the SAME --phase continues that phase's cosine (a crashed
+    # session); resuming with a HIGHER --phase starts a fresh warmup from the
+    # floor at the next epoch.  Without this, extending a finished run by
+    # raising --epochs jumps the LR from the annealed floor to wherever
+    # max(epoch fraction, clock fraction) lands — ~40x in one step for run 1.
+    phase: int = 1
+    phase_lr_mult: float = 0.3              # peak LR of a phase > 1, relative to
+                                            # the run's saved base_lrs (run 1:
+                                            # 3e-4 decoder, 6e-5 encoder top)
+    phase_warmup_frac: float = 0.05         # of the phase's own progress
 
     # -----------------------------------------------------------------
     def apply_smoke(self) -> "Config":
@@ -382,6 +400,9 @@ class Config:
         assert 0 <= self.freeze_epochs <= self.epochs
         assert 0.0 <= self.unlabeled_batch_frac <= 2.0
         assert self.encoder_unfreeze_blocks >= 0
+        assert self.phase >= 1, f"--phase must be >= 1, got {self.phase}"
+        assert 0.0 < self.phase_lr_mult <= 1.0, (
+            f"--phase_lr_mult must be in (0, 1], got {self.phase_lr_mult}")
         # A floor above the initial scale would pin the scale there and defeat
         # the backoff the scaler exists to perform.
         assert 0.0 < self.amp_min_scale <= self.amp_init_scale

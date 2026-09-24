@@ -45,7 +45,7 @@ def test_export_matches_the_checkpoint(tmp_path, monkeypatch):
 
         out = tmp_path / "m.onnx"
         try:
-            export(str(ck), str(out), opset=17, check=True)
+            export(str(ck), str(out), opset=18, check=True)
         except Exception as e:  # noqa: BLE001
             pytest.skip(f"torch.onnx export unavailable in this build: {e}")
         assert out.is_file() and out.stat().st_size > 1000
@@ -90,7 +90,7 @@ def test_sidecar_records_the_opset_the_graph_actually_has(tmp_path, monkeypatch)
 
         out = tmp_path / "m.onnx"
         try:
-            export(str(ck), str(out), opset=17, check=False)
+            export(str(ck), str(out), opset=18, check=False)
         except Exception as e:  # noqa: BLE001
             pytest.skip(f"torch.onnx export unavailable: {e}")
 
@@ -99,7 +99,7 @@ def test_sidecar_records_the_opset_the_graph_actually_has(tmp_path, monkeypatch)
         m = onnx.load(str(out), load_external_data=False)
         real = next(i.version for i in m.opset_import if i.domain in ("", "ai.onnx"))
         assert meta["opset"] == real
-        assert meta["opset_requested"] == 17
+        assert meta["opset_requested"] == 18
         # and every external weight file the graph references is named
         for name in meta["external_data"]:
             assert (out.parent / name).is_file(), name
@@ -124,7 +124,7 @@ def test_external_weight_files_are_reported_so_they_can_be_shipped(
 
         out = tmp_path / "m.onnx"
         try:
-            export(str(ck), str(out), opset=17, check=False)
+            export(str(ck), str(out), opset=18, check=False)
         except Exception as e:  # noqa: BLE001
             pytest.skip(f"torch.onnx export unavailable: {e}")
         printed = capsys.readouterr().out

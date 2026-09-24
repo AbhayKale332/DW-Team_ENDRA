@@ -54,6 +54,7 @@ import json
 import math
 import os
 import random
+import shutil
 import sys
 import time
 import traceback
@@ -142,6 +143,47 @@ def lr_scale(progress: float, warmup: float = 0.05, final_div: float = 1e2) -> f
         return floor + (1.0 - floor) * (p / max(1e-8, warmup))
     q = (p - warmup) / max(1e-8, 1.0 - warmup)
     return floor + (1.0 - floor) * 0.5 * (1.0 + math.cos(math.pi * q))
+
+
+def phase_progress(epoch: int, step: int, n_steps: int, phase_start: int,
+                   epochs: int, phase_elapsed_min: float,
+                   max_minutes: float) -> float:
+    """Progress through the *current phase*, fed to `lr_scale`.
+
+    Same max(epoch fraction, wall-clock fraction) as always, but both halves
+    are measured from the phase's own start: epochs [phase_start, epochs] and
+    `phase_elapsed_min` against `max_minutes`.  Phase 1 has phase_start=1 and a
+    phase clock equal to the run clock, so it is exactly the old formula.
+    """
+    n_ep = max(1, epochs - phase_start + 1)
+    p_ep = (epoch - phase_start + step / max(1, n_steps)) / n_ep
+    p_clk = phase_elapsed_min / max(1e-8, max_minutes)
+    return max(p_ep, p_clk)
+
+
+# A saved schedule counts as annealed once its LR multiplier is within 1.5x of
+# the cosine floor (`lr_scale`'s final_div is 1e2).
+_ANNEALED_FRAC = 1.5 / 1e2
+
+
+def _schedule_annealed(ck: dict, saved_phase: dict) -> bool:
+    """Did the checkpoint's phase already finish its cosine?
+
+    New checkpoints record the phase progress they stopped at.  Older ones
+    (run 1) do not, so the LR the optimiser last used is compared with the base
+    it was scaled from: 3.00e-06 / 3.00e-04 = 0.01 for run 1, which is the
+    floor.  The progress test also rejects the *start* of a phase, where the LR
+    is at the floor too but the warmup has yet to run.
+    """
+    prog = saved_phase.get("progress")
+    if prog is not None:
+        return float(prog) >= 1.0 - 1e-6
+    try:
+        lr = float(ck["opt"]["param_groups"][0]["lr"])
+        base = float(ck["base_lrs"][0]) * float(saved_phase.get("lr_mult", 1.0))
+        return base > 0 and lr / base <= _ANNEALED_FRAC
+    except (KeyError, IndexError, TypeError, ValueError):
+        return False
 
 
 def build_optimizer(cfg: Config, model: DepthWizardNet, with_encoder: bool):
@@ -521,6 +563,14 @@ def main() -> None:
     t0 = time.time()
     stop = False
     dead_epochs = 0                  # consecutive epochs with zero applied steps
+    # The current phase's schedule (see config.py `phase`).  A fresh run is
+    # phase `cfg.phase` from epoch 1 at full LR with the ordinary warmup.
+    phase_id = int(cfg.phase)
+    phase_start = 1
+    phase_mult = 1.0
+    phase_warm = float(cfg.warmup_frac)
+    phase_t0 = t0                    # this phase's clock (max_minutes)
+    sched_progress = 0.0             # last progress fed to lr_scale
 
     if full_ck is not None:
         # The optimiser's param-group structure has to match what was saved,
@@ -545,8 +595,84 @@ def main() -> None:
         elapsed_min = float(full_ck.get("elapsed_min", 0.0))
         t0 = time.time() - elapsed_min * 60.0
         _restore_rng(full_ck.get("rng"))
+
+        # ---- which phase are we in? ----------------------------------
+        # Checkpoints written before phases existed are phase 1 from epoch 1,
+        # and their whole elapsed time is phase time.
+        saved = {"id": 1, "start_epoch": 1, "elapsed_min": elapsed_min,
+                 "lr_mult": 1.0, "warmup_frac": float(cfg.warmup_frac)}
+        saved.update(full_ck.get("phase") or {})
+        saved_id = int(saved["id"])
+        want = int(cfg.phase)
+        if want < saved_id:
+            raise SystemExit(
+                f"[phase] --phase {want} but {cfg.resume} is already in phase "
+                f"{saved_id}.  Re-run with --phase {saved_id} to continue that "
+                f"phase, or --phase {saved_id + 1} to start a new one.")
+        if want == saved_id and start_epoch <= cfg.epochs \
+                and _schedule_annealed(full_ck, saved):
+            # Continuing a finished cosine would jump the LR from the floor to
+            # wherever the new epoch fraction lands, with no warmup, on
+            # converged weights.  A new phase is what was meant.
+            want = saved_id + 1
+            print("[phase] " + "!" * 60)
+            print(f"[phase] !! the phase-{saved_id} schedule in {cfg.resume} has "
+                  f"already annealed, but --epochs {cfg.epochs} leaves epochs "
+                  f"{start_epoch}..{cfg.epochs} to train.  Continuing it would "
+                  f"spike the LR, so this starts phase {want} instead (as if "
+                  f"--phase {want} had been passed).  Pass --phase {want} "
+                  f"explicitly on any later resume.")
+            print("[phase] " + "!" * 60)
+        if want > saved_id:
+            phase_id, phase_start = want, start_epoch
+            phase_mult = float(cfg.phase_lr_mult)
+            phase_warm = float(cfg.phase_warmup_frac)
+            phase_t0 = time.time()
+            if start_epoch <= cfg.epochs:
+                peak = base_lrs[0] * phase_mult
+                print(f"[phase] {phase_id} starts at epoch {start_epoch} of "
+                      f"{cfg.epochs}: peak lr {peak:.2e} (x{phase_mult:g} of "
+                      f"{base_lrs[0]:.2e}), warmup {phase_warm:g} of the phase, "
+                      f"from floor {peak / 1e2:.2e}; budget "
+                      f"{cfg.max_minutes:.0f} min from now")
+        else:
+            phase_id = saved_id
+            phase_start = int(saved["start_epoch"])
+            phase_mult = float(saved["lr_mult"])
+            phase_warm = float(saved["warmup_frac"])
+            phase_t0 = time.time() - float(saved["elapsed_min"]) * 60.0
+            if phase_id > 1:
+                print(f"[phase] continuing phase {phase_id} (started at epoch "
+                      f"{phase_start}, {float(saved['elapsed_min']):.0f} min in, "
+                      f"peak lr x{phase_mult:g})")
+        sched_progress = float(saved.get("progress") or 0.0)
+
         print(f"[resume] continuing at epoch {start_epoch}, best {best:.3f} m, "
-              f"{elapsed_min:.0f} min of --max_minutes {cfg.max_minutes:.0f} used")
+              f"{(time.time() - phase_t0) / 60.0:.0f} min of --max_minutes "
+              f"{cfg.max_minutes:.0f} used (phase {phase_id}; "
+              f"{elapsed_min:.0f} min in total)")
+        if start_epoch > cfg.epochs:
+            print(f"[resume] checkpoint already finished epoch {start_epoch - 1} "
+                  f"of --epochs {cfg.epochs} — nothing to train; running final "
+                  f"eval/exports only.  To continue: raise --epochs and pass "
+                  f"--phase {phase_id + 1}.")
+
+        # ---- best.pt carry-over --------------------------------------
+        # A fresh session starts with an empty output_dir, but `best` came back
+        # from the checkpoint.  If no later epoch beats it, nothing writes
+        # best.pt here — and the final eval then runs on live, non-EMA weights
+        # and the ONNX export is skipped.  So bring the file along with the
+        # number.
+        src_best = Path(cfg.resume).parent / "best.pt"
+        dst_best = out_dir / "best.pt"
+        if is_main and not dst_best.is_file() and src_best.is_file() \
+                and src_best.resolve() != dst_best.resolve():
+            shutil.copy2(src_best, dst_best)
+            best_ep = next((h.get("epoch") for h in reversed(history)
+                            if (h.get("val") or {}).get("global", {})
+                            .get("rmse_m") == best), "?")
+            print(f"[resume] carried best.pt ({best:.3f} m, e{best_ep}) "
+                  f"from {src_best}")
         del full_ck
 
     t_session = time.time()          # this session's own clock (session_minutes)
@@ -557,20 +683,42 @@ def main() -> None:
     # and until now that was only discoverable by reading the lr= column after
     # the run was over.  v4-2 ended at lr 5.09e-05 (81 % of the cosine) and
     # scored 3.804 m; v4, which annealed to 8.32e-06, scored 3.441 m.
-    if is_main:
-        used = (time.time() - t0) / 60.0
+    #
+    # Run 1 printed "cosine reaches 50 %, anneal does NOT complete" from the
+    # clock alone (480 of 960 min), when the epoch fraction was what actually
+    # finished the schedule — and that line is what made a resume look needed.
+    # The clock is now only a floor on progress, and the warning fires only
+    # when the measured epoch time says the remaining epochs cannot fit.
+    if is_main and start_epoch <= cfg.epochs:
+        used = (time.time() - phase_t0) / 60.0
         at_cap = (used + cfg.session_minutes if cfg.session_minutes > 0
                   else cfg.max_minutes)
         p_clock = min(1.0, at_cap / max(1e-8, cfg.max_minutes))
-        lr_end = cfg.learning_rate * lr_scale(p_clock, cfg.warmup_frac)
-        tail = "" if p_clock >= 1.0 - 1e-6 else (
-            f"  [!] the anneal does NOT complete this session — "
-            f"{'resume to finish it' if cfg.save_full_state else 'and save_full_state is OFF, so it cannot be resumed'}")
-        print(f"[sched] {cfg.epochs} epochs, budget {cfg.max_minutes:.0f} min"
+        n_left = cfg.epochs - start_epoch + 1
+        n_phase = max(1, cfg.epochs - phase_start + 1)
+        # Minutes per epoch (training + per-epoch eval) from the history this
+        # run already has; unknown on a fresh run.
+        ep_min = (float(history[-1].get("minutes", 0.0)) / len(history)
+                  if history else 0.0)
+        p_end = 1.0
+        if ep_min > 0 and cfg.session_minutes > 0 \
+                and n_left * ep_min > cfg.session_minutes:
+            fit = int(cfg.session_minutes // ep_min)
+            p_end = max(p_clock, (start_epoch - phase_start + fit) / n_phase)
+        lr_end = base_lrs[0] * phase_mult * lr_scale(min(1.0, p_end), phase_warm)
+        tail = "" if p_end >= 1.0 - 1e-6 else (
+            f"  [!] at ~{ep_min:.0f} min/epoch only ~{fit} of {n_left} epochs "
+            f"fit this session, so the anneal does NOT complete (~"
+            f"{100.0 * p_end:.0f} %) — "
+            f"{'resume with the same --phase to finish it' if cfg.save_full_state else 'and save_full_state is OFF, so it cannot be resumed'}")
+        print(f"[sched] phase {phase_id}: epochs {phase_start}..{cfg.epochs}, "
+              f"budget {cfg.max_minutes:.0f} min"
               f"{f' (session cap {cfg.session_minutes:.0f} min)' if cfg.session_minutes > 0 else ''}"
               f"{f', {used:.0f} min already spent' if used > 1.0 else ''}"
-              f"  ->  cosine reaches {100.0 * p_clock:.0f} %, "
-              f"decoder lr {cfg.learning_rate:.2e} -> {lr_end:.2e}{tail}")
+              f"  ->  clock alone would reach {100.0 * p_clock:.0f} %; the "
+              f"epoch fraction ends it sooner if all {n_left} epochs fit.  "
+              f"decoder lr peak {base_lrs[0] * phase_mult:.2e} -> {lr_end:.2e}"
+              f"{tail}")
 
     for epoch in range(start_epoch, cfg.epochs + 1):
         # ---- unfreeze the encoder once the decoder has warmed up ----------
@@ -628,14 +776,16 @@ def main() -> None:
         n_ok = 0         # optimiser steps actually applied this epoch
         n_run = 0        # skips since the last applied step
 
+        lr_start = None
         for step, batch in enumerate(dl_tr):
-            progress = max(
-                (epoch - 1 + step / n_steps) / max(1, cfg.epochs),
-                ((time.time() - t0) / 60.0) / max(1e-8, cfg.max_minutes),
-            )
-            sc = lr_scale(progress, cfg.warmup_frac)
+            sched_progress = phase_progress(
+                epoch, step, n_steps, phase_start, cfg.epochs,
+                (time.time() - phase_t0) / 60.0, cfg.max_minutes)
+            sc = phase_mult * lr_scale(sched_progress, phase_warm)
             for g, b in zip(opt.param_groups, base_lrs):
                 g["lr"] = b * sc
+            if lr_start is None:
+                lr_start = opt.param_groups[0]["lr"]
 
             batch = _to_device(batch, device)
             if gpu_prep is not None:
@@ -812,8 +962,9 @@ def main() -> None:
             # deliberately keeps those to one per *optimiser* step, and breaking
             # mid-accumulation would throw away the partial gradient anyway.
             if sync:
-                stop = (time.time() - t0) / 60 > cfg.max_minutes
-                reason = f"wall-clock cap {cfg.max_minutes:.0f} min"
+                stop = (time.time() - phase_t0) / 60 > cfg.max_minutes
+                reason = (f"wall-clock cap {cfg.max_minutes:.0f} min"
+                          f"{f' (phase {phase_id})' if phase_id > 1 else ''}")
                 if not stop and cfg.session_minutes > 0 and \
                         (time.time() - t_session) / 60 > cfg.session_minutes:
                     stop = True
@@ -831,6 +982,14 @@ def main() -> None:
                     break
 
         run_loss = float(run_loss_t)
+        if not stop:
+            # The epoch ran to completion, so record where the schedule stands
+            # at its END — which is 1.0 after the last epoch, and is what lets
+            # a later resume tell a finished cosine from a phase that is still
+            # at its warmup floor.
+            sched_progress = phase_progress(
+                epoch, n_steps, n_steps, phase_start, cfg.epochs,
+                (time.time() - phase_t0) / 60.0, cfg.max_minutes)
         # Reported as a FRACTION, always, not as a bare count.  "500 optimiser
         # step(s) skipped" was in the v4 log six times and read as a tolerable
         # nuisance; "500/500 (100 %) — this epoch applied NO updates" does not.
@@ -850,7 +1009,12 @@ def main() -> None:
         rec = {"epoch": epoch, "train_loss": run_loss / max(1, nb),
                "opt_steps": n_ok, "opt_steps_skipped": n_bad,
                "encoder_frozen": core.encoder.frozen,
-               "minutes": (time.time() - t0) / 60}
+               "minutes": (time.time() - t0) / 60,
+               # Decoder group, first and last step: the schedule, visible in
+               # metrics.json without having to grep run.log.
+               "phase": phase_id,
+               "lr_start": lr_start,
+               "lr_end": opt.param_groups[0]["lr"]}
 
         # Two consecutive dead epochs means the floor above did not help and
         # nothing is being learned.  Burning the rest of a 480-minute budget on
@@ -915,7 +1079,11 @@ def main() -> None:
                     or epoch == cfg.epochs):
                 _save_full(out_dir / "last_full.pt", core, opt, scaler, ema,
                            teacher, epoch, base_lrs, best, history,
-                           (time.time() - t0) / 60)
+                           (time.time() - t0) / 60,
+                           {"id": phase_id, "start_epoch": phase_start,
+                            "elapsed_min": (time.time() - phase_t0) / 60,
+                            "lr_mult": phase_mult, "warmup_frac": phase_warm,
+                            "progress": sched_progress})
             write_metrics_json(out_dir / "metrics.json", cfg, spec, history, best,
                                (time.time() - t0) / 60)
         else:
@@ -1130,7 +1298,8 @@ def _restore_rng(rng) -> None:
 
 
 def _save_full(path: Path, core, opt, scaler, ema, teacher, epoch: int,
-               base_lrs, best: float, history: list, elapsed_min: float) -> None:
+               base_lrs, best: float, history: list, elapsed_min: float,
+               phase: dict | None = None) -> None:
     """The resume artefact, deliberately separate from best.pt / last.pt.
 
     `best.pt` and `last.pt` carry EMA-*merged* weights, which is right for
@@ -1152,7 +1321,11 @@ def _save_full(path: Path, core, opt, scaler, ema, teacher, epoch: int,
                     if teacher is not None else None),
         "teacher_n": getattr(teacher, "n", 0),
         "epoch": epoch,
-        "elapsed_min": float(elapsed_min),
+        "elapsed_min": float(elapsed_min),     # all sessions, all phases
+        # The schedule this checkpoint is part of: {id, start_epoch,
+        # elapsed_min (this phase only), lr_mult, warmup_frac, progress}.
+        # Resuming with the same --phase continues it; a higher one restarts.
+        "phase": dict(phase or {}),
         "best": float(best),
         "history": history,
         "encoder_frozen": bool(core.encoder.frozen),

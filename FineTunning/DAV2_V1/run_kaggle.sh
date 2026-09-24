@@ -7,6 +7,7 @@
 #   bash run_kaggle.sh smoke              # the first real 2-process DDP run
 #   bash run_kaggle.sh train              # the real run (torchrun, 2 processes)
 #   bash run_kaggle.sh train --resume /kaggle/input/<prev>/last_full.pt
+#   bash run_kaggle.sh phase2             # e25-e40 + india_labeled, from run 1
 #   bash run_kaggle.sh finalize           # post-training eval/figures/report/ONNX
 #   bash run_kaggle.sh onnx | report
 #
@@ -203,9 +204,12 @@ PY
     # --epochs 24 / --max_minutes 960 / --session_minutes 480 is a TWO-session
     # profile and all three numbers must be passed identically in both sessions.
     # `progress = max(epoch fraction, elapsed/max_minutes)`, so `max_minutes` is
-    # the budget the cosine is SIZED for, not a safety cap.  Session 2 adds, and
-    # changes nothing else:
+    # the budget the cosine is SIZED for, not a safety cap.  A session that died
+    # MID-schedule is continued by adding, and changing nothing else:
     #   --resume /kaggle/input/<session-1>/outputs/dav2-v1/last_full.pt
+    # Once the schedule has FINISHED (run 1 did: all 24 epochs, lr at the 3e-6
+    # floor), a plain --resume trains nothing, and raising --epochs alone would
+    # spike the LR — continuing needs a new --phase.  That is `phase2` below.
     #
     # --make_zip false is not optional: package_results.build_zip is
     # shutil.make_archive with no exclusions, so it duplicates GB of .pt/.onnx
@@ -218,6 +222,51 @@ PY
       --num_workers 2 --prefetch_factor 2 --compile_model false \
       --consistency_every 2 --w_consistency 1.0 \
       --epochs 24 --eval_every 1 --max_minutes 960 --session_minutes 480 \
+      --save_full_state true --make_zip false "$@"
+    ;;
+
+  phase2)
+    # Phase 2: 16 more epochs (e25-e40) from run 1's last_full.pt, with its own
+    # warmup + cosine at 0.3x run 1's peak LR, and india_labeled added to the
+    # mix (sampler weight 2 via config.py's default --sampler_weights).  gamus
+    # stays FIRST, so best.pt is still selected on the GAMUS val prefix and the
+    # number stays comparable with v1-v4; india_labeled's val split is scored
+    # and reported every epoch by build_aux_val_loaders, never selected on.
+    #
+    # Attach run 1's notebook output as an input.  Its last_full.pt is found
+    # under $KIN; DW_RESUME=<path> overrides the search.  train.py copies run
+    # 1's best.pt into $OUT if phase 2 never beats it.
+    #
+    # Re-running this exact command after a crash, with DW_RESUME pointing at
+    # the PHASE-2 last_full.pt, continues phase 2 instead of restarting it: the
+    # checkpoint records the phase id, start epoch and phase clock.
+    #
+    # Budget: 16 x (~16.6 min train + ~1 min India eval) ~= 280 min of
+    # training; + ~40 min val finals + ~85 min gamus/test (2861 tiles plain +
+    # TTA, 400 sliding) + setup ~= 7 h, well inside Kaggle's 12 h.
+    RESUME="${DW_RESUME:-}"
+    if [ -z "$RESUME" ]; then
+      CANDS="$(find -L "$KIN" -maxdepth 8 -name last_full.pt 2>/dev/null | sort)"
+      NC="$(printf '%s' "$CANDS" | grep -c . || true)"
+      if [ "$NC" -ne 1 ]; then
+        echo "phase2: expected exactly one last_full.pt under $KIN, found $NC:"
+        if [ -n "$CANDS" ]; then printf '%s\n' "$CANDS" | sed 's/^/  /'; fi
+        echo "attach run 1's notebook output, or set DW_RESUME=<path>/last_full.pt"
+        exit 1
+      fi
+      RESUME="$CANDS"
+    fi
+    echo "phase2: resuming from $RESUME"
+    torchrun --standalone --nnodes=1 --nproc_per_node="$NPROC" train.py \
+      --data_root "$DATA" --output_dir "$OUT" \
+      --datasets gamus,synrs3d_g05,synrs3d_g1,india_labeled \
+      --amp_dtype fp16 --grad_checkpoint_encoder false \
+      --batch_size 6 --grad_accum 2 --eval_batch_mult 4 \
+      --num_workers 2 --prefetch_factor 2 --compile_model false \
+      --consistency_every 2 --w_consistency 1.0 \
+      --resume "$RESUME" --phase 2 --phase_lr_mult 0.3 --phase_warmup_frac 0.05 \
+      --epochs 40 --eval_every 1 --max_minutes 480 --session_minutes 480 \
+      --test_sources gamus:test \
       --save_full_state true --make_zip false "$@"
     ;;
 
@@ -246,6 +295,6 @@ PY
     ;;
 
   *)
-    echo "usage: bash run_kaggle.sh {check|prepare|link|smoke|train|finalize|onnx|report} [flags]"
+    echo "usage: bash run_kaggle.sh {check|prepare|link|smoke|train|phase2|finalize|onnx|report} [flags]"
     exit 1;;
 esac

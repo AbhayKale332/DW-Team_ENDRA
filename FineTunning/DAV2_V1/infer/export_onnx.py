@@ -47,7 +47,7 @@ class _HeightOnly(torch.nn.Module):
         return out["fused"], out["seg"].argmax(1, keepdim=True).to(torch.int32)
 
 
-def export(ckpt: str, out_path: str, *, opset: int = 17, hf_token: str = "",
+def export(ckpt: str, out_path: str, *, opset: int = 18, hf_token: str = "",
            check: bool = True) -> Path:
     from infer.load import load_model
 
@@ -205,7 +205,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="export DepthWizard to ONNX")
     ap.add_argument("--ckpt", default="outputs/v4/best.pt")
     ap.add_argument("--out", default="")
-    ap.add_argument("--opset", type=int, default=17)
+    ap.add_argument("--opset", type=int, default=18)
     ap.add_argument("--hf-token", default="")
     ap.add_argument("--no-check", action="store_true")
     a = ap.parse_args()
