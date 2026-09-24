@@ -16,7 +16,18 @@ store is shared (`dwdata/packed.py` is byte-identical across the two trees).
 
 The protocol mirrors v4's `test_gamus_test_*` exactly — all tiles centre-crop
 plain + TTA, sliding window + TTA over the first `--sliding_tiles` — so the two
-runs' numbers sit in the same table.
+runs' numbers sit in the same table.  Two things are needed on top of the v3
+config for that to hold:
+
+  * `--tta_scales 1.0,1.25`.  v3 trained with `tta_scales=(1.0,)` and
+    `_restore_arch` would carry that over; v4 and DAV2 score TTA at (1.0, 1.25).
+    `parse_config` skips tuples, so this is the only way to set it.
+  * `per_landscape_metrics` is forced on, so the output carries the same
+    `per_landscape` breakdown v4/DAV2's metrics.json do.
+
+The same script also scores v4's secondary val sets (`dfc23_g050/val`,
+`india_labeled/val`: `--tiles 400 --sliding_tiles 0 --skip_tta`, i.e. the
+400-tile prefix, centre-crop, plain — how `val_<source>` is computed in v4).
 """
 
 from __future__ import annotations
@@ -62,6 +73,9 @@ def _own_args(argv: list[str]) -> tuple[argparse.Namespace, list[str]]:
     p.add_argument("--out", default="outputs/v3_test")
     p.add_argument("--skip_plain", action="store_true")
     p.add_argument("--skip_tta", action="store_true")
+    p.add_argument("--tta_scales", default="",
+                   help="comma list, e.g. 1.0,1.25 (v4/DAV2's); empty keeps the "
+                        "run config's")
     return p.parse_known_args(argv)
 
 
@@ -92,6 +106,10 @@ def main() -> None:
     _restore_arch(cfg, a.run_config, rest)
     cfg.hf_token = resolve_hf_token(cfg)
     cfg.gpu_augment = False        # the eval path normalises on the host
+    cfg.per_landscape_metrics = True
+    if a.tta_scales:
+        cfg.tta_scales = tuple(float(x) for x in a.tta_scales.split(",") if x.strip())
+    print(f"[cfg] tta_scales={tuple(cfg.tta_scales)}")
 
     out_dir = Path(a.out)
     out_dir.mkdir(parents=True, exist_ok=True)

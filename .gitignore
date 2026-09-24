@@ -4,6 +4,7 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+Research-Paper/
 # C extensions
 *.so
 

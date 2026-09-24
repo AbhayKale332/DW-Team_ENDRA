@@ -38,6 +38,11 @@ SEG_IGNORE_INDEX = 7
 # Per-height-stratum edges (m) for the stratified / balanced RMSE table.
 HEIGHT_STRATA_M: tuple[float, ...] = (0.0, 2.0, 5.0, 10.0, 20.0, 1e9)
 
+# v4's per-tile landscape classes (eval/landscape.py, copied unchanged from
+# V4_Kaggle).  v3 never trained with these; they exist so `eval_test.py` can put
+# v3 in the same table as v4 and DAV2, whose metrics carry `per_landscape`.
+LANDSCAPE_NAMES: tuple[str, ...] = ("urban", "sparse", "hilly", "forested")
+
 
 @dataclass
 class Config:
@@ -151,6 +156,9 @@ class Config:
     tta_scales: tuple = (1.0,)              # dihedral only by default; add 1.25 for +scale
     final_sliding_eval: bool = True         # full-tile sliding-window eval at the end
     per_class_metrics: bool = True
+    # Off by default so v3's own training eval is unchanged; eval_test.py turns
+    # it on to match v4/DAV2's metrics.json.
+    per_landscape_metrics: bool = False
     dump_class_stats: bool = True
     class_names: tuple = CLASS_NAMES
     output_dir: str = _DEFAULT_OUTPUT_DIR

@@ -81,9 +81,14 @@ def test_scores_a_held_out_store(test_store, monkeypatch, capsys):
     _run(["--ckpt", str(ck), "--run_config", str(conf),
           "--data_root", str(test_store / "data"), "--source", "gamus",
           "--split", "test", "--sliding_tiles", "2", "--num_workers", "0",
-          "--batch_size", "2", "--out", str(out)], monkeypatch)
+          "--batch_size", "2", "--tta_scales", "1.0,1.5",
+          "--out", str(out)], monkeypatch)
 
     m = json.loads((out / "test_metrics.json").read_text())
+    # The override wins over the (1.0,) the run config carries.  (1.5, not
+    # v4's 1.25: on this 64 px tile 1.25 is a 5-token grid, which v3's DPT
+    # cannot fuse; the real 512 px tile goes to 640 px = 40 tokens.)
+    assert m["config"]["tta_scales"] == [1.0, 1.5]
     for k in ("test_gamus_test_plain", "test_gamus_test_tta",
               "test_gamus_test_sliding_tta"):
         assert m[k]["global"]["n"] > 0, k
@@ -91,6 +96,8 @@ def test_scores_a_held_out_store(test_store, monkeypatch, capsys):
         # Every breakdown the deck quotes must survive the trip to JSON.
         assert m[k]["balanced_rmse_m"] is not None
         assert "bias_m" in m[k]["tall_gt15m"]
+        # ...and the landscape table v4/DAV2's metrics.json carry.
+        assert sum(v["tiles"] for v in m[k]["per_landscape"].values()) > 0, k
     assert m["tiles_scored"] == 4
     # The store was written at 128 px; the centre-crop path uses cfg.tile_size.
     assert m["config"]["tile_size"] == 64

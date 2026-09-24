@@ -30,8 +30,10 @@ def sliding_eval(model, full_ds, cfg, spec, device, *, tta: bool = False,
         height, _ = predict_scene(model, rgb, gsd, spec, device, tta=tta,
                                   tta_scales=tuple(cfg.tta_scales), amp_dtype=amp_dt,
                                   overlap=0.25, batch_tiles=max(1, cfg.batch_size // 2))
-        ev.add(torch.from_numpy(height).to(device),
-               s["target"].to(device), s["valid"].to(device), s["cls"].to(device))
+        pred_t = torch.from_numpy(height).to(device)
+        tgt_t, val_t = s["target"].to(device), s["valid"].to(device)
+        ev.add(pred_t, tgt_t, val_t, s["cls"].to(device))
+        ev.add_tiles(pred_t.unsqueeze(0), tgt_t.unsqueeze(0), val_t.unsqueeze(0), gsd)
         if log_every and (i + 1) % log_every == 0:
             print(f"  [sliding] {i + 1}/{n}", flush=True)
     return ev.result(tta)
