@@ -1,0 +1,21 @@
+{
+  "encoder_model_id": "depth-anything/Depth-Anything-V2-Base-hf",
+  "mean": [
+    0.485,
+    0.456,
+    0.406
+  ],
+  "std": [
+    0.229,
+    0.224,
+    0.225
+  ],
+  "canonical_gsd_m": 0.5,
+  "tile_size": 518,
+  "patch": 14,
+  "radiometric_stretch": true,
+  "stretch_lo_pct": 2.0,
+  "stretch_hi_pct": 98.0,
+  "target": "nDSM_agl_metres",
+  "version": "dav2-v1"
+}
