@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import torch
 
-from config import HEIGHT_STRATA_M
+from config import HEIGHT_STRATA_M, LANDSCAPE_NAMES
 
 
 class MetricAccum:
@@ -74,6 +74,40 @@ class Evaluator:
         self.strata = [MetricAccum() for _ in range(len(HEIGHT_STRATA_M) - 1)]
         self.tall = MetricAccum()
         self.flat = MetricAccum()
+        self.land = {k: MetricAccum() for k in LANDSCAPE_NAMES}
+        self.land_tiles = {k: 0 for k in LANDSCAPE_NAMES}
+        self.land_desc: list[dict] = []
+
+    @torch.no_grad()
+    def add_tiles(self, pred, target, valid, gsd_m=1.0):
+        """Per-tile landscape breakdown.  `pred/target/valid` are (B, [1,] H, W).
+
+        Verbatim from V4_Kaggle/eval/metrics.py: `classify` is numpy, so the GT
+        and its mask come back to the host once per batch.
+        """
+        if not getattr(self.cfg, "per_landscape_metrics", False):
+            return
+        from eval.landscape import classify
+
+        p = pred if pred.dim() == 3 else pred[:, 0]
+        t = target if target.dim() == 3 else target[:, 0]
+        v = valid if valid.dim() == 3 else valid[:, 0]
+        t_np = t.detach().to("cpu", torch.float32).numpy()
+        v_np = v.detach().to("cpu", torch.bool).numpy()
+        if torch.is_tensor(gsd_m):
+            g_np = gsd_m.detach().to("cpu", torch.float32).reshape(-1).numpy()
+        else:
+            g_np = None
+        for i in range(t_np.shape[0]):
+            if not v_np[i].any():                       # host-side, free
+                continue
+            g = float(g_np[i % len(g_np)]) if g_np is not None else float(gsd_m)
+            name, desc = classify(t_np[i], v_np[i], g)
+            vi = v[i].bool()
+            self.land[name].update(p[i][vi], t[i][vi])
+            self.land_tiles[name] += 1
+            if len(self.land_desc) < 64:
+                self.land_desc.append({"landscape": name, **desc})
 
     @torch.no_grad()
     def add(self, pred, target, valid, cls=None):
@@ -127,6 +161,16 @@ class Evaluator:
                         "mean_gt_height_m": self.cls_h[i] / max(1, self.cls_px[i]),
                     } for i in self.cls if self.cls_px[i]
                 }
+        if getattr(self.cfg, "per_landscape_metrics", False) and any(
+                a.n for a in self.land.values()):
+            per = {k: a.result() for k, a in self.land.items() if a.n > 0}
+            for k in per:
+                per[k]["tiles"] = self.land_tiles[k]
+            out["per_landscape"] = per
+            r = [v["rmse_m"] for v in per.values()]
+            out["landscape_rmse_spread_m"] = max(r) - min(r) if len(r) > 1 else 0.0
+            out["landscape_worst"] = max(per, key=lambda k: per[k]["rmse_m"])
+            out["landscape_descriptors"] = self.land_desc
         return out
 
 
@@ -164,13 +208,19 @@ def evaluate(model, loader, cfg, device, use_tta: bool = False,
             pred = pred.float()
         cls = batch["cls"].to(device, non_blocking=True).long().unsqueeze(1)
         ev.add(pred, tgt, val, cls)
+        ev.add_tiles(pred, tgt, val, batch.get("gsd_m", 1.0))
     return ev.result(use_tta)
 
 
 def format_line(m: dict) -> str:
     g = m["global"]
     tall, flat = m.get("tall_gt15m", {}), m.get("flat_lt1m", {})
-    return (f"RMSE={g['rmse_m']:.3f} MAE={g['mae_m']:.3f} r={g['pearson_r']:.3f} "
+    line = (f"RMSE={g['rmse_m']:.3f} MAE={g['mae_m']:.3f} r={g['pearson_r']:.3f} "
             f"d1={g['delta1']:.3f} bal={m['balanced_rmse_m']:.3f} "
             f"tall_bias={tall.get('bias_m', float('nan')):+.2f} "
             f"flat_bias={flat.get('bias_m', float('nan')):+.2f}")
+    if m.get("per_landscape"):
+        land = " ".join(f"{k[:4]}={v['rmse_m']:.2f}"
+                        for k, v in sorted(m["per_landscape"].items()))
+        line += f"  [{land}]"
+    return line

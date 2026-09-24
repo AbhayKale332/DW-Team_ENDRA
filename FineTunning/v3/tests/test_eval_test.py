@@ -81,9 +81,14 @@ def test_scores_a_held_out_store(test_store, monkeypatch, capsys):
     _run(["--ckpt", str(ck), "--run_config", str(conf),
           "--data_root", str(test_store / "data"), "--source", "gamus",
           "--split", "test", "--sliding_tiles", "2", "--num_workers", "0",
-          "--batch_size", "2", "--out", str(out)], monkeypatch)
+          "--batch_size", "2", "--tta_scales", "1.0,1.5",
+          "--out", str(out)], monkeypatch)
 
     m = json.loads((out / "test_metrics.json").read_text())
+    # The override wins over the (1.0,) the run config carries.  (1.5, not
+    # v4's 1.25: on this 64 px tile 1.25 is a 5-token grid, which v3's DPT
+    # cannot fuse; the real 512 px tile goes to 640 px = 40 tokens.)
+    assert m["config"]["tta_scales"] == [1.0, 1.5]
     for k in ("test_gamus_test_plain", "test_gamus_test_tta",
               "test_gamus_test_sliding_tta"):
         assert m[k]["global"]["n"] > 0, k
@@ -91,6 +96,8 @@ def test_scores_a_held_out_store(test_store, monkeypatch, capsys):
         # Every breakdown the deck quotes must survive the trip to JSON.
         assert m[k]["balanced_rmse_m"] is not None
         assert "bias_m" in m[k]["tall_gt15m"]
+        # ...and the landscape table v4/DAV2's metrics.json carry.
+        assert sum(v["tiles"] for v in m[k]["per_landscape"].values()) > 0, k
     assert m["tiles_scored"] == 4
     # The store was written at 128 px; the centre-crop path uses cfg.tile_size.
     assert m["config"]["tile_size"] == 64
@@ -113,3 +120,59 @@ def test_refuses_a_checkpoint_that_does_not_fit(test_store, monkeypatch):
               "--data_root", str(test_store / "data"), "--sliding_tiles", "0",
               "--num_workers", "0", "--batch_size", "2",
               "--out", str(test_store / "out2")], monkeypatch)
+
+
+def test_fit_keys_bridges_the_dinov3_layout_change():
+    """The v3 best.pt (transformers 5.x) saved blocks as encoder.model.model.layer.*;
+    Kaggle's 4.x builds encoder.model.layer.*, and all 408 came back missing."""
+    from eval_test import fit_keys
+
+    old = {"encoder.model.embeddings.cls_token": 0,
+           "encoder.model.model.layer.0.norm1.weight": 1,
+           "encoder.model.norm.weight": 2, "head.w": 3}
+    new = {"encoder.model.embeddings.cls_token", "encoder.model.layer.0.norm1.weight",
+           "encoder.model.norm.weight", "head.w"}
+    sd, n = fit_keys(old, new)
+    assert (n, set(sd), sd["encoder.model.layer.0.norm1.weight"]) == (1, new, 1)
+    # ...and back, for a checkpoint saved under the newer layout.
+    sd, n = fit_keys({"encoder.model.layer.3.mlp.w": 5},
+                     {"encoder.model.model.layer.3.mlp.w"})
+    assert (n, sd) == (1, {"encoder.model.model.layer.3.mlp.w": 5})
+    # A name the model does not have is left alone for the missing-key guard.
+    sd, n = fit_keys({"encoder.model.model.layer.0.x": 1}, {"decoder.y"})
+    assert (n, sd) == (0, {"encoder.model.model.layer.0.x": 1})
+
+
+def test_replicated_splits_the_batch_and_keeps_autocast():
+    """Two-GPU eval must score exactly what one GPU does.  Autocast and grad
+    mode are thread-local, so the worker threads have to re-enter both — a
+    replica silently running fp32 (or building a graph) is the failure."""
+    from eval_test import Replicated
+
+    class Net(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv = torch.nn.Conv2d(3, 2, 1)
+            self.seen = []
+
+        def forward(self, x):
+            self.seen.append((torch.get_autocast_dtype("cpu"),
+                              torch.is_autocast_enabled("cpu"), torch.is_grad_enabled()))
+            y = self.conv(x)
+            return {"fused": y[:, :1], "seg": y, "b_logits": y}
+
+    net = Net().eval()
+    rep = Replicated(net, [torch.device("cpu")] * 2)
+    x = torch.randn(5, 3, 8, 8)
+    with torch.no_grad():
+        ref = net(x)
+        out = rep(x)
+        assert set(out) == {"fused", "seg"}      # b_logits never comes back
+        for k in out:
+            assert torch.allclose(out[k], ref[k]), k
+        assert rep(x[:1])["fused"].shape[0] == 1  # batch smaller than devices
+        with torch.autocast("cpu", dtype=torch.bfloat16):
+            rep(x)
+    seen = rep.replicas[0].seen + rep.replicas[1].seen
+    assert (torch.bfloat16, True, False) in seen
+    assert all(not grad for *_, grad in seen)
