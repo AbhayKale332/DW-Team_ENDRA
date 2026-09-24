@@ -72,11 +72,9 @@ KEPT = {
 FIXES = {
     # v4's val was `first 400 of 859, prefix not sample` and came out 87.5 %
     # urban against a 57.6 % urban test set. best.pt was selected on that.
-    # A prefix is not a sample; loaders.py:244 says so in the log line it
-    # prints and then does it anyway.
-    #   >> THIS FLAG DOES NOT EXIST YET. See README "val split" -- loaders.py
-    #   >> needs a seeded permutation before this run is worth launching.
-    # "val_sample_seed": "42",
+    # v5 loaders.py draws a seeded random 400 instead (`sample_indices`), and
+    # the log line reads "random 400 of 859, seed 42".
+    "val_sample_seed": "42",
     #
     # opset 17 conversion failed (`axes_input_to_attribute.h:55`) and the
     # exporter silently kept 18, while depthwizard.onnx.json recorded 17.
@@ -99,7 +97,59 @@ INFRA = {
     "make_zip": "false",
 }
 
-FLAGS = {**INFRA, **KEPT, **REVERTS, **FIXES}
+# --- the v5 additions (plan Steps 1-3 and 5) --------------------------------
+V5 = {
+    # Its own results directory: v4m's best.pt / metrics.json stay untouched.
+    "output_dir": "/results/v5",
+    # Step 2: full-resolution RGB stem + convex 2x upsampling.  Zero-initialised,
+    # so epoch 0 computes what v4 did; `detail_branch false` is the ablation.
+    "detail_branch": "true",
+    "detail_dim": "64",
+    # Step 1: DFC23 / India nDSMs are ~2 m stereo on 0.5 m pixels.  Scored only
+    # after 4x4 average pooling, and kept out of the normal / flatness / bin
+    # terms -- the fix for v4's blobs.  `coarse_pool` and the vegetation pair
+    # below are Step 0 outputs: run tools/audit_labels.py and pass its
+    # audit.json through `with_audit()` rather than editing these by hand.
+    "coarse_label_sources": "dfc23,india_labeled",
+    "coarse_pool": "4",
+    "w_coarse": "1.0",
+    "coarse_mask_veg": "false",          # provisional until the audit says trees sit at ~0 m
+    "coarse_veg_exg": "0.05",
+    # Step 1: the Cartosat look.  MERGED = 0.6 m luminance + 1.6 m colour
+    # (1.6/0.6 = 2.67, bracketed); 10 % grayscale for PAN-only uploads.
+    "aug_pansharp_p": "0.5",
+    "aug_pansharp_lo": "2.0",
+    "aug_pansharp_hi": "3.3",
+    "aug_gray_p": "0.1",
+}
+
+FLAGS = {**INFRA, **KEPT, **REVERTS, **FIXES, **V5}
+
+# The Step 0 outputs, and only those, may be overridden from an audit.
+AUDIT_KEYS = ("coarse_pool", "coarse_mask_veg", "coarse_veg_exg",
+              "aug_pansharp_lo", "aug_pansharp_hi")
+
+
+def with_audit(path: str | None = None, flags: dict | None = None) -> dict:
+    """FLAGS with the Step 0 values from `tools/audit_labels.py`'s audit.json.
+
+    Any other key in the audit is ignored: the audit measures labels and
+    radiometry, it does not get to change the schedule or the datasets.
+    """
+    import json as _json
+    import os as _os
+    from pathlib import Path as _P
+
+    out = dict(FLAGS if flags is None else flags)
+    path = path or _os.environ.get("DW_AUDIT", "")
+    if not path:
+        return out
+    rep = _json.loads(_P(path).read_text())
+    sug = rep.get("flags", rep)
+    for k in AUDIT_KEYS:
+        if k in sug:
+            out[k] = str(sug[k])
+    return out
 
 # Deliberately absent, and why:
 #   w_consistency / unlabeled_source / teacher_ema / consistency_*
@@ -112,6 +162,25 @@ FLAGS = {**INFRA, **KEPT, **REVERTS, **FIXES}
 #     never ran is worse than no config.
 
 if __name__ == "__main__":
-    import json, sys
-    sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent))
-    print(json.dumps(FLAGS, indent=2))
+    import json
+    import sys
+    from dataclasses import fields
+    from pathlib import Path
+
+    # Every key must be a real v5 config field: parse_config ends in
+    # parse_known_args, so a typo is silently dropped and the run uses the
+    # default you thought you had overridden.
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "v5"))
+    from config import Config, parse_config
+
+    names = {f.name for f in fields(Config)}
+    bad = sorted(set(FLAGS) - names)
+    if bad:
+        raise SystemExit(f"not v5 config fields: {bad}")
+    f = with_audit(sys.argv[1] if len(sys.argv) > 1 else None)
+    cfg = parse_config([x for k, v in f.items() for x in (f"--{k}", v)]
+                       + ["--data_root", "/scratch/dwdata"])
+    print(json.dumps(f, indent=2))
+    print(f"[ok] {len(f)} flags parse; detail_branch={cfg.detail_branch} "
+          f"coarse={cfg.coarse_label_sources!r}@{cfg.coarse_pool} "
+          f"val_sample_seed={cfg.val_sample_seed}")
