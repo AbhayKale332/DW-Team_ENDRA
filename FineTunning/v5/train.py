@@ -309,8 +309,9 @@ def main() -> None:
     else:
         print(f"[ddp] rank {rank}/{world_size} up on cuda:{local_rank}",
               file=sys.__stdout__, flush=True)
-        _null = open(os.devnull, "w")
-        sys.stdout = sys.stderr = _null
+        # stdout only: stderr stays live so a rank-1 crash prints its traceback
+        # (with both silenced, torchrun reported "exitcode 1" and nothing else).
+        sys.stdout = open(os.devnull, "w")
 
     cfg.hf_token = resolve_hf_token(cfg)
     # Identical on every rank: model init must match before DDP's constructor
