@@ -188,11 +188,11 @@ def run_job(job_id: str, image_path: Path, opts: dict) -> None:
 
         # the same call the CLI and the final evaluation make
         with _state["lock"]:
-            height, seg = predict_scene(
+            height, seg, std = predict_scene(
                 _model(), rgb, meta.gsd_m, spec, device,
                 tta=bool(opts.get("tta")), amp_dtype=amp,
                 overlap=0.25, batch_tiles=int(opts.get("batch_tiles") or 4),
-                want_seg=True, progress=prog, valid=meta.valid)
+                want_seg=True, progress=prog, valid=meta.valid, return_std=True)
 
         dsm_abs, dtm, extra, datum = None, None, {}, ""
         if absolute and meta.georeferenced:
@@ -209,7 +209,7 @@ def run_job(job_id: str, image_path: Path, opts: dict) -> None:
         job.update(stage="writing", progress=0.93)
         payload = write_outputs(out_dir, Path(image_path).stem, rgb, height, meta,
                                 spec, dsm_abs, extra, seg=seg, dtm=dtm,
-                                mesh=bool(opts.get("mesh", True)), datum=datum)
+                                mesh=bool(opts.get("mesh", True)), datum=datum, std=std)
         job.update(stage="done", progress=1.0, result=payload,
                    files=sorted(p.name for p in out_dir.iterdir()),
                    finished=time.time())
@@ -299,11 +299,59 @@ def create_app():
                         "filename": v.get("filename")} for k, v in _jobs.items()),
                       key=lambda r: -r["started"])
 
-    @app.get("/api/result/{job_id}/{name}")
+    def _job_dir(job_id: str) -> Path:
+        d = (JOBS / job_id).resolve()
+        if d.parent != JOBS.resolve() or not (d / "meta.json").is_file():
+            raise HTTPException(404, "unknown job or no result yet")
+        return d
+
+    @app.post("/api/reference/{job_id}")
+    async def reference(job_id: str, file: UploadFile = File(...),
+                        kind: str = Form("auto"), datum: str = Form("")):
+        """Validate a finished job against an uploaded reference DSM / nDSM
+        (any GeoTIFF): reprojected onto the prediction grid, datum-converted,
+        scored per pixel, on confident pixels and per 30 m cell."""
+        from serve.validate import validate_reference
+
+        d = _job_dir(job_id)
+        if kind not in ("auto", "dsm", "ndsm"):
+            raise HTTPException(422, "kind must be auto, dsm or ndsm")
+        if datum and datum not in ("EGM96", "EGM2008", "WGS84"):
+            raise HTTPException(422, "datum must be EGM96, EGM2008 or WGS84")
+        dst = d / f"reference{Path(file.filename or 'ref.tif').suffix or '.tif'}"
+        with open(dst, "wb") as fh:
+            shutil.copyfileobj(file.file, fh)
+        try:
+            return validate_reference(d, str(dst), kind=kind, ref_datum=datum)
+        except (ValueError, OSError) as e:
+            raise HTTPException(422, str(e)) from e
+        except Exception as e:  # noqa: BLE001  rasterio errors are not ValueErrors
+            raise HTTPException(422, f"could not read the reference: {e}") from e
+
+    @app.post("/api/aoi/{job_id}")
+    def aoi(job_id: str, row: int = Form(...), col: int = Form(...),
+            h: int = Form(...), w: int = Form(...), max_px: int = Form(2048)):
+        """A full-resolution window (given in the job's viewer pixels) as its own
+        product directory; the viewer then loads `base` like any result."""
+        from serve.validate import extract_aoi
+
+        d = _job_dir(job_id)
+        try:
+            with _state["lock"]:
+                r = extract_aoi(d, row, col, h, w, max_px=min(max(64, max_px), 4096))
+        except (ValueError, OSError) as e:
+            raise HTTPException(422, str(e)) from e
+        return {"base": f"/api/result/{job_id}/{r['dir']}", "shape": r["shape"],
+                "decimation": r["decimation"], "window_full_res": r["window_full_res"]}
+
+    @app.get("/api/result/{job_id}/{name:path}")
     def result_file(job_id: str, name: str):
+        root = JOBS.resolve()
         p = (JOBS / job_id / name).resolve()
         # containment check: a job id or name from a URL must never escape JOBS
-        if not str(p).startswith(str(JOBS.resolve())) or not p.is_file():
+        # (`name` may hold an AOI subdirectory; a string-prefix test would also
+        # accept a sibling such as `jobs2/`)
+        if not p.is_relative_to(root) or p == root or not p.is_file():
             raise HTTPException(404, "not found")
         return FileResponse(p)
 

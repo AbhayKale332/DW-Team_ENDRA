@@ -38,9 +38,14 @@ def predict_canonical(
     model, rgb_canon_u8: np.ndarray, spec: PreprocSpec, device,
     *, tta: bool = False, tta_scales=(1.0,), amp_dtype=None,
     overlap: float = 0.25, batch_tiles: int = 4, want_seg: bool = False,
-    progress=None,
+    progress=None, want_std: bool = False,
 ):
-    """Sliding-window prediction over an image already at the canonical GSD."""
+    """Sliding-window prediction over an image already at the canonical GSD.
+
+    `want_std` (v5): also blend Head B's per-pixel `b_std` (the spread of its bin
+    distribution, metres) the same way as the height, and return it as a third
+    value — `None` when the model does not emit it (the ONNX graph, v3).
+    """
     from models.tta import tta_predict
 
     S = spec.tile_size
@@ -57,6 +62,7 @@ def predict_canonical(
     acc = np.zeros((Hp, Wp), np.float32)
     wsum = np.zeros((Hp, Wp), np.float32)
     seg_acc = None
+    std_acc = None
     coords = [(y, x) for y in ys for x in xs]
     total = len(coords)
 
@@ -66,18 +72,26 @@ def predict_canonical(
             spec.normalise(rgb_canon_u8[y:y + S, x:x + S]) for y, x in chunk
         ])
         t = torch.from_numpy(batch).to(device, non_blocking=True)
+        std = None
         if tta:
             pred = tta_predict(model, t, tuple(tta_scales), "fused",
                                patch=spec.patch, amp_dtype=amp_dtype)
             seg = None
-            if want_seg:
+            if want_seg or want_std:
                 with _autocast(device, amp_dtype):
-                    seg = model(t)["seg"]
+                    out = model(t)
+                seg = out["seg"] if want_seg else None
+                std = out.get("b_std") if want_std else None
         else:
             with _autocast(device, amp_dtype):
                 out = model(t)
             pred, seg = out["fused"], (out["seg"] if want_seg else None)
+            std = out.get("b_std") if want_std else None
         pred = pred.float().cpu().numpy()[:, 0]
+        if std is not None:
+            std = std.float().cpu().numpy()[:, 0]
+            if std_acc is None:
+                std_acc = np.zeros((Hp, Wp), np.float32)
         if seg is not None:
             seg = seg.float().argmax(1).cpu().numpy()
             if seg_acc is None:
@@ -86,6 +100,8 @@ def predict_canonical(
         for i, (y, x) in enumerate(chunk):
             acc[y:y + S, x:x + S] += pred[i] * win
             wsum[y:y + S, x:x + S] += win
+            if std is not None:
+                std_acc[y:y + S, x:x + S] += std[i] * win
             if seg is not None:
                 seg_acc[y:y + S, x:x + S] = seg[i]
         if progress:
@@ -95,6 +111,10 @@ def predict_canonical(
     height = height[:H, :W]
     if seg_acc is not None:
         seg_acc = seg_acc[:H, :W]
+    if want_std:
+        std_out = None if std_acc is None else \
+            (std_acc / np.maximum(wsum, 1e-6))[:H, :W].astype(np.float32)
+        return height.astype(np.float32), seg_acc, std_out
     return height.astype(np.float32), seg_acc
 
 
@@ -130,12 +150,14 @@ def predict_scene(
     model, rgb_u8: np.ndarray, src_gsd_m: float, spec: PreprocSpec, device,
     *, tta: bool = False, tta_scales=(1.0,), amp_dtype=None, overlap: float = 0.25,
     batch_tiles: int = 4, want_seg: bool = False, progress=None,
-    valid: np.ndarray | None = None,
+    valid: np.ndarray | None = None, return_std: bool = False,
 ):
     """RGB at any GSD -> nDSM in metres on the input grid (+ optional class map).
 
     `valid` (v5): NoData pixels are excluded from the stretch, painted with the
     median colour before the network sees them, and come back as NaN.
+    `return_std` (v5): return `(height, seg, std)`, std = Head B's per-pixel
+    spread in metres on the same grid, or None if the model has no Head B output.
     """
     H, W = rgb_u8.shape[:2]
     rgb_s = stretch_scene(rgb_u8, spec, valid=valid)
@@ -143,15 +165,23 @@ def predict_scene(
     canon_hw = gsd_to_shape(H, W, src_gsd_m, spec.canonical_gsd_m)
     rgb_c = resize(rgb_s, canon_hw, "bilinear")
 
-    height_c, seg_c = predict_canonical(
+    res = predict_canonical(
         model, rgb_c, spec, device, tta=tta, tta_scales=tta_scales,
         amp_dtype=amp_dtype, overlap=overlap, batch_tiles=batch_tiles,
-        want_seg=want_seg, progress=progress,
+        want_seg=want_seg, progress=progress, want_std=return_std,
     )
+    height_c, seg_c = res[0], res[1]
     height = resize(height_c, (H, W), "bilinear").astype(np.float32)
     seg = resize(seg_c.astype(np.int32), (H, W), "nearest") if seg_c is not None else None
+    std = None
+    if return_std and res[2] is not None:
+        std = resize(res[2], (H, W), "bilinear").astype(np.float32)
     if valid is not None and not valid.all():
         height[~valid] = np.nan
+        if std is not None:
+            std[~valid] = np.nan
+    if return_std:
+        return height, seg, std
     return height, seg
 
 
@@ -215,7 +245,9 @@ def predict_scene_windowed(
 
     ndsm_path = out_dir / "ndsm_m.tif"
     seg_path = out_dir / "seg.tif"
-    ov_h = []
+    std_path = out_dir / "ndsm_std_m.tif"       # opened on the first band that has one
+    ds_std = None
+    ov_h, ov_std = [], []
     stats_n, stats_sum = 0, 0.0
     lo_h, hi_h = np.inf, -np.inf
     below1 = 0
@@ -234,15 +266,23 @@ def predict_scene_windowed(
             canon_hw = gsd_to_shape(hh, ww, g, spec.canonical_gsd_m)
             rgb_c = resize(rgb, canon_hw, "bilinear")
             del rgb
-            h_c, s_c = predict_canonical(
+            h_c, s_c, sd_c = predict_canonical(
                 model, rgb_c, spec, device, tta=tta, tta_scales=tta_scales,
                 amp_dtype=amp_dtype, overlap=overlap, batch_tiles=batch_tiles,
-                want_seg=want_seg)
+                want_seg=want_seg, want_std=True)
             del rgb_c
             h = resize(h_c, (hh, ww), "bilinear").astype(np.float32)[r0 - a0:r1 - a0]
             v = valid[r0 - a0:r1 - a0]
             h[~v] = np.nan
             dn.write(h, 1, window=Window(0, r0, W, r1 - r0))
+            if sd_c is not None:
+                sd = resize(sd_c, (hh, ww), "bilinear").astype(np.float32)[r0 - a0:r1 - a0]
+                sd[~v] = np.nan
+                if ds_std is None:
+                    ds_std = rasterio.open(std_path, "w",
+                                           **_geotiff_profile(source, "float32", np.nan))
+                ds_std.write(sd, 1, window=Window(0, r0, W, r1 - r0))
+                ov_std.append(sd[(-r0) % ov_step::ov_step, ::ov_step])
             if want_seg:
                 s = resize(s_c.astype(np.int32), (hh, ww), "nearest")[r0 - a0:r1 - a0]
                 s = np.where(v, s, 255).astype(np.uint8)
@@ -262,9 +302,15 @@ def predict_scene_windowed(
             if progress:
                 progress(bi + 1, len(bands))
 
+    if ds_std is not None:
+        ds_std.close()
     height_ov = np.concatenate(ov_h, 0)[:ov_rgb.shape[0], :ov_rgb.shape[1]]
+    std_ov = (np.concatenate(ov_std, 0)[:ov_rgb.shape[0], :ov_rgb.shape[1]]
+              if ov_std and len(ov_std) == len(ov_h) else None)
     out = {
         "ndsm_path": str(ndsm_path), "seg_path": str(seg_path) if want_seg else None,
+        "std_path": str(std_path) if ds_std is not None else None,
+        "overview_std": std_ov,
         "overview_step": ov_step, "overview_height": height_ov,
         "overview_rgb": ov_rgb_s, "overview_valid": ov_valid,
         "stats": {"height_min_m": lo_h if stats_n else None,

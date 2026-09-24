@@ -8,6 +8,19 @@
  * (shadow_img.png), and their agreement.  The sun sliders start at the product
  * metadata's sun (meta.sun) when there is one.
  *
+ * Also v5 (plan C2/C4/C5/C6):
+ *   * vertical walls — the mesh splits along height discontinuities and fills
+ *     the step with shaded vertical quads, instead of draping roof texture
+ *     over a sloped "wall" between a roof and the street;
+ *   * a confidence drape from Head B's spread (ndsm_std_m.npy) and metrics on
+ *     confident pixels next to all pixels;
+ *   * reference validation: gt_dsm_m.npy (absolute) or gt_ndsm_m.npy, and, when
+ *     served by serve/app.py, uploading any reference GeoTIFF — reprojected
+ *     and datum-converted server-side, scored per pixel and per 30 m cell;
+ *   * whole scene first, detail on demand: shift-drag a box on the 2-D map and
+ *     load that area at full resolution (a windowed 20k x 20k product is only
+ *     an overview in meta.json's arrays).
+ *
  * Loads a prediction directory written by `infer/predict.py`:
  *
  *     ndsm_m.npy   float32 (H, W), metres above ground   <- preferred, exact
@@ -15,6 +28,8 @@
  *     rgb.png      the optical image that produced it
  *     meta.json    the contract, the scene metadata, the diagnostics
  *     gt_ndsm_m.npy (optional) reference surface -> live metrics + error layer
+ *     gt_dsm_m.npy  (optional) the same, for an absolute reference DSM
+ *     ndsm_std_m.npy (optional) Head B's per-pixel spread -> confidence layer
  *
  * The .npy path exists because a 16-bit PNG drawn into a 2-D canvas is
  * down-converted to 8 bits by the browser, which would quantise a 0-60 m range
@@ -94,12 +109,19 @@ const S = {
   surfaces: {},           // { ndsm, dsm, dtm } Float32Arrays, whichever exist
   surface: 'ndsm',
   shadowImg: null,        // Uint8Array mask from shadow_img.png, or null
-  gt: null,               // Float32Array or null (a reference nDSM)
+  gt: null,               // Float32Array or null (a reference surface)
+  gtKind: 'ndsm',         // which of our surfaces the reference is compared to
+  std: null,              // Float32Array or null (Head B's spread, metres)
+  validation: null,       // server-side validation.json, if any
+  url: '',                // the URL the product was loaded from ('' = local files)
+  parentBase: '',         // the overview's URL while an AOI is shown
+  sel: null,              // {r0, c0, r1, c1} AOI selection on the 2-D map
   rgb: null,              // HTMLCanvasElement
   meta: null,
   hMin: 0, hMax: 1,
   probeA: null, probeB: null,
 };
+
 
 function decodeHeightFromPng(img, meta) {
   const c = document.createElement('canvas');
@@ -125,14 +147,28 @@ function statsOf(a) {
   return { min: lo, max: hi, mean: n ? sum / n : 0, n };
 }
 
-function compareToReference() {
+/** The surface a reference is compared to: ours of the same kind. */
+function refSurface() {
+  return S.surfaces[S.gtKind] || S.surfaces.ndsm || S.raw;
+}
+
+/** Head B's "confident" cut: meta.uncertainty's threshold (>= 1 m). */
+function confThreshold() {
+  const t = S.meta?.uncertainty?.confident_threshold_m;
+  return isFinite(t) ? t : 1.0;
+}
+
+function compareToReference(confidentOnly = false) {
   if (!S.gt) return null;
+  if (confidentOnly && !S.std) return null;
+  const thr = confThreshold();
   let se = 0, ae = 0, sd = 0, n = 0;
   let sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0;
-  const P = S.surfaces.ndsm || S.raw;
+  const P = refSurface();
   for (let i = 0; i < P.length; i++) {
     const p = P[i], t = S.gt[i];
     if (!isFinite(p) || !isFinite(t)) continue;
+    if (confidentOnly && !(S.std[i] <= thr)) continue;
     const d = p - t;
     se += d * d; ae += Math.abs(d); sd += d; n++;
     sx += p; sy += t; sxx += p * p; syy += t * t; sxy += p * t;
@@ -176,8 +212,21 @@ function layerCanvas(mode) {
       else rgb = c && m ? [250, 250, 250] : m ? [220, 50, 40] : c ? [40, 90, 230] : [70, 70, 70];
       d[i * 4] = rgb[0]; d[i * 4 + 1] = rgb[1]; d[i * 4 + 2] = rgb[2]; d[i * 4 + 3] = 255;
     }
+  } else if (mode === 'confidence' && S.std) {
+    // green = confident, yellow = at the threshold, red = 2x it and beyond
+    const thr = confThreshold();
+    for (let i = 0; i < S.std.length; i++) {
+      const v = S.std[i];
+      let rgb;
+      if (!isFinite(v)) rgb = [0, 0, 0];
+      else {
+        const t = clamp(v / (2 * thr), 0, 1);
+        rgb = t < 0.5 ? [60 + 390 * t, 190, 90 - 100 * t] : [255, 190 - 300 * (t - 0.5), 40];
+      }
+      d[i * 4] = rgb[0]; d[i * 4 + 1] = rgb[1]; d[i * 4 + 2] = rgb[2]; d[i * 4 + 3] = 255;
+    }
   } else if (mode === 'error' && S.gt) {
-    const P = S.surfaces.ndsm || S.raw;
+    const P = refSurface();
     let lim = 0;
     for (let i = 0; i < P.length; i++) {
       const e = Math.abs(P[i] - S.gt[i]);
@@ -189,10 +238,14 @@ function layerCanvas(mode) {
       d[i * 4] = r; d[i * 4 + 1] = gg; d[i * 4 + 2] = b; d[i * 4 + 3] = 255;
     }
   } else {
-    const src = mode === 'reference' && S.gt ? S.gt : S.height;
+    // the reference is drawn on the active surface's colour scale when it is
+    // the same kind, so equal colours mean equal heights
+    const ref = mode === 'reference' && S.gt;
+    const src = ref ? S.gt : S.height;
+    const off = ref ? S.base : 0;
     for (let i = 0; i < src.length; i++) {
-      const nd = !isFinite(S.raw[i]);
-      const [r, gg, b] = nd ? [0, 0, 0] : turbo((src[i] - S.hMin) / span);
+      const nd = ref ? !isFinite(src[i]) : !isFinite(S.raw[i]);
+      const [r, gg, b] = nd ? [0, 0, 0] : turbo((src[i] - off - S.hMin) / span);
       d[i * 4] = r; d[i * 4 + 1] = gg; d[i * 4 + 2] = b; d[i * 4 + 3] = 255;
     }
   }
@@ -334,6 +387,102 @@ function decimation() {
   return step;
 }
 
+/**
+ * The surface as a grid mesh, with vertical walls where the height jumps.
+ *
+ * A plain height-field mesh joins a roof vertex to the street vertex next to it
+ * with one sloped triangle, and drapes the roof's texture down that slope: the
+ * "melted building" look.  Here an edge between two grid vertices is *split*
+ * when their heights differ by more than the wall threshold.  A cell with a
+ * split edge is drawn as four quadrants, one per corner: corners joined by
+ * unsplit edges form a group sharing a centre height; each quadrant is flat
+ * towards its corner's side of a split edge; and every internal half-edge where
+ * the two sides disagree gets a vertical quad, shaded darker.  Split decisions
+ * are per *edge*, so the two cells sharing an edge always agree and the mesh
+ * stays watertight.  Cells without a split edge stay two triangles.
+ */
+function buildGeometry(step, gw, gh, spacing, thr) {
+  const W = S.W, H = S.H;
+  const hAt = (r, c) => S.height[Math.min(H - 1, r * step) * W + Math.min(W - 1, c * step)];
+  const pos = [], uv = [], col = [], idx = [];
+  const add = (x, y, z, shade) => {
+    pos.push(x, y, z);
+    uv.push((x / S.gsd + 0.5) / W, 1 - (z / S.gsd + 0.5) / H);
+    col.push(shade, shade, shade);
+    return pos.length / 3 - 1;
+  };
+  for (let r = 0; r < gh; r++) {
+    for (let c = 0; c < gw; c++) add(c * spacing, hAt(r, c), r * spacing, 1);
+  }
+  const V = (r, c) => r * gw + c;
+  let walls = 0;
+  const WALL = 0.62;
+  const useWalls = thr > 0;
+  for (let r = 0; r < gh - 1; r++) {
+    for (let c = 0; c < gw - 1; c++) {
+      // ring order, clockwise on screen: top-left, top-right, bottom-right, bottom-left
+      const rc = [[r, c], [r, c + 1], [r + 1, c + 1], [r + 1, c]];
+      const h = rc.map(([y, x]) => hAt(y, x));
+      const split = [0, 1, 2, 3].map((i) => useWalls && Math.abs(h[i] - h[(i + 1) % 4]) > thr);
+      if (!split.some(Boolean)) {
+        const [a, b, d, cc] = rc.map(([y, x]) => V(y, x));
+        idx.push(a, cc, b, b, cc, d);
+        continue;
+      }
+      walls++;
+      // groups: union over unsplit edges
+      const g = [0, 1, 2, 3];
+      const find = (i) => (g[i] === i ? i : (g[i] = find(g[i])));
+      for (let i = 0; i < 4; i++) if (!split[i]) g[find(i)] = find((i + 1) % 4);
+      const gsum = {}, gn = {};
+      for (let i = 0; i < 4; i++) {
+        const k = find(i);
+        gsum[k] = (gsum[k] || 0) + h[i]; gn[k] = (gn[k] || 0) + 1;
+      }
+      const cx = (c + 0.5) * spacing, cz = (r + 0.5) * spacing;
+      const centre = {};
+      for (const k in gsum) centre[k] = add(cx, gsum[k] / gn[k], cz, 1);
+      // edge i runs from ring[i] to ring[i+1]; its midpoint vertex per side
+      const mid = [];
+      for (let i = 0; i < 4; i++) {
+        const [y0, x0] = rc[i], [y1, x1] = rc[(i + 1) % 4];
+        const mx = ((x0 + x1) / 2) * spacing, mz = ((y0 + y1) / 2) * spacing;
+        if (split[i]) mid.push([add(mx, h[i], mz, 1), add(mx, h[(i + 1) % 4], mz, 1)]);
+        else { const v = add(mx, (h[i] + h[(i + 1) % 4]) / 2, mz, 1); mid.push([v, v]); }
+      }
+      // quadrant i: corner, mid of the previous edge (its end side), centre,
+      // mid of the next edge (its start side) — winding gives +y normals
+      for (let i = 0; i < 4; i++) {
+        const p = V(...rc[i]);
+        const mPrev = mid[(i + 3) % 4][1], mNext = mid[i][0], ctr = centre[find(i)];
+        idx.push(p, mPrev, ctr, p, ctr, mNext);
+      }
+      // walls on the internal half-edges (edge midpoint -> centre)
+      for (let i = 0; i < 4; i++) {
+        const j = (i + 1) % 4;
+        const cp = centre[find(i)], cq = centre[find(j)];
+        const mp = mid[i][0], mq = mid[i][1];
+        const yp0 = pos[mp * 3 + 1], yq0 = pos[mq * 3 + 1];
+        const yp1 = pos[cp * 3 + 1], yq1 = pos[cq * 3 + 1];
+        if (yp0 === yq0 && yp1 === yq1) continue;
+        const mx = pos[mp * 3], mz = pos[mp * 3 + 2];
+        const a = add(mx, yp0, mz, WALL), b = add(mx, yq0, mz, WALL);
+        const d = add(cx, yq1, cz, WALL), e = add(cx, yp1, cz, WALL);
+        idx.push(a, b, d, a, d, e);
+      }
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  const n = pos.length / 3;
+  geo.setIndex(n > 65535 ? new THREE.Uint32BufferAttribute(idx, 1)
+    : new THREE.Uint16BufferAttribute(idx, 1));
+  geo.computeVertexNormals();
+  return { geo, walls, verts: n };
+}
+
 function buildMesh() {
   if (mesh) {
     mesh.geometry.dispose();
@@ -346,39 +495,29 @@ function buildMesh() {
   const gh = Math.floor((S.H - 1) / step) + 1;
   const spacing = S.gsd * step;
 
-  // PlaneGeometry is built in XY then rotated to XZ, so (col, row) maps to
-  // (x, z) with x growing east and z growing south — the same convention
-  // viz/mesh.py writes, and the same one the UV mapping below assumes.
-  const geo = new THREE.PlaneGeometry((gw - 1) * spacing, (gh - 1) * spacing, gw - 1, gh - 1);
-  geo.rotateX(-Math.PI / 2);
-  const pos = geo.attributes.position;
-  for (let r = 0; r < gh; r++) {
-    for (let c = 0; c < gw; c++) {
-      const sr = Math.min(S.H - 1, r * step), sc = Math.min(S.W - 1, c * step);
-      pos.setY(r * gw + c, S.height[sr * S.W + sc]);
-    }
-  }
-  pos.needsUpdate = true;
-  geo.computeVertexNormals();
+  // (col, row) -> (x, z) with x growing east and z growing south — the same
+  // convention viz/mesh.py writes and the picking below assumes.
+  const thr = $('walls')?.checked ? Math.max(0.1, +$('wallThr').value || 2.5) : 0;
+  const { geo, walls, verts } = buildGeometry(step, gw, gh, spacing, thr);
 
   const tex = new THREE.CanvasTexture(layerCanvas($('layer').value));
   tex.encoding = THREE.sRGBEncoding;
   tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
   const mat = new THREE.MeshStandardMaterial({
-    map: tex, roughness: 0.95, metalness: 0.0,
+    map: tex, roughness: 0.95, metalness: 0.0, vertexColors: true,
     wireframe: $('wire').checked, side: THREE.DoubleSide,
   });
   mesh = new THREE.Mesh(geo, mat);
   mesh.receiveShadow = true;
   mesh.castShadow = true;
-  mesh.position.set((gw - 1) * spacing / 2, 0, (gh - 1) * spacing / 2);
   scene.add(mesh);
 
   applyExaggeration();
   updateSun();
   buildFlyPath();
   resetCamera();
-  $('vertCount').textContent = (gw * gh).toLocaleString() + ' verts (1:' + step + ')';
+  $('vertCount').textContent = verts.toLocaleString() + ' verts (1:' + step + ')' +
+    (thr ? ` · ${walls.toLocaleString()} wall cells` : '');
 }
 
 function applyExaggeration() {
@@ -708,6 +847,13 @@ function draw2d() {
   }
   dot(S.probeA, '#2d6cdf');
   dot(S.probeB, '#e5793a');
+  if (S.sel) {
+    g.strokeStyle = '#ffd166'; g.lineWidth = 1.5 * devicePixelRatio;
+    g.setLineDash([6 * devicePixelRatio, 4 * devicePixelRatio]);
+    g.strokeRect(S.sel.c0 * sc + ox, S.sel.r0 * sc + oy,
+      (S.sel.c1 - S.sel.c0) * sc, (S.sel.r1 - S.sel.r0) * sc);
+    g.setLineDash([]);
+  }
   g.restore();
   cv._map = { ox, oy, sc };
 }
@@ -727,14 +873,41 @@ function drawContours(g, ox, oy, sc) {
   g.fillStyle = 'rgba(255,255,255,.35)';
 }
 
-$('map')?.addEventListener('pointerdown', (ev) => {
+function mapPx(ev) {
   const cv = $('map'), m = cv._map;
-  if (!m || !S.height) return;
+  if (!m) return null;
   const r = cv.getBoundingClientRect();
-  const x = ((ev.clientX - r.left) * devicePixelRatio - m.ox) / m.sc;
-  const y = ((ev.clientY - r.top) * devicePixelRatio - m.oy) / m.sc;
-  if (x < 0 || y < 0 || x >= S.W || y >= S.H) return;
-  addProbe({ row: Math.round(y), col: Math.round(x) });
+  return { x: ((ev.clientX - r.left) * devicePixelRatio - m.ox) / m.sc,
+           y: ((ev.clientY - r.top) * devicePixelRatio - m.oy) / m.sc };
+}
+
+// click = probe; shift-drag = select an area to load at full resolution
+let _drag = null;
+$('map')?.addEventListener('pointerdown', (ev) => {
+  const p = mapPx(ev);
+  if (!p || !S.height) return;
+  if (ev.shiftKey) {
+    _drag = { x0: clamp(p.x, 0, S.W), y0: clamp(p.y, 0, S.H) };
+    $('map').setPointerCapture(ev.pointerId);
+    return;
+  }
+  if (p.x < 0 || p.y < 0 || p.x >= S.W || p.y >= S.H) return;
+  addProbe({ row: Math.round(p.y), col: Math.round(p.x) });
+});
+$('map')?.addEventListener('pointermove', (ev) => {
+  if (!_drag) return;
+  const p = mapPx(ev);
+  const x1 = clamp(p.x, 0, S.W), y1 = clamp(p.y, 0, S.H);
+  S.sel = { c0: Math.floor(Math.min(_drag.x0, x1)), c1: Math.ceil(Math.max(_drag.x0, x1)),
+            r0: Math.floor(Math.min(_drag.y0, y1)), r1: Math.ceil(Math.max(_drag.y0, y1)) };
+  draw2d();
+});
+$('map')?.addEventListener('pointerup', () => {
+  if (!_drag) return;
+  _drag = null;
+  if (S.sel && (S.sel.c1 - S.sel.c0 < 8 || S.sel.r1 - S.sel.r0 < 8)) S.sel = null;
+  updateAoiUi();
+  draw2d();
 });
 
 // ---------------------------------------------------------------------------
@@ -767,9 +940,15 @@ async function loadFromFiles(fileList) {
   }
   if (!hgt) { warn('no height array found (need ndsm_m.npy or ndsm16.png)'); return; }
 
-  let gt = null;
+  let gt = null, gtKind = 'ndsm';
   const gtBuf = await read('gt_ndsm_m.npy', 'buf');
+  const gtDsm = gtBuf ? null : await read('gt_dsm_m.npy', 'buf');
   if (gtBuf) gt = parseNpy(gtBuf).data;
+  else if (gtDsm) { gt = parseNpy(gtDsm).data; gtKind = 'dsm'; }
+  const stdBuf = await read('ndsm_std_m.npy', 'buf');
+  const std = stdBuf ? parseNpy(stdBuf).data : null;
+  const valTxt = await read('validation.json', 'text');
+  const validation = valTxt ? JSON.parse(valTxt) : null;
   const extraSurf = {};
   for (const k of ['dsm', 'dtm']) {
     const b = await read(`${k}_m.npy`, 'buf');
@@ -782,7 +961,8 @@ async function loadFromFiles(fileList) {
   let shadow = null;
   if (files['shadow_img.png']) shadow = imageToCanvas(await fileToImage(files['shadow_img.png']));
 
-  adopt({ hgt, gt, rgb, meta, extraSurf, shadow });
+  S.url = '';
+  adopt({ hgt, gt, gtKind, rgb, meta, extraSurf, shadow, std, validation });
 }
 
 function fileToImage(file) {
@@ -801,17 +981,27 @@ function imageToCanvas(img) {
   return c;
 }
 
+/** An optional file next to the product: parsed .npy / JSON, or null. */
+async function fetchOpt(url, how = 'npy') {
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    return how === 'json' ? await r.json() : parseNpy(await r.arrayBuffer()).data;
+  } catch (e) { return null; }
+}
+
 async function loadFromUrl(base) {
   base = base.replace(/\/+$/, '') + '/';
   const meta = await fetch(base + 'meta.json').then((r) => r.json());
   const hgt = parseNpy(await fetch(base + 'ndsm_m.npy').then((r) => r.arrayBuffer()));
-  let gt = null;
-  try {
-    gt = parseNpy(await fetch(base + 'gt_ndsm_m.npy').then((r) => {
-      if (!r.ok) throw new Error('no reference');
-      return r.arrayBuffer();
-    })).data;
-  } catch (e) { /* optional */ }
+  // meta.files lists what was written (validation adds its files to it), so
+  // optional layers that do not exist are not requested at all
+  const listed = (n) => !Array.isArray(meta.files) || meta.files.includes(n);
+  const opt = (n, how) => (listed(n) ? fetchOpt(base + n, how) : Promise.resolve(null));
+  let gt = await opt('gt_ndsm_m.npy'), gtKind = 'ndsm';
+  if (!gt) { gt = await opt('gt_dsm_m.npy'); gtKind = 'dsm'; }
+  const std = await opt('ndsm_std_m.npy');
+  const validation = await opt('validation.json', 'json');
   let rgb = null;
   try {
     const img = new Image();
@@ -821,19 +1011,18 @@ async function loadFromUrl(base) {
   } catch (e) { /* optional */ }
   const extraSurf = {};
   for (const k of ['dsm', 'dtm']) {
-    try {
-      const r = await fetch(base + `${k}_m.npy`);
-      if (r.ok) extraSurf[k] = parseNpy(await r.arrayBuffer()).data;
-    } catch (e) { /* optional */ }
+    const a = await opt(`${k}_m.npy`);
+    if (a) extraSurf[k] = a;
   }
   let shadow = null;
-  try {
+  if (listed('shadow_img.png')) try {
     const img = new Image();
     img.src = base + 'shadow_img.png';
     await img.decode();
     shadow = imageToCanvas(img);
   } catch (e) { /* optional */ }
-  adopt({ hgt, gt, rgb, meta, extraSurf, shadow });
+  S.url = base;
+  adopt({ hgt, gt, gtKind, rgb, meta, extraSurf, shadow, std, validation });
 }
 
 function surfaceUnit() {
@@ -858,7 +1047,8 @@ function useSurface(name) {
   return st;
 }
 
-function adopt({ hgt, gt, rgb, meta, extraSurf = {}, shadow = null }) {
+function adopt({ hgt, gt, gtKind = 'ndsm', rgb, meta, extraSurf = {}, shadow = null,
+                 std = null, validation = null }) {
   $('warn').style.display = 'none';
   $('warn').innerHTML = '';
   S.H = hgt.shape[0]; S.W = hgt.shape[1];
@@ -896,6 +1086,14 @@ function adopt({ hgt, gt, rgb, meta, extraSurf = {}, shadow = null }) {
   }
   S.gt = gt && gt.length === hgt.data.length ? gt : null;
   if (gt && !S.gt) warn('reference array shape differs from the prediction — ignored');
+  S.gtKind = S.gt && S.surfaces[gtKind] ? gtKind : 'ndsm';
+  if (S.gt && gtKind === 'dsm' && !S.surfaces.dsm) {
+    warn('the reference is an absolute DSM but this product has no dsm_m.npy — ignored');
+    S.gt = null;
+  }
+  S.std = std && std.length === hgt.data.length ? std : null;
+  S.validation = validation;
+  S.sel = null;
   S.meta = meta || {};
   S.gsd = +(meta.scene?.gsd_m ?? meta.gsd_m ?? 0.5);
   if (rgb && (rgb.width !== S.W || rgb.height !== S.H)) {
@@ -913,6 +1111,9 @@ function adopt({ hgt, gt, rgb, meta, extraSurf = {}, shadow = null }) {
     const o = $(sel).querySelector('[value=error]');
     const o2 = $(sel).querySelector('[value=reference]');
     o.disabled = o2.disabled = !S.gt;
+    const o3 = $(sel).querySelector('[value=confidence]');
+    if (o3) o3.disabled = !S.std;
+    if ($(sel).selectedOptions[0]?.disabled) $(sel).value = 'height';
   }
   if (!rgb && $('layer').value === 'rgb') $('layer').value = 'height';
 
@@ -938,20 +1139,121 @@ function adopt({ hgt, gt, rgb, meta, extraSurf = {}, shadow = null }) {
       `terrain on this imagery — check the declared GSD.`);
   }
 
-  const cmp = compareToReference();
-  $('metrics').innerHTML = cmp
-    ? `<table><tr><td>RMSE</td><td><b>${fmt(cmp.rmse)} m</b></td></tr>` +
-      `<tr><td>MAE</td><td>${fmt(cmp.mae)} m</td></tr>` +
-      `<tr><td>bias</td><td>${fmt(cmp.bias)} m</td></tr>` +
-      `<tr><td>Pearson r</td><td>${fmt(cmp.r, 3)}</td></tr>` +
-      `<tr><td>pixels</td><td>${cmp.n.toLocaleString()}</td></tr></table>`
-    : '<span class="dim">load <code>gt_ndsm_m.npy</code> alongside to validate ' +
-      'against a reference surface</span>';
+  if (S.std) {
+    const u = meta.uncertainty || {};
+    $('info').innerHTML += `<br>confidence: ${fmt((u.confident_frac ?? NaN) * 100, 0)} % of ` +
+      `pixels within ±${fmt(confThreshold(), 1)} m <span class="dim">(Head B spread)</span>`;
+  }
+  if (meta.aoi) {
+    const a = meta.aoi;
+    $('info').innerHTML += `<br><b>full-resolution AOI</b> rows ${a.row}…${a.row + a.height}, ` +
+      `cols ${a.col}…${a.col + a.width}` + (a.decimation > 1 ? ` (1:${a.decimation})` : '');
+  }
+  renderMetrics();
+  updateAoiUi();
 
   buildMesh();
   setMode('orbit');
   reportProbe();
   draw2d();
+}
+
+function renderMetrics() {
+  const row = (k, v) => `<tr><td>${k}</td><td>${v}</td></tr>`;
+  const block = (title, m) => !m || !m.n ? '' :
+    `<tr><td colspan="2" class="dim" style="padding-top:6px">${title}</td></tr>` +
+    row('RMSE', `<b>${fmt(m.rmse ?? m.rmse_m)} m</b>`) + row('MAE', `${fmt(m.mae ?? m.mae_m)} m`) +
+    row('bias', `${fmt(m.bias ?? m.bias_m)} m`) + row('Pearson r', fmt(m.r ?? m.pearson_r, 3)) +
+    row('pixels', (m.n).toLocaleString());
+  if (!S.gt) {
+    $('metrics').innerHTML = '<span class="dim">load <code>gt_ndsm_m.npy</code> or ' +
+      '<code>gt_dsm_m.npy</code> alongside' + (S.url ? ', or upload a reference below,' : '') +
+      ' to validate against a reference surface</span>';
+    return;
+  }
+  const v = S.validation;
+  let html = `<div class="dim">reference: ${S.gtKind === 'dsm' ? 'absolute DSM' : 'nDSM'}` +
+    (v ? ` · ${v.reference} · ${v.placement}` : '') + '</div><table>';
+  html += block('all pixels', compareToReference(false));
+  html += block(`confident pixels (spread ≤ ${fmt(confThreshold(), 1)} m)`,
+    compareToReference(true));
+  if (v?.per_cell?.n) html += block(`per ${v.per_cell.cell_m} m cell`, v.per_cell);
+  html += '</table>';
+  if (v?.datum_conversion) {
+    const d = v.datum_conversion;
+    html += `<div class="dim">datum ${d.from} → ${d.to}: ${d.applied ? 'converted' : d.note}</div>`;
+  }
+  if (isFinite(v?.median_err_on_ground_m)) {
+    html += `<div class="dim">median error on ground ${fmt(v.median_err_on_ground_m)} m ` +
+      '(datum sanity: ≈ 0)</div>';
+  }
+  $('metrics').innerHTML = html;
+}
+
+/** `/api/result/<job>/` (+ an AOI subdirectory) -> the job id, or null. */
+function jobOf(url) {
+  const m = /\/api\/result\/([^/]+)\//.exec(url || '');
+  return m ? m[1] : null;
+}
+
+function updateAoiUi() {
+  const served = !!jobOf(S.url);
+  // an AOI directory is a view onto its parent job; references go to the job
+  $('refBox').style.display = served && !S.meta?.aoi ? '' : 'none';
+  $('aoiLoad').disabled = !(served && S.sel && !S.meta?.aoi);
+  $('aoiBack').style.display = S.parentBase ? '' : 'none';
+  const s = S.sel;
+  $('aoiInfo').innerHTML = S.meta?.aoi ? 'showing a full-resolution area'
+    : !served ? '<span class="dim">needs the served viewer (serve/app.py)</span>'
+    : s ? `selected ${s.c1 - s.c0} × ${s.r1 - s.r0} px ` +
+      `(${fmt((s.c1 - s.c0) * S.gsd, 0)} × ${fmt((s.r1 - s.r0) * S.gsd, 0)} m)`
+    : '<span class="dim">shift-drag a box on the 2-D map</span>';
+}
+
+async function loadAoi() {
+  const job = jobOf(S.url), s = S.sel;
+  if (!job || !s) return;
+  $('aoiLoad').disabled = true;
+  $('aoiInfo').textContent = 'cutting the area at full resolution…';
+  const fd = new FormData();
+  fd.append('row', s.r0); fd.append('col', s.c0);
+  fd.append('h', s.r1 - s.r0); fd.append('w', s.c1 - s.c0);
+  try {
+    const r = await fetch(`/api/aoi/${job}`, { method: 'POST', body: fd });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || r.statusText);
+    const parent = S.url;
+    await loadFromUrl(j.base);
+    S.parentBase = parent;
+    updateAoiUi();
+  } catch (e) { warn('AOI failed: ' + e.message); updateAoiUi(); }
+}
+
+async function uploadReference() {
+  const job = jobOf(S.url), f = $('refFile').files[0];
+  if (!job || !f) return;
+  const fd = new FormData();
+  fd.append('file', f);
+  fd.append('kind', $('refKind').value);
+  fd.append('datum', $('refDatum').value);
+  $('refStatus').textContent = 'reprojecting and scoring…';
+  try {
+    const r = await fetch(`/api/reference/${job}` , { method: 'POST', body: fd });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || r.statusText);
+    const base = S.url;
+    const gt = await fetchOpt(base + `gt_${j.kind}_m.npy`);
+    if (!gt || gt.length !== S.surfaces.ndsm.length) throw new Error('reference not on the grid');
+    S.gt = gt; S.gtKind = j.kind; S.validation = j;
+    for (const sel of ['layer', 'layer2d']) {
+      $(sel).querySelector('[value=error]').disabled = false;
+      $(sel).querySelector('[value=reference]').disabled = false;
+    }
+    $('refStatus').textContent = `scored against ${j.reference} (${j.kind})`;
+    renderMetrics();
+    $('layer2d').value = 'error';
+    draw2d();
+  } catch (e) { $('refStatus').textContent = ''; warn('reference failed: ' + e.message); }
 }
 
 function refreshTexture() {
@@ -982,6 +1284,16 @@ function boot() {
   $('layer2d').addEventListener('change', draw2d);
   $('contours').addEventListener('change', draw2d);
   $('wire').addEventListener('change', refreshTexture);
+  $('walls')?.addEventListener('change', () => S.height && buildMesh());
+  $('wallThr')?.addEventListener('change', () => S.height && $('walls').checked && buildMesh());
+  $('aoiLoad')?.addEventListener('click', loadAoi);
+  $('aoiBack')?.addEventListener('click', async () => {
+    const b = S.parentBase;
+    S.parentBase = '';
+    if (b) await loadFromUrl(b).catch((e) => warn('load failed: ' + e));
+    updateAoiUi();
+  });
+  $('refGo')?.addEventListener('click', uploadReference);
   for (const id of ['sunAz', 'sunEl']) {
     $(id).addEventListener('input', () => {
       updateSun();

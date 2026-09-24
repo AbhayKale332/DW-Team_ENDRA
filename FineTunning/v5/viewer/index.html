@@ -34,6 +34,8 @@
   button{flex:1 1 auto;padding:7px 9px;background:#242c35;color:var(--ink);
     border:1px solid var(--line);border-radius:6px;cursor:pointer;font:inherit;font-size:12px}
   button:hover{background:#2c3540}
+  button:disabled{opacity:.42;cursor:default}
+  button:disabled:hover{background:#242c35}
   button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
   #info,#probe,#metrics{color:#b8c2cc;font-size:12px}
   #probe{min-height:44px}
@@ -82,7 +84,7 @@
     <h2>Load a prediction</h2>
     <input type="file" id="files" multiple
            accept=".png,.jpg,.json,.npy"
-           title="select ndsm_m.npy, rgb.png, meta.json (and gt_ndsm_m.npy to validate)" />
+           title="select ndsm_m.npy, rgb.png, meta.json (and gt_ndsm_m.npy / gt_dsm_m.npy to validate)" />
     <p class="dim" style="margin:8px 0 0;font-size:11px">
       Pick the whole output folder of<br><code>python -m infer.predict …</code><br>
       <code>ndsm_m.npy</code> + <code>meta.json</code> is the minimum;
@@ -122,6 +124,7 @@
       <option value="shadow_cast">Shadow — cast by height</option>
       <option value="shadow_img" disabled>Shadow — in image</option>
       <option value="shadow_agree" disabled>Shadow agreement</option>
+      <option value="confidence" disabled>Confidence (Head B spread)</option>
       <option value="reference" disabled>Reference height</option>
       <option value="error" disabled>Error vs reference</option>
     </select>
@@ -133,7 +136,21 @@
       <option value="500000" selected>Balanced (500k)</option>
       <option value="1500000">Full (1.5M)</option>
     </select>
+    <div class="row chk"><input type="checkbox" id="walls" checked />
+      <span>vertical walls above</span>
+      <input type="number" id="wallThr" value="2.5" min="0.5" max="50" step="0.5"
+             style="width:62px;background:#0f1318;color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:2px 4px" />
+      <span class="dim">m</span></div>
     <div class="row chk"><input type="checkbox" id="wire" /> <span>wireframe</span></div>
+  </section>
+
+  <section>
+    <h2>Area of interest</h2>
+    <div id="aoiInfo" style="font-size:12px"><span class="dim">shift-drag a box on the 2-D map</span></div>
+    <div class="btns">
+      <button id="aoiLoad" disabled title="load the selected area at full resolution">Load full resolution</button>
+      <button id="aoiBack" style="display:none">Back to whole scene</button>
+    </div>
   </section>
 
   <section>
@@ -156,6 +173,25 @@
     <h2>Validation</h2>
     <div id="metrics"><span class="dim">load <code>gt_ndsm_m.npy</code> alongside to
       validate against a reference surface</span></div>
+    <div id="refBox" style="display:none;margin-top:10px">
+      <label>Reference DSM / nDSM (GeoTIFF)</label>
+      <input type="file" id="refFile" accept=".tif,.tiff,.vrt,.img" />
+      <div class="row">
+        <select id="refKind" title="what the reference holds">
+          <option value="auto">kind: auto</option>
+          <option value="dsm">absolute DSM</option>
+          <option value="ndsm">height above ground</option>
+        </select>
+        <select id="refDatum" title="the reference's vertical datum (absolute DSMs)">
+          <option value="">datum: unknown</option>
+          <option value="EGM96">EGM96 (SRTM)</option>
+          <option value="EGM2008">EGM2008 (COP30)</option>
+          <option value="WGS84">WGS84 ellipsoid (CartoDEM)</option>
+        </select>
+      </div>
+      <div class="btns"><button id="refGo">Validate against it</button></div>
+      <div id="refStatus" class="dim" style="font-size:11px"></div>
+    </div>
   </section>
 </aside>
 
@@ -170,6 +206,7 @@
         <option value="shadow_cast">Shadow — cast</option>
         <option value="shadow_img" disabled>Shadow — image</option>
         <option value="shadow_agree" disabled>Shadow agreement</option>
+        <option value="confidence" disabled>Confidence</option>
         <option value="reference" disabled>Reference</option>
         <option value="error" disabled>Error</option>
       </select>

@@ -196,8 +196,14 @@ def _geo_crs(meta, datum: str):
 def write_outputs(out_dir: Path, stem: str, rgb_u8, height_m, meta, spec,
                   dsm_abs=None, extra: dict | None = None, seg=None,
                   dtm=None, mesh: bool = True, datum: str = "",
-                  geotiff: bool = True) -> dict:
-    """Write the product.  NaN = NoData everywhere (v5: Cartosat collars)."""
+                  geotiff: bool = True, std=None) -> dict:
+    """Write the product.  NaN = NoData everywhere (v5: Cartosat collars).
+
+    `std` (v5, plan C5): Head B's per-pixel spread in metres.  v4 computed it and
+    dropped it; it is written as `ndsm_std_m.npy` (+ `.tif` when georeferenced)
+    and summarised in `meta.json["uncertainty"]`, which also fixes the
+    "confident" threshold the viewer and the reference validation use.
+    """
     from PIL import Image
 
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -220,6 +226,12 @@ def write_outputs(out_dir: Path, stem: str, rgb_u8, height_m, meta, spec,
     if dtm is not None:
         np.save(out_dir / "dtm_m.npy", np.asarray(dtm, np.float32))
         extra_files.append("dtm_m.npy")
+    unc = None
+    if std is not None and np.shape(std) == np.shape(height_m):
+        std = np.asarray(std, np.float32)
+        np.save(out_dir / "ndsm_std_m.npy", std)
+        extra_files.append("ndsm_std_m.npy")
+        unc = uncertainty_summary(std, height_m)
 
     wrote_tif = []
     if meta.georeferenced and geotiff:
@@ -240,6 +252,11 @@ def write_outputs(out_dir: Path, stem: str, rgb_u8, height_m, meta, spec,
                     d.update_tags(1, UNITS="metres", PRODUCT="DSM_absolute",
                                   VERTICAL_DATUM=datum or "unknown")
                 wrote_tif.append("dsm_m.tif")
+            if std is not None and unc is not None:
+                with rasterio.open(out_dir / "ndsm_std_m.tif", "w", **prof) as d:
+                    d.write(std, 1)
+                    d.update_tags(1, UNITS="metres", PRODUCT="nDSM_uncertainty_std")
+                wrote_tif.append("ndsm_std_m.tif")
             if dtm is not None:
                 with rasterio.open(out_dir / "dtm_m.tif", "w", **vprof) as d:
                     d.write(np.asarray(dtm, np.float32), 1)
@@ -282,6 +299,8 @@ def write_outputs(out_dir: Path, stem: str, rgb_u8, height_m, meta, spec,
                   *mesh_files],
         "ndsm16_encode": "height_m = height_min_m + (png16/65535)*(height_max_m-height_min_m)",
     }
+    if unc is not None:
+        payload["uncertainty"] = unc
     if dsm_abs is not None:
         payload["dsm_min_m"] = float(np.nanmin(dsm_abs))
         payload["dsm_max_m"] = float(np.nanmax(dsm_abs))
@@ -312,6 +331,28 @@ def write_outputs(out_dir: Path, stem: str, rgb_u8, height_m, meta, spec,
     return payload
 
 
+def uncertainty_summary(std: np.ndarray, height_m: np.ndarray,
+                        min_threshold_m: float = 1.0) -> dict:
+    """Distribution of Head B's spread and the "confident" cut.
+
+    The threshold is relative to the scene — the median spread, floored at
+    `min_threshold_m` — because Head B's spread grows with height (a 30 m roof
+    spans more bins than a road), so a fixed cut would call every tall
+    structure unconfident.  About half the valid pixels pass it by
+    construction; the point of the layer is *where* the other half sits.
+    """
+    fin = np.isfinite(std) & np.isfinite(height_m)
+    if not fin.any():
+        return {"valid_px": 0}
+    v = std[fin]
+    thr = float(max(min_threshold_m, np.median(v)))
+    return {"std_median_m": float(np.median(v)), "std_p90_m": float(np.percentile(v, 90)),
+            "std_max_m": float(v.max()), "confident_threshold_m": thr,
+            "confident_frac": float((v <= thr).mean()), "valid_px": int(v.size),
+            "rule": "confident = ndsm_std_m <= confident_threshold_m "
+                    "(max(1 m, scene median spread))"}
+
+
 def _json_default(o):
     if isinstance(o, (np.floating, np.integer)):
         return o.item()
@@ -340,7 +381,7 @@ def run_windowed(model, spec, source, meta, device, out_dir: Path, *, absolute: 
                  out_datum: str = "", detail_gain: float = 1.0, dem_cache: str = "",
                  tta: bool = False, tta_scales=(1.0,), amp_dtype=None,
                  overlap: float = 0.25, batch_tiles: int = 4, band_rows: int = 2048,
-                 mesh: bool = True, progress=None) -> dict:
+                 mesh: bool = True, progress=None, overview_max: int = 2048) -> dict:
     """A scene that does not fit in memory: stream nDSM -> DSM on disk, then a
     decimated overview (<= 2048 px) for the viewer and `meta.json`.
 
@@ -358,10 +399,11 @@ def run_windowed(model, spec, source, meta, device, out_dir: Path, *, absolute: 
         model, source, spec, device, out_dir, tta=tta, tta_scales=tta_scales,
         amp_dtype=amp_dtype, overlap=overlap, batch_tiles=batch_tiles,
         band_rows=band_rows, want_seg=True, block_px=k if absolute else 0,
-        progress=progress)
+        progress=progress, overview_max=overview_max)
     extra = {"windowed": {"band_rows": band_rows, "halo_px": res["halo_px"],
                           "overview_step": res["overview_step"]},
-             "full_resolution": {"ndsm": res["ndsm_path"], "seg": res["seg_path"]},
+             "full_resolution": {"ndsm": res["ndsm_path"], "seg": res["seg_path"],
+                                 **({"std": res["std_path"]} if res.get("std_path") else {})},
              "full_resolution_stats": res["stats"]}
     datum = ""
     if absolute and meta.georeferenced:
@@ -404,7 +446,7 @@ def run_windowed(model, spec, source, meta, device, out_dir: Path, *, absolute: 
         dsm_ov, dtm_ov = dec(extra["full_resolution"]["dsm"]), dec(extra["full_resolution"]["dtm"])
     return write_outputs(out_dir, Path(str(meta.path)).stem, res["overview_rgb"], h_ov,
                          ov_meta, spec, dsm_ov, extra, dtm=dtm_ov, mesh=mesh,
-                         datum=datum, geotiff=False)
+                         datum=datum, geotiff=False, std=res.get("overview_std"))
 
 
 def main() -> None:
@@ -512,10 +554,10 @@ def main() -> None:
     rgb, meta = read_scene(inputs, user_gsd_m=a.gsd,
                            assumed_gsd_m=a.assumed_gsd or spec.canonical_gsd_m,
                            max_side=a.max_side, bands=bands)
-    height, seg = predict_scene(
+    height, seg, std = predict_scene(
         model, rgb, meta.gsd_m, spec, device, tta=a.tta, tta_scales=scales,
         amp_dtype=amp_dt, overlap=a.overlap, batch_tiles=a.batch_tiles,
-        want_seg=True, progress=prog, valid=meta.valid,
+        want_seg=True, progress=prog, valid=meta.valid, return_std=True,
     )
 
     dsm_abs, dtm, extra, datum = None, None, {}, ""
@@ -550,7 +592,7 @@ def main() -> None:
         print(f"[infer] GCPs: {ginfo}")
 
     write_outputs(out_dir, stem, rgb, height, meta, spec, dsm_abs,
-                  extra, seg=seg, dtm=dtm, mesh=not a.no_mesh, datum=datum)
+                  extra, seg=seg, dtm=dtm, mesh=not a.no_mesh, datum=datum, std=std)
 
 
 if __name__ == "__main__":
