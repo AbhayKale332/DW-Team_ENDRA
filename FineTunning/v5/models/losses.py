@@ -345,15 +345,28 @@ def coarse_flags(batch: dict, cfg, device) -> torch.Tensor | None:
     return torch.tensor(f, dtype=torch.bool, device=device).view(-1, 1, 1, 1)
 
 
-def coarse_terms(pred, target, valid, cfg, w=None, gsd=None):
-    """`regression_terms` after k x k average pooling (k = cfg.coarse_pool).
+def coarse_pool_px(cfg, gsd_m: float) -> int:
+    """Pool size, in pixels, that matches a coarse label at this GSD.
+
+    `coarse_label_m > 0`: round(coarse_label_m / gsd_m), so the block is the
+    label's own footprint whatever the crop was resampled to.  Otherwise the
+    fixed `coarse_pool` (v5's first cut, and what `coarse_label_m 0` keeps).
+    """
+    m = float(getattr(cfg, "coarse_label_m", 0.0) or 0.0)
+    if m > 0 and gsd_m and gsd_m > 0:
+        return max(1, int(round(m / float(gsd_m))))
+    return int(max(1, getattr(cfg, "coarse_pool", 4)))
+
+
+def coarse_terms(pred, target, valid, cfg, w=None, gsd=None, k: int | None = None):
+    """`regression_terms` after k x k average pooling (default k = cfg.coarse_pool).
 
     A DFC23 / India label carries ~2 m of information per ~4 px; comparing the
     prediction's 4x4 block means to the label's leaves the network free to put
     real edges inside the block.  A pooled pixel counts only when every source
     pixel under it was valid, so NoData edges cannot drag a block mean down.
     """
-    k = int(max(1, getattr(cfg, "coarse_pool", 4)))
+    k = int(max(1, k if k is not None else getattr(cfg, "coarse_pool", 4)))
     vf = valid.to(pred.dtype)
     n = F.avg_pool2d(vf, k)
     full = n > 0.999
@@ -436,10 +449,35 @@ def compute_losses(out: dict, batch: dict, cfg, balancer: StratumBalancer):
         veg = batch.get("veg")
         if getattr(cfg, "coarse_mask_veg", False) and veg is not None:
             val_c = val_c & ~(veg.bool() & (tgt < 1.0))
-        cf, _ = coarse_terms(out["fused"], tgt, val_c, cfg, w, gsd)
-        ca, _ = coarse_terms(out["a"], tgt, val_c, cfg, w, gsd)
-        cb, _ = coarse_terms(out["b"], tgt, val_c, cfg, w, gsd)
-        l_coarse = cfg.w_fused * cf + cfg.w_head_a * ca + cfg.w_head_b * cb
+        # One pool size per sample (see `coarse_pool_px`): samples are grouped
+        # by k and each group's loss is weighted by its valid pixels.  Reading
+        # the per-sample GSDs back is one small device sync, paid only on
+        # batches that carry a coarse sample with `coarse_label_m` set.
+        groups = {None: coarse}
+        if float(getattr(cfg, "coarse_label_m", 0.0) or 0.0) > 0 and gsd is not None:
+            gl = gsd.reshape(-1).tolist()
+            cl = coarse.reshape(-1).tolist()
+            ks: dict = {}
+            for i, (g, c) in enumerate(zip(gl, cl)):
+                if c:
+                    ks.setdefault(coarse_pool_px(cfg, g), []).append(i)
+            groups = {}
+            for kk, idx in ks.items():
+                m = torch.zeros(len(gl), dtype=torch.bool)
+                m[idx] = True
+                groups[kk] = m.to(tgt.device).view(-1, 1, 1, 1)
+        l_coarse = tgt.new_zeros(())
+        n_tot = tgt.new_zeros(())
+        for kk, sel in groups.items():
+            vk = val_c & sel
+            nk = vk.sum().float()
+            cf, _ = coarse_terms(out["fused"], tgt, vk, cfg, w, gsd, k=kk)
+            ca, _ = coarse_terms(out["a"], tgt, vk, cfg, w, gsd, k=kk)
+            cb, _ = coarse_terms(out["b"], tgt, vk, cfg, w, gsd, k=kk)
+            l_coarse = l_coarse + nk * (cfg.w_fused * cf + cfg.w_head_a * ca
+                                        + cfg.w_head_b * cb)
+            n_tot = n_tot + nk
+        l_coarse = l_coarse / n_tot.clamp_min(1.0)
         n_f = val_f.sum().float()
         n_c = val_c.sum().float()
         frac_c = n_c / (n_f + n_c).clamp_min(1.0)

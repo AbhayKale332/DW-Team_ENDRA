@@ -44,7 +44,10 @@ class _HeightOnly(torch.nn.Module):
 
     def forward(self, image):
         out = self.net(image)
-        return out["fused"], out["seg"].argmax(1, keepdim=True).to(torch.int32)
+        # v5: Head B's spread travels too, so the standalone (ONNX) deployment
+        # keeps the confidence layer and the confident-pixel metrics.
+        return (out["fused"], out["seg"].argmax(1, keepdim=True).to(torch.int32),
+                out["b_std"])
 
 
 def export(ckpt: str, out_path: str, *, opset: int = 17, hf_token: str = "",
@@ -74,7 +77,7 @@ def export(ckpt: str, out_path: str, *, opset: int = 17, hf_token: str = "",
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    common = dict(input_names=["image"], output_names=["height_m", "seg"],
+    common = dict(input_names=["image"], output_names=["height_m", "seg", "height_std_m"],
                   opset_version=opset)
     with torch.no_grad():
         try:
@@ -93,7 +96,8 @@ def export(ckpt: str, out_path: str, *, opset: int = 17, hf_token: str = "",
             torch.onnx.export(
                 wrapper, (dummy,), str(out_path), do_constant_folding=True,
                 dynamic_axes={"image": {0: "batch"}, "height_m": {0: "batch"},
-                              "seg": {0: "batch"}}, **common)
+                              "seg": {0: "batch"}, "height_std_m": {0: "batch"}},
+                **common)
     # `opset` is a *request*.  The dynamo exporter emits at its own native
     # opset and then asks onnxscript to down-convert; when an op has no version
     # adapter that conversion fails, onnxscript prints a traceback, says "the
@@ -107,7 +111,9 @@ def export(ckpt: str, out_path: str, *, opset: int = 17, hf_token: str = "",
     meta = {"preproc": spec.to_dict(), "input": f"float32 (batch,3,{s},{s}), "
             "encoder-normalised RGB at canonical GSD",
             "outputs": {"height_m": f"float32 (batch,1,{s},{s}) nDSM in metres",
-                        "seg": f"int32 (batch,1,{s},{s}) class id"},
+                        "seg": f"int32 (batch,1,{s},{s}) class id",
+                        "height_std_m": f"float32 (batch,1,{s},{s}) Head B spread, "
+                                        "metres (uncertainty)"},
             "opset": real_opset, "opset_requested": opset,
             "external_data": [f.name for f in ext],
             "source_checkpoint": str(ckpt)}

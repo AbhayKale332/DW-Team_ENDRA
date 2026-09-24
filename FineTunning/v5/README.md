@@ -52,6 +52,15 @@ visual half, and there v4 had a problem: it was better than v3 on GAMUS test
 | C5 | **Uncertainty**: Head B's per-pixel spread (`b_std`, computed and dropped in v4) is written as `ndsm_std_m.npy` / `.tif`, with a confidence drape and metrics on confident pixels | `infer/engine.py`, `infer/predict.py` |
 | C6 | **Whole scene first, detail on demand**: shift-drag a box on the 2-D map to load that area at full resolution out of a windowed product | `serve/validate.py extract_aoi`, `POST /api/aoi/{job}` |
 
+### 0.2.1 Architecture review fixes (after the first v5 cut)
+
+| Issue | Fix |
+|---|---|
+| `coarse_pool` was fixed in pixels, but the GSD jitter puts DFC23 crops at 0.30–0.50 m, where 4 px is 1.2–2.0 m — finer than a ~2 m label, so part of its blur was still taught | `coarse_label_m` (metres): each sample is pooled over `round(coarse_label_m / gsd)` px, grouped by pool size; the audit reports it; `v5_flags` sets 2.0 |
+| The ONNX graph (the standalone deployment) had no `b_std`, so the confidence layer and confident-pixel metrics vanished under `--onnx` | third output `height_std_m`; `_OnnxModel` passes it through; older 2-output graphs still load |
+| Head B's bins stopped at 120 m while v5 trains on labels up to 150 m | `bin_max_m 150` in `v5_flags` |
+| The unfreeze rebuilt the optimiser: decoder AdamW state lost, encoder at ~peak LR with no warm-up | encoder groups appended to the live optimiser (same layout a resume rebuilds), encoder LR ramped 0 → 1 over `unfreeze_warmup_epochs` (1.0) |
+
 ### 0.3 Runbook
 
 ```bash

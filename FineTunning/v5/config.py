@@ -229,6 +229,12 @@ class Config:
     # AdamW state (~150 MB a block on a 15 GiB T4) and a faster step.  16 keeps
     # the top two thirds adaptable and roughly halves the unfrozen cost.
     encoder_unfreeze_blocks: int = 0
+    # v5: after `freeze_epochs`, ramp the encoder groups' LR linearly from 0 over
+    # this many epochs, and keep the decoder's AdamW state.  v1-v4 rebuilt the
+    # optimiser at the unfreeze: the decoder lost its moments and 300 M encoder
+    # parameters started at ~peak LR with no warm-up — the point v4's notes say
+    # Head B's bin widths began to run away.  0 = the old step change.
+    unfreeze_warmup_epochs: float = 1.0
     # The cap covers *training* only; the final plain/TTA/sliding evaluation,
     # the qualitative export, figures, the report and the ONNX export run after
     # it and cost ~30 min on v3.  280 + 30 keeps the whole run inside a 5.5 h
@@ -351,6 +357,12 @@ class Config:
     # and bin terms.  Empty string -> v4 behaviour.
     coarse_label_sources: str = ""          # v5 run: "dfc23,india_labeled"
     coarse_pool: int = 4
+    # The label's real resolution in METRES.  > 0 sizes the pool per sample as
+    # round(coarse_label_m / gsd_m): the GSD jitter resamples 90 % of crops, and
+    # a DFC23 tile (512 px @ 0.5 m) lands at 0.30-0.50 m, where a fixed 4 px
+    # block is 1.2-2.0 m — finer than a ~2 m label, so part of its upsampling
+    # blur was still being taught.  0 keeps the fixed `coarse_pool` pixels.
+    coarse_label_m: float = 0.0             # v5 run: 2.0 (tools/audit_labels.py)
     w_coarse: float = 1.0
     # When the audit shows the coarse labels put trees at ~0 m, mask vegetation
     # (ExG > coarse_veg_exg) with label < 1 m out of those samples, so "a tree

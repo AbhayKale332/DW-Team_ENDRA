@@ -106,8 +106,11 @@ class _OnnxModel:
     def __call__(self, t):
         import torch
 
-        h, s = self.session.run(None, {"image": t.detach().cpu().numpy()})
-        return {"fused": torch.from_numpy(h), "seg": _onehot(torch.from_numpy(s))}
+        outs = self.session.run(None, {"image": t.detach().cpu().numpy()})
+        d = {"fused": torch.from_numpy(outs[0]), "seg": _onehot(torch.from_numpy(outs[1]))}
+        if len(outs) > 2:                   # v5 graphs carry Head B's spread
+            d["b_std"] = torch.from_numpy(outs[2])
+        return d
 
 
 def _onehot(seg):

@@ -102,3 +102,62 @@ def test_grayscale_aug_and_defaults_off():
     cfg.aug_gray_p = 1.0
     y = sensor_augment(x.clone(), cfg)
     assert torch.allclose(y[:, 0], y[:, 1]) and torch.allclose(y[:, 1], y[:, 2])
+
+
+# ---------------------------------------------------------------------
+# coarse pool sized in metres, per sample
+# ---------------------------------------------------------------------
+def test_coarse_pool_follows_the_crop_gsd():
+    from models.losses import coarse_pool_px
+
+    cfg = Config()
+    assert coarse_pool_px(cfg, 0.3) == cfg.coarse_pool      # 0 = the fixed pixel pool
+    cfg.coarse_label_m = 2.0
+    assert [coarse_pool_px(cfg, g) for g in (0.25, 0.3, 0.5, 1.0)] == [8, 7, 4, 2]
+
+
+def test_a_2m_label_at_0p25m_is_pooled_over_its_own_footprint():
+    """DFC23 crops land at 0.30-0.50 m.  At 0.25 m a 2 m label is 8 px: a map that
+    is sharp inside those 8 px blocks is right, and only the metre-sized pool
+    agrees.  The fixed 4 px pool still charges it for detail the label lacks."""
+    S = 64
+    t = torch.zeros(1, 1, S, S)
+    t[..., 13:43, 9:35] = 15.0
+    t[..., 20:25, 44:61] = 6.0
+    label = F.avg_pool2d(t, 8).repeat_interleave(8, -1).repeat_interleave(8, -2)
+    B = 1
+    batch = {"target": label, "valid": torch.ones(B, 1, S, S, dtype=torch.bool),
+             "cls": torch.full((B, S, S), 7), "gsd_m": torch.full((B,), 0.25),
+             "src": ["dfc23_g050"]}
+
+    def coarse(cfg):
+        return float(compute_losses(_out(t, B, S), batch, cfg, StratumBalancer(0.0))[1]["coarse"])
+
+    cfg = Config()
+    cfg.coarse_label_sources = "dfc23"
+    fixed = coarse(cfg)
+    cfg.coarse_label_m = 2.0
+    metric = coarse(cfg)
+    assert metric < 1e-3 < fixed
+
+
+def test_mixed_gsd_batch_groups_by_pool_size():
+    from models.losses import coarse_terms
+
+    S = 32
+    t = torch.zeros(2, 1, S, S)
+    t[..., 8:24, 8:24] = 10.0
+    pred = t + torch.randn_like(t)
+    batch = {"target": t, "valid": torch.ones(2, 1, S, S, dtype=torch.bool),
+             "cls": torch.full((2, S, S), 7), "gsd_m": torch.tensor([0.25, 0.5]),
+             "src": ["dfc23_a", "dfc23_b"]}
+    cfg = Config()
+    cfg.coarse_label_sources, cfg.coarse_label_m = "dfc23", 2.0
+    got = float(compute_losses(_out(pred, 2, S), batch, cfg, StratumBalancer(0.0))[1]["coarse"])
+    # by hand: each sample at its own k, weighted by its (equal) pixel count
+    v = torch.ones(1, 1, S, S, dtype=torch.bool)
+    parts = []
+    for i, k in ((0, 8), (1, 4)):
+        f, _ = coarse_terms(pred[i:i + 1], t[i:i + 1], v, cfg, k=k)
+        parts.append((cfg.w_fused + cfg.w_head_a + cfg.w_head_b) * float(f))
+    assert abs(got - sum(parts) / 2) < 1e-4

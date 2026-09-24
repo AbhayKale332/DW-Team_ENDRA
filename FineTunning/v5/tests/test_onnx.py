@@ -54,15 +54,20 @@ def test_export_matches_the_checkpoint(tmp_path, monkeypatch):
         assert meta["preproc"]["tile_size"] == 64
         assert meta["preproc"]["canonical_gsd_m"] == 0.5
         assert "height_m" in meta["outputs"] and "seg" in meta["outputs"]
+        assert "height_std_m" in meta["outputs"]
 
         ort = pytest.importorskip("onnxruntime")
         sess = ort.InferenceSession(str(out), providers=["CPUExecutionProvider"])
         x = np.random.RandomState(0).randn(2, 3, 64, 64).astype(np.float32)  # batch 2
-        h, s = sess.run(None, {"image": x})
+        h, s, sd = sess.run(None, {"image": x})
         assert h.shape == (2, 1, 64, 64) and s.shape == (2, 1, 64, 64)
         with torch.no_grad():
-            ref = net(torch.from_numpy(x))["fused"].numpy()
-        assert np.abs(ref - h).max() < 5e-2, "onnx graph disagrees with the checkpoint"
+            o = net(torch.from_numpy(x))
+        assert np.abs(o["fused"].numpy() - h).max() < 5e-2, \
+            "onnx graph disagrees with the checkpoint"
+        # v5: the standalone graph carries Head B's spread too
+        assert sd.shape == (2, 1, 64, 64)
+        assert np.abs(o["b_std"].numpy() - sd).max() < 5e-2
     finally:
         undo()
 
@@ -91,10 +96,12 @@ def test_onnx_adapter_plugs_into_the_engine(tmp_path, monkeypatch):
 
         sess = ort.InferenceSession(str(out), providers=["CPUExecutionProvider"])
         rgb = (np.random.RandomState(1).rand(150, 210, 3) * 255).astype(np.uint8)
-        h, seg = predict_scene(_OnnxModel(sess), rgb, 0.5, spec,
-                               torch.device("cpu"), want_seg=True, batch_tiles=2)
+        h, seg, std = predict_scene(_OnnxModel(sess), rgb, 0.5, spec,
+                                    torch.device("cpu"), want_seg=True, batch_tiles=2,
+                                    return_std=True)
         assert h.shape == (150, 210) and np.isfinite(h).all()
         assert seg.shape == (150, 210)
+        assert std is not None and std.shape == (150, 210)    # uncertainty survives ONNX
     finally:
         undo()
 

@@ -168,6 +168,37 @@ def build_optimizer(cfg: Config, model: DepthWizardNet, with_encoder: bool):
     return opt, base
 
 
+def add_encoder_groups(cfg: Config, model: DepthWizardNet, opt, base_lrs: list) -> list:
+    """Unfreeze-time optimiser change that keeps the decoder's AdamW state.
+
+    Appends the encoder's LLRD groups to the live optimiser.  The resulting
+    group order — decoder, decoder no-decay, encoder by depth — is exactly what
+    `build_optimizer(with_encoder=True)` builds, so a full-state checkpoint
+    saved after the unfreeze still loads positionally into a resumed run.
+    """
+    groups = model.encoder.llrd_param_groups(cfg.encoder_lr, cfg.llrd, cfg.weight_decay)
+    for g in groups:
+        if g["params"]:
+            opt.add_param_group(g)
+            base_lrs = list(base_lrs) + [g["lr"]]
+    n = sum(p.numel() for g in groups for p in g["params"])
+    print(f"[optim] +{len(groups)} encoder groups ({n / 1e6:.1f}M params); decoder "
+          f"AdamW state kept")
+    return base_lrs
+
+
+def encoder_lr_ramp(cfg: Config, epoch_pos: float) -> float:
+    """Multiplier on the encoder groups' LR, `epoch_pos` = epochs completed (float).
+
+    Linear 0 -> 1 over `unfreeze_warmup_epochs` from the unfreeze.  Derived from
+    the position in the run, not a counter, so a resume lands on the same value.
+    """
+    ramp = float(getattr(cfg, "unfreeze_warmup_epochs", 0.0) or 0.0)
+    if not cfg.freeze_epochs or ramp <= 0:
+        return 1.0
+    return min(1.0, max(0.0, (epoch_pos - cfg.freeze_epochs) / ramp))
+
+
 class MeanTeacher:
     """An EMA copy of the network, used to pseudo-label unlabeled imagery.
 
@@ -571,7 +602,7 @@ def main() -> None:
         if cfg.freeze_epochs and epoch == cfg.freeze_epochs + 1:
             before = _bucket_params(model)   # sampled BEFORE anything changes
             core.encoder.set_frozen(False, cfg.encoder_unfreeze_blocks)
-            opt, base_lrs = build_optimizer(cfg, core, with_encoder=True)
+            base_lrs = add_encoder_groups(cfg, core, opt, base_lrs)
             if ema is not None:
                 ema = ModelEMA(core, cfg.ema_decay)   # shadow now covers the encoder
             if teacher is not None:
@@ -628,8 +659,9 @@ def main() -> None:
                 ((time.time() - t0) / 60.0) / max(1e-8, cfg.max_minutes),
             )
             sc = lr_scale(progress, cfg.warmup_frac)
+            ramp = encoder_lr_ramp(cfg, epoch - 1 + step / n_steps)
             for g, b in zip(opt.param_groups, base_lrs):
-                g["lr"] = b * sc
+                g["lr"] = b * sc * (ramp if str(g.get("name", "")).startswith("enc") else 1.0)
 
             batch = _to_device(batch, device)
             if gpu_prep is not None:
@@ -905,10 +937,14 @@ def main() -> None:
                         _pref = tuple(x.strip() for x in cfg.coarse_label_sources.split(",")
                                       if x.strip())
                         if _pref and _src.startswith(_pref):
+                            from models.losses import coarse_pool_px
+
+                            # val crops sit at the canonical GSD
+                            _k = coarse_pool_px(cfg, cfg.canonical_gsd_m)
                             mp = evaluate(core, _dl, cfg, device, use_tta=False,
-                                          gpu_prep=gpu_prep, pool=cfg.coarse_pool)
-                            rec[f"val_{_src}_pooled{cfg.coarse_pool}"] = mp
-                            print(f"  eval e{epoch}  [{_src} @{cfg.coarse_pool}x pooled] "
+                                          gpu_prep=gpu_prep, pool=_k)
+                            rec[f"val_{_src}_pooled{_k}"] = mp
+                            print(f"  eval e{epoch}  [{_src} @{_k}x pooled] "
                                   f"{format_line(mp)}")
                     if m["global"]["rmse_m"] < best:
                         best = m["global"]["rmse_m"]
