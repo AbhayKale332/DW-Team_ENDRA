@@ -1003,8 +1003,8 @@ Five changes, in four files:
 
 Two more things the same log exposed, neither of them the crash:
 
-- **`flat=0.000` on every step of every epoch.** The GAMUS Kaggle mirror ships
-  no semantic raster, so `cls` arrives entirely as `SEG_IGNORE_INDEX` — and
+- **`flat=0.000` on every step of every epoch.** The GAMUS Kaggle PNG mirror (since
+  removed) shipped no semantic raster, so `cls` arrives entirely as `SEG_IGNORE_INDEX` — and
   `flatness_loss` intersected its GT-flatness mask with the flat-*class* set,
   which is empty. The planarity penalty §3 calls the direct counter to "texture
   becomes terrain", and which matters most on the out-of-domain Indian imagery

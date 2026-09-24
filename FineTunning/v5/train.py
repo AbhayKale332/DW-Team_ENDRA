@@ -401,7 +401,16 @@ def main() -> None:
                 core.encoder.set_frozen(
                     False, int(ck.get("encoder_unfreeze_blocks",
                                       cfg.encoder_unfreeze_blocks)))
-        miss, unexp = core.load_state_dict(ck.get("model", ck), strict=False)
+        # A checkpoint saved under the other transformers DINOv3 key layout
+        # (4.x `layer.N` / 5.x `model.layer.N`) would otherwise load no encoder
+        # weights at all, and strict=False would only report a count.
+        from eval_test import fit_keys
+
+        sd, n_ren = fit_keys(ck.get("model", ck), core.state_dict().keys())
+        miss, unexp = core.load_state_dict(sd, strict=False)
+        if n_ren:
+            print(f"[resume] {n_ren} encoder keys renamed across the transformers "
+                  f"4.x/5.x DINOv3 layout")
         kind = "full-state resume" if full_ck is not None else "warm start"
         print(f"[resume] {cfg.resume}: {kind}, "
               f"missing {len(miss)}, unexpected {len(unexp)}")
@@ -1227,7 +1236,10 @@ def _save(path: Path, core, spec: PreprocSpec, cfg, epoch: int, metrics, ema):
     without being handed a config: the recipe travels with the weights.
     """
     sd = ema.state_dict() if ema is not None else None
-    model_sd = core.head_state_dict() if core.encoder.frozen else core.full_state_dict()
+    # A frozen encoder is the hub's and is left out, unless the run started from
+    # a checkpoint: then it holds trained weights the hub does not have.
+    with_enc = not core.encoder.frozen or bool(cfg.resume)
+    model_sd = core.full_state_dict() if with_enc else core.head_state_dict()
     if sd is not None:
         model_sd = {k: sd.get(k, v) for k, v in model_sd.items()}
     torch.save({
@@ -1236,7 +1248,7 @@ def _save(path: Path, core, spec: PreprocSpec, cfg, epoch: int, metrics, ema):
         "config": safe_config_dict(cfg),
         "epoch": epoch,
         "metrics": metrics,
-        "encoder_included": not core.encoder.frozen,
+        "encoder_included": with_enc,
     }, path)
 
 

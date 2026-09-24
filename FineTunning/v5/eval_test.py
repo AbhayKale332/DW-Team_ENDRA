@@ -578,7 +578,8 @@ def main(argv=None) -> None:
     del ck
     d = Path(cfg.data_root) / a.source / a.split
     if not store_exists(d):
-        raise SystemExit(f"no packed store at {d} — run pack_gamus_png.py first")
+        raise SystemExit(f"no packed store at {d} — attach depthwizard-gamus and run `bash run_kaggle.sh link`, "
+                         f"or `prepare_data.py --datasets gamus --gamus_test 0`")
     store = PackedStore(d)
     n = min(a.tiles, len(store)) if a.tiles else len(store)
     print(f"[data] {a.source}/{a.split}: {len(store)} tiles @ {store.tile_px}px "

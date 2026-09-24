@@ -1,7 +1,7 @@
 """DepthWizard v4 on Modal — 1x H100.
 
 Glue only. The image mounts ../V4_Kaggle verbatim at /root/dw and shells out to
-its train.py / prepare_data.py / pack_gamus_png.py. Nothing here is duplicated
+its train.py / prepare_data.py. Nothing here is duplicated
 from that tree, and its DDP code short-circuits at world_size==1, so we run a
 plain `python train.py` — no torchrun.
 
@@ -263,15 +263,12 @@ def prepare(datasets: str = "gamus,synrs3d,dfc23", force: bool = False) -> None:
     fl = ["--force"] if force else []
 
     if "gamus" in want:
-        # The Kaggle PNG mirror, not the gated HF repo: prepare_gamus issues one
-        # hf_hub_download per file (~13 200 requests) and earns a CAS 429 that it
-        # swallows per tile. Cost: no class rasters, so gamus has_seg=no.
-        src = f"{dl}/gamus"
-        _kaggle("akashch1512/gamusdataset", src, ["train", "val"])
-        sh([sys.executable, "pack_gamus_png.py", "--src", src,
-            "--out", SCRATCH,          # never omit: default is /kaggle/temp/dwdata
-            "--depth_scale", "auto", "--train_tiles", "0", "--val_tiles", "0",
-            "--prime_workers", "8", *fl])
+        # The gated HF repo, as 01_data_prep.ipynb does: class rasters included,
+        # all 5004 train tiles, and the held-out gamus/test split.  (The Kaggle
+        # PNG mirror this used to pull has been removed.)
+        sh([sys.executable, "prepare_data.py", "--data_root", SCRATCH,
+            "--datasets", "gamus", "--gamus_train", "0", "--gamus_val", "0",
+            "--gamus_test", "0", "--workers", "8", *fl])
 
     if "synrs3d" in want:
         # 4 archives = all three of g1 (the only source that reaches past GAMUS's

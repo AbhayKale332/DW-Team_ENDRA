@@ -1,8 +1,8 @@
 # DepthWizard v4 on Modal — 1× H100, ~$14 a run
 
 Glue only: `modal_app.py` mounts [`../V4_Kaggle`](../V4_Kaggle) verbatim at
-`/root/dw` and shells out to its `train.py` / `prepare_data.py` /
-`pack_gamus_png.py`. No library code is duplicated, and editing that tree needs
+`/root/dw` and shells out to its `train.py` / `prepare_data.py`.
+No library code is duplicated, and editing that tree needs
 no rebuild (`copy=False`). Its DDP machinery short-circuits at `world_size == 1`,
 so we run a plain `python train.py` — no `torchrun`, no NCCL env.
 
@@ -82,8 +82,8 @@ truncated v4-2's cosine at 81% and cost 0.36 m. One container has no 12 h
 session to survive. `--max_minutes` still *sizes* the cosine, so `::train
 --epochs N` re-derives it — never move one without the other.
 
-**GAMUS comes from the gated HF repo**, not the Kaggle PNG mirror. The mirror
-existed because the fetch used to spend two requests per file (~30 000 for
+**GAMUS comes from the gated HF repo**, not the Kaggle PNG mirror (since
+removed). The mirror existed because the fetch used to spend two requests per file (~30 000 for
 train, HEAD then GET) and re-spend them on every resume, so it never got past a
 429; `prepare_data.py` now lists the tree once and fetches each file with one
 ranged GET, skipping what is already complete. The mirror's cost was the class

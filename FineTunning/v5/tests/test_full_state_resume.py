@@ -241,3 +241,29 @@ def test_val_split_lookup_is_prefix_aware(tmp_path):
     assert val_split_of("synrs3d_g05") is None
     assert val_split_of("synrs3d") is None
     assert val_split_of("nonesuch") is None
+
+
+def test_warm_start_keeps_its_encoder_while_frozen(tmp_path, store, monkeypatch):
+    """A frozen encoder is dropped from best.pt/last.pt as "the hub's" — wrong
+    after a warm start, where it holds trained weights the hub does not have."""
+    undo = use_stub(hidden=32, patch=16, layers=8)
+    try:
+        from models.heads import DepthWizardNet
+
+        cfg = _tiny_cfg(tmp_path, Path(store.dir).parents[1])
+        cfg.epochs, cfg.freeze_epochs, cfg.save_full_state = 1, 1, False
+        net = DepthWizardNet(cfg)
+        sd = {k: (v + 1.0 if k.startswith("encoder.") and v.dtype.is_floating_point else v)
+              for k, v in net.state_dict().items()}
+        init = tmp_path / "init.pt"
+        torch.save({"model": sd}, init)
+        cfg.resume = str(init)
+        _run(cfg, monkeypatch)
+
+        ck = torch.load(Path(cfg.output_dir) / "last.pt", map_location="cpu",
+                        weights_only=False)
+        assert ck["encoder_included"]
+        enc = [k for k in sd if k.startswith("encoder.") and sd[k].dtype.is_floating_point]
+        assert enc and all(torch.equal(ck["model"][k], sd[k]) for k in enc)
+    finally:
+        undo()

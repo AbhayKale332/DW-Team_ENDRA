@@ -8,8 +8,8 @@ looked fine until the val number was traced back.
 
 So two things are load-bearing here and neither is visible from the store:
 
-First, `classes/` has to actually arrive.  The Kaggle PNG mirror that replaced
-this path has no class rasters, which made `seg_ce_loss` exactly 0.0 on every
+First, `classes/` has to actually arrive.  The Kaggle PNG mirror that once replaced
+this path (since removed) had no class rasters, which made `seg_ce_loss` exactly 0.0 on every
 step while `w_seg` still read 0.2, trained Head C on synthetic SynRS3D alone,
 and left `geo/calibrate.py` without the ground mask its DTM fit wants.  `has_seg`
 in `index.json` is the one bit that records whether any of that works.

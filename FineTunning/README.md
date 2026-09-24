@@ -12,6 +12,7 @@ Fine-tuning experiments. Code is written locally, runs on **Kaggle** GPUs.
 ```
 FineTunning/
 ├── pyproject.toml               # local dev env only (uv)
+├── Kaggle_File_Structure.md     # what /kaggle/input holds (packed stores, raw DFC23)
 ├── v1/                          # experiment version 1 = DepthWizard Phase 0
 │   ├── kaggle_phase0.py         # the whole spike: GAMUS -> model -> train -> eval
 │   ├── eval_imele_on_gamus.py   # IMELE baseline row, same val split + metrics

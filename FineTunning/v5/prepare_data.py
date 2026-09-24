@@ -436,7 +436,7 @@ def prepare_gamus(root: Path, split: str, n_tiles: int, token, force: bool,
     # `classes/` is fetched best-effort (the except below swallows a 404 so a
     # repo without semantics still packs).  That silence is exactly how every v4
     # run so far trained with a 0.2-weight semantic head that contributed
-    # nothing: the PNG mirror has no classes, and this path would not have said
+    # nothing: the PNG mirror (since removed) had no classes, and this path would not have said
     # so either.  Count the yield and stamp it into the index.
     writer = ShardWriter(out, tile_px=1024, gsd_m=GAMUS_GSD_M, shard_tiles=128)
     done = 0
