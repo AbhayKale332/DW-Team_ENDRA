@@ -1,3 +1,142 @@
+# DepthWizard v5 — the ISRO metric, v3-or-better detail, and a shadow mask
+
+SIH 2026, PS 26175 (ISRO): single-view optical RGB → metric DSM → navigable 3D
+flythrough.  **§0 is v5.**  Everything from §1 on is the v4 README this tree was
+copied from (`FineTunning/V4_Kaggle/`), kept because the v4 machinery (DDP,
+resume, the preprocessing contract, the FastAPI deliverable) is unchanged
+underneath.  The plan is `CompetitionContext/V5_Research_Additions.md`, and the
+open questions for the hosts are in `CompetitionContext/Host_Questions_Draft.md`.
+
+## 0. v5
+
+### 0.1 Why v5 exists
+
+How the hosts score it (`CompetitionContext/FAQs.md`): **50 % accuracy** is
+RMSE, MAE and r of the **absolute DSM against SRTM or Copernicus 30 m**, on
+Cartosat-2S 0.6 m GeoTIFFs across urban, sparse, hilly and forested scenes.
+**50 % visualisation**.  So the calibration of the absolute DSM and the
+Cartosat input path decide the accuracy half.  The model mostly feeds the
+visual half, and there v4 had a problem: it was better than v3 on GAMUS test
+(TTA RMSE 3.321 vs 3.565) but rendered **blobs**.  The four reasons:
+
+1. 40 % of its crops were DFC23 / India labels: ~2 m stereo heights,
+   bilinearly upsampled onto 0.5 m pixels, fitted pixel by pixel.
+2. `flatness_loss` treated their unlabelled pixels as eligible.
+3. Wrong class ids.  `GROUND_LIKE_IDS = (0, 3, 4)` included the 9.4 m
+   *building* class and missed ground and road.
+4. No full-resolution path: the finest features were 16 px patches.
+
+### 0.2 What changed (by plan step)
+
+| Step | Change | Where |
+|---|---|---|
+| 0 | **Label audit.** Measures the labels' true resolution (→ `coarse_pool`), whether coarse labels put trees at 0 m (→ `coarse_mask_veg`, ExG τ calibrated on GAMUS trees), pins the GAMUS class names from per-id heights plus overlay PNGs, checks held-out overlaps by stem *and* image content, and calibrates the Cartosat augmentations on the real product | `tools/audit_labels.py` |
+| 1 | **Class ids pinned** (1 ground, 2 low veg, 3 building, 4 water, 5 road, 6 tree); ground-like = (1, 2, 4, 5); SynRS3D's packed ids remapped at load | `config.py`, `dwdata/dataset.py` |
+| 1 | **Coarse supervision**: DFC23 / India scored after 4×4 pooling (L1 + SILog + gradient) and excluded from the normal, flatness and bin terms | `models/losses.py` |
+| 1 | **Cartosat augmentations**: pan-sharpen simulation (chroma at 1/2–1/3.3 resolution), grayscale | `dwdata/gpu_aug.py` |
+| 2 | **Detail branch**: full-resolution RGB stem + RAFT-style convex 2× upsampling, zero-initialised, so v4 checkpoints still load and the branch starts out as v4 | `models/heads.py` |
+| 3 | **Seeded val sample** (v4's val was a prefix, 87.5 % urban vs a 57.6 % urban test set); `edge_rmse_m`, `grad_ratio` | `dwdata/loaders.py`, `eval/metrics.py` |
+| 3 | **One protocol for v3 / v4 / v5**: `eval_test.py` scores any checkpoint, v3's through v3's own code (`--model_code ../v3`), adds sharpness metrics to every version, qualitative strips and shadow IoU, and writes `outputs/v3_v4_v5.md` | `eval_test.py` |
+| 5 | **The run profile**: v3's five reverts + `detail_branch`, coarse flags, Cartosat augs, `val_sample_seed 42`, `/results/v5`; `with_audit()` applies the Step 0 numbers | `../V4_modal/v5_flags.py` |
+| A1 | **DEM-anchored DSM**: `DSM = U(DEM) + λ·[nDSM − U(A(nDSM))]` with Tobler iterations, so every 30 m cell averages to the DEM exactly and the model supplies only what is finer (v4's `DTM + nDSM` double-counted everything SRTM / COP30 already contain) | `geo/calibrate.py` |
+| A2 | **Datum-correct DEMs**: every source carries its vertical datum (SRTM EGM96, COP30 EGM2008, CartoDEM ellipsoidal); `srtm30` renamed to what it is (a mixed AWS mosaic); native SRTM via OpenTopography (`OPENTOPO_KEY`); offline DEM cache; compound vertical CRS on output | `geo/dem.py` |
+| A4 | **GCPs** in lon/lat + datum; offset / tilt on the terrain, scale on the nDSM only | `geo/calibrate.py` |
+| A5 | **Shadow scale check**: the height scale that best explains the image's shadows, under the product's sun (label-free evidence of metric scale) | `viz/shadow.py` |
+| A7 | **Judge proxy**: scene → windowed DSM → scored against SRTM and COP30, per pixel and per 30 m cell, with the datum sanity number | `eval/judge_proxy.py` |
+| B | **Cartosat input**: NRSC product folders / zips (BAND3,2,1), PAN + MX pan-sharpened in memory, per-band stretch on valid pixels, NoData → NaN, row-band windowed inference (a 20k × 20k scene peaked at 5.9 GB RAM), `max_side` transform fix | `dwdata/scene_io.py`, `infer/engine.py` |
+| B | **PAN + MX → registered RGB GeoTIFF**: phase-correlation shift measurement, then pan-sharpening (`gdal_pansharpen` if on PATH, else built-in Brovey) | `tools/cartosat_to_rgb.py` |
+| C1 | Viewer shows what is scored: Surface / Structures / Terrain toggle, lon/lat probe | `viewer/` |
+| C2 | **In-app validation**: upload any reference GeoTIFF; it is reprojected onto the prediction grid, datum-converted, and scored per pixel, on confident pixels, and per 30 m cell | `serve/validate.py`, `POST /api/reference/{job}` |
+| C3 | **Shadow mask**: shadows in the image, cast by the heights (live with the sun sliders), and their agreement | `viz/shadow.py`, `viewer/` |
+| C4 | **Vertical walls**: the mesh splits at height steps above a threshold (default 2.5 m) and fills them with shaded vertical quads, so roofs no longer smear down a slope | `viewer/app.js buildGeometry` |
+| C5 | **Uncertainty**: Head B's per-pixel spread (`b_std`, computed and dropped in v4) is written as `ndsm_std_m.npy` / `.tif`, with a confidence drape and metrics on confident pixels | `infer/engine.py`, `infer/predict.py` |
+| C6 | **Whole scene first, detail on demand**: shift-drag a box on the 2-D map to load that area at full resolution out of a windowed product | `serve/validate.py extract_aoi`, `POST /api/aoi/{job}` |
+
+### 0.3 Runbook
+
+```bash
+cd FineTunning/v5
+
+# Step 0 — audit (CPU).  Paste nothing by hand: the flags come from audit.json.
+python tools/audit_labels.py --data_root /scratch/dwdata --out outputs/audit \
+    --cartosat ../../cartosat_2S_Sample/Cartosat-2E/247677521
+
+# the Bhubaneswar PAN + MX pair -> one registered 0.6 m RGB GeoTIFF
+python tools/cartosat_to_rgb.py --pan ../../cartosat_2S_Sample/5132211 \
+    --mx ../../cartosat_2S_Sample/5132611 --out bhubaneswar_rgb.tif
+
+# train on Modal: the v5 tree, the v5 profile, the audit's Step 0 numbers
+cd ../V4_modal
+python v5_flags.py ../v5/outputs/audit/audit.json          # print + parse-check
+DW_CODE=v5 DW_AUDIT=../v5/outputs/audit/audit.json modal run modal_app.py::smoke
+DW_CODE=v5 DW_AUDIT=../v5/outputs/audit/audit.json modal run --detach modal_app.py::train
+
+# one protocol for all three versions, then the table
+cd ../v5
+python eval_test.py --ckpt best_3.7.pt  --data_root D --tta_scales 1.0,1.25 \
+    --max_valid_height_m 150 --qualitative 12 --out outputs/v4_test
+python eval_test.py --model_code ../v3 --ckpt best_2.715.pt --data_root D \
+    --tta_scales 1.0,1.25 --max_valid_height_m 150 --qualitative 12 --out outputs/v3_test
+python eval_test.py --ckpt /results/v5/best.pt --data_root D --tta_scales 1.0,1.25 \
+    --max_valid_height_m 150 --qualitative 12 --out outputs/v5_test
+python eval_test.py --compare outputs/v3_test,outputs/v4_test,outputs/v5_test \
+    --labels v3,v4,v5 --md outputs/v3_v4_v5.md
+
+# the accuracy half, the way the judges score it
+python -m eval.judge_proxy ../../cartosat_2S_Sample/Cartosat-2E/247677521 \
+    --landscape sparse --ckpt outputs/v5/best.pt --out outputs/judge_proxy
+
+# the deliverable: upload -> DSM -> viewer (reference upload, AOIs, shadows)
+python -m serve.app --ckpt outputs/v5/best.pt --port 8000
+python -m geo.dem --prime scene.tif      # fill the DEM cache for offline demos
+```
+
+`--qualitative 12` samples the same 12 tiles in every run (`--qual_seed 42`),
+so `--compare` can stitch strips RGB | GT | v3 | v4 | v5 | shadow agreement.
+For named tiles use `--qual_stems a,b,c` instead.
+
+### 0.4 What is verified, and what is not
+
+Verified in this tree (`pytest -q`: stub encoder, synthetic fixtures, no GPU,
+no network):
+* every item in §0.2 has tests, including: a MERGED folder / zip stacks
+  BAND3,2,1; windowed = whole-array within 1e-3 m across band seams; the
+  anchored DSM's 30 m cell means equal the DEM; GCPs leave the nDSM scale
+  unchanged; a box casts a shadow h / tan(el) long; the phase correlation
+  recovers a known PAN/MX shift and its sign; the audit recovers a 4× coarse
+  label, flat "trees" and a retitled duplicate tile; the reference validation
+  reprojects a lon/lat DSM and recovers a 2 m offset; an AOI cut from a
+  windowed product matches the full-resolution GeoTIFF pixel for pixel;
+  `eval_test.py` loads v4- and v5-shaped checkpoints and refuses one with
+  missing head weights; the Modal image carries the v5 profile into the
+  container.
+* The viewer was driven in headless Chromium (Playwright, SwiftShader) against
+  the real service with a stand-in model: surface toggle, walls on/off,
+  confidence and shadow layers, reference upload (lon/lat GeoTIFF → reprojected
+  → scored), AOI select → load → back, probe with lon/lat, and no console
+  errors.
+
+**Not** done yet, and it matters:
+* **No real checkpoint has been scored through the v5 code**, and no training
+  run has happened.  The cloud session that wrote this had no access to
+  huggingface.co, so the published v3 / v4 / DAv2 weights and the DINOv3
+  encoder could not be downloaded.  The first thing to run on a GPU box is the
+  three `eval_test.py` lines above with the existing weights (`best_2.715` =
+  v3, `best_3.7` = v4).
+* The audit and `cartosat_to_rgb.py` have run on synthetic data only.  The
+  `coarse_pool` / `coarse_mask_veg` / pan-sharpen numbers in `v5_flags.py` are
+  provisional until `audit.json` exists.
+* The judge proxy has run on a synthetic scene against live Copernicus data,
+  not on the Cartosat samples.
+* The mesh is a decimated regular grid with walls.  The plan's RTIN adaptive
+  mesh (Martini) is not implemented.  Thin towers narrower than the
+  decimation step can still drop out at the "Fast" mesh setting.
+* The geoid test skips without network (PROJ fetches the EGM grids from
+  cdn.proj.org).  Run `projsync` once on an offline demo machine.
+* `λ` (`--detail-gain`) stays 1.0 until the hosts answer Q1 of the draft.
+
+---
+
 # DepthWizard v4 (Kaggle 2× T4) — Phase 2 + Phase 3
 
 SIH 2026, PS 26175 (ISRO): single-view optical RGB → metric DSM → navigable 3D
