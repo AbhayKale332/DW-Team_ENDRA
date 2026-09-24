@@ -1,0 +1,276 @@
+"""Materialised tile store: `.npy` memmap shards.
+
+v2 streamed every tile from the Hugging Face hub inside the DataLoader workers,
+behind a bounded-LRU cache that re-`rglob`'d the whole cache directory on each
+download.  With a 50 GiB cap over an ~80 GiB dataset that means constant
+eviction + re-download, and the training loop spends its life waiting on the
+network: the real v2 run managed 278 steps/epoch and died at 75 minutes having
+seen ~1.4 M crops' worth of wall-clock but only ~20 epochs of a 30-epoch plan.
+
+v3 splits that in two.  `prepare_data.py` materialises the tiles **once** into
+contiguous `.npy` shards; training then memory-maps them, so a crop is a page
+fault instead of an HTTPS round trip and the GPU is the bottleneck again.
+
+Layout (one directory per dataset/split):
+
+    index.json                {"tile_px", "gsd_m", "n", "has_seg", "shards": [...]}
+    shard_000_rgb.npy         (n, T, T, 3) uint8
+    shard_000_hgt.npy         (n, T, T)    float16   metres, nDSM/AGL
+    shard_000_cls.npy         (n, T, T)    uint8     class id, 255 == unlabelled
+    shard_000_val.npy         (n, T, T)    bool      source validity (no-data mask)
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import numpy as np
+
+NO_LABEL = 255
+
+
+class ShardWriter:
+    """Append tiles; rolls to a new shard every `shard_tiles`."""
+
+    def __init__(self, out_dir: str | Path, tile_px: int, gsd_m: float,
+                 shard_tiles: int = 200, has_seg: bool = True):
+        self.dir = Path(out_dir)
+        self.dir.mkdir(parents=True, exist_ok=True)
+        self.tile_px = int(tile_px)
+        self.gsd_m = float(gsd_m)
+        self.shard_tiles = int(shard_tiles)
+        self.has_seg = bool(has_seg)
+        self.shards: list[dict] = []
+        self._i = 0                 # index within the current shard
+        self._arrays: dict | None = None
+        self._stems: list[str] = []
+
+    def _open_shard(self) -> None:
+        name = f"shard_{len(self.shards):03d}"
+        n, t = self.shard_tiles, self.tile_px
+        mk = lambda suf, shape, dt: np.lib.format.open_memmap(  # noqa: E731
+            self.dir / f"{name}_{suf}.npy", mode="w+", dtype=dt, shape=shape)
+        self._arrays = {
+            "name": name,
+            "rgb": mk("rgb", (n, t, t, 3), np.uint8),
+            "hgt": mk("hgt", (n, t, t), np.float16),
+            "cls": mk("cls", (n, t, t), np.uint8),
+            "val": mk("val", (n, t, t), np.bool_),
+        }
+        self._i = 0
+        self._stems = []
+
+    def add(self, stem: str, rgb: np.ndarray, hgt: np.ndarray,
+            cls: np.ndarray | None, valid: np.ndarray | None) -> None:
+        t = self.tile_px
+        assert rgb.shape[:2] == (t, t), f"{stem}: rgb {rgb.shape} != {t}"
+        if self._arrays is None or self._i >= self.shard_tiles:
+            self.close()
+            self._open_shard()
+        a = self._arrays
+        a["rgb"][self._i] = rgb[..., :3].astype(np.uint8)
+        a["hgt"][self._i] = np.asarray(hgt, np.float32).astype(np.float16)
+        a["cls"][self._i] = (np.full((t, t), NO_LABEL, np.uint8) if cls is None
+                             else np.clip(cls, 0, 254).astype(np.uint8))
+        v = np.isfinite(np.asarray(hgt, np.float32)) if valid is None else valid.astype(bool)
+        a["val"][self._i] = v
+        self._stems.append(stem)
+        self._i += 1
+
+    def close(self) -> None:
+        if self._arrays is None:
+            return
+        a, n = self._arrays, self._i
+        # trim the shard to the tiles actually written
+        for suf in ("rgb", "hgt", "cls", "val"):
+            p = self.dir / f"{a['name']}_{suf}.npy"
+            arr = np.load(p, mmap_mode="r")[:n]
+            tmp = p.with_suffix(".tmp.npy")
+            np.save(tmp, np.ascontiguousarray(arr))
+            del arr
+            tmp.replace(p)
+        self.shards.append({"file": a["name"], "n": n, "stems": self._stems})
+        self._arrays = None
+
+    def finalise(self) -> dict:
+        self.close()
+        idx = {
+            "tile_px": self.tile_px, "gsd_m": self.gsd_m,
+            "has_seg": self.has_seg,
+            "n": sum(s["n"] for s in self.shards),
+            "shards": self.shards,
+        }
+        (self.dir / "index.json").write_text(json.dumps(idx, indent=2))
+        return idx
+
+
+class PackedStore:
+    """Read-only memmap view over one dataset/split directory."""
+
+    def __init__(self, root: str | Path):
+        self.dir = Path(root)
+        self.index = json.loads((self.dir / "index.json").read_text())
+        self.tile_px = int(self.index["tile_px"])
+        self.gsd_m = float(self.index["gsd_m"])
+        self.has_seg = bool(self.index.get("has_seg", True))
+        self.stems: list[str] = []
+        self._map: list[tuple[int, int]] = []       # (shard_i, row)
+        for si, sh in enumerate(self.index["shards"]):
+            for r in range(sh["n"]):
+                self._map.append((si, r))
+            self.stems.extend(sh["stems"])
+        # memmaps are opened lazily and per-process, so DataLoader workers each
+        # get their own handles instead of inheriting a half-consumed one.
+        self._mm: dict[tuple[int, str], np.ndarray] = {}
+        # Per-tile stretch LUTs, memoised per process.  The bounds depend only on
+        # the tile, never on the crop, so recomputing them every __getitem__ was
+        # pure waste (~45 ms of a ~180 ms sample).
+        self._lut: dict[int, np.ndarray] = {}
+        # Per-store stretch-bound tables, keyed by (lo_pct, hi_pct).
+        self._bounds_cache: dict[tuple[float, float], np.ndarray | None] = {}
+
+    def __len__(self) -> int:
+        return len(self._map)
+
+    def _arr(self, si: int, suf: str) -> np.ndarray:
+        key = (si, suf)
+        a = self._mm.get(key)
+        if a is None:
+            name = self.index["shards"][si]["file"]
+            a = self._mm[key] = np.load(self.dir / f"{name}_{suf}.npy", mmap_mode="r")
+        return a
+
+    def get(self, i: int):
+        si, r = self._map[i]
+        rgb = np.asarray(self._arr(si, "rgb")[r])
+        hgt = np.asarray(self._arr(si, "hgt")[r], dtype=np.float32)
+        cls = np.asarray(self._arr(si, "cls")[r])
+        val = np.asarray(self._arr(si, "val")[r])
+        return rgb, hgt, cls, val
+
+    def rgb_view(self, i: int) -> np.ndarray:
+        """Read-only memmap view of one tile's RGB — no copy, no float cast.
+
+        Used for the per-scene stretch bounds, which need the whole tile even
+        though the crop that follows needs only a window of it.
+        """
+        si, r = self._map[i]
+        return self._arr(si, "rgb")[r]
+
+    def get_window(self, i: int, top: int, left: int, win: int):
+        """Just the `win` x `win` window of one tile.
+
+        `get()` materialises all four full-tile planes (~9 MB for a 1024 px
+        GAMUS tile) to then throw most of it away one crop later; at 12 000
+        crops an epoch that dominated the DataLoader.  Slicing the memmap first
+        touches only the pages the crop actually needs.
+        """
+        si, r = self._map[i]
+        sl = (slice(top, top + win), slice(left, left + win))
+        rgb = np.asarray(self._arr(si, "rgb")[r][sl])
+        hgt = np.asarray(self._arr(si, "hgt")[r][sl], dtype=np.float32)
+        cls = np.asarray(self._arr(si, "cls")[r][sl])
+        val = np.asarray(self._arr(si, "val")[r][sl])
+        return rgb, hgt, cls, val
+
+    # -- per-tile stretch bounds ----------------------------------------
+    # These are a property of the *scene*, so they do not belong in the crop
+    # path at all.  Measured on gamus/train they were 13.4 ms of an 82 ms
+    # __getitem__ — a full-tile 3 MB read plus a 3-channel histogram, done to
+    # produce six numbers, once per crop, in every worker independently.
+    # `prime_stretch_bounds` computes them once for the whole store and writes
+    # them next to the shards, so every later run and every worker starts with
+    # them already on disk and the crop path costs a 256x3 table build.
+
+    def _bounds_path(self, lo_pct: float, hi_pct: float) -> Path:
+        return self.dir / f"stretch_bounds_{lo_pct:g}_{hi_pct:g}.npy"
+
+    def _bounds(self, lo_pct: float, hi_pct: float) -> np.ndarray | None:
+        """(n, 2, C) float32 of per-tile (lo, hi), memmapped if it exists."""
+        key = (lo_pct, hi_pct)
+        if key in self._bounds_cache:
+            return self._bounds_cache[key]
+        p = self._bounds_path(lo_pct, hi_pct)
+        arr = None
+        if p.is_file():
+            try:
+                a = np.load(p, mmap_mode="r")
+                if a.shape[0] == len(self):
+                    arr = a
+            except (OSError, ValueError):
+                arr = None
+        self._bounds_cache[key] = arr
+        return arr
+
+    def prime_stretch_bounds(self, lo_pct: float, hi_pct: float,
+                             workers: int = 0, verbose: bool = True) -> bool:
+        """Compute and persist every tile's stretch bounds. Idempotent.
+
+        Returns True if the table is on disk afterwards.  Called once from
+        `build_loaders`, before the workers fork, so the cost is paid at
+        startup on the parent and never inside a training step.
+        """
+        p = self._bounds_path(lo_pct, hi_pct)
+        if self._bounds(lo_pct, hi_pct) is not None:
+            return True
+        from concurrent.futures import ThreadPoolExecutor
+
+        from .preprocess import scene_stretch_bounds
+
+        n = len(self)
+        out = np.empty((n, 2, 3), np.float32)
+
+        def one(i: int) -> None:
+            lo, hi = scene_stretch_bounds(self.rgb_view(i), lo_pct, hi_pct)
+            out[i, 0], out[i, 1] = lo[:3], hi[:3]
+
+        # The histogram releases the GIL inside numpy and the read is I/O, so
+        # threads are the right tool and they share one set of memmaps.
+        try:
+            if workers and workers > 1:
+                with ThreadPoolExecutor(max_workers=workers) as ex:
+                    list(ex.map(one, range(n)))
+            else:
+                for i in range(n):
+                    one(i)
+            tmp = p.with_suffix(".tmp.npy")
+            np.save(tmp, out)
+            tmp.replace(p)
+        except (OSError, ValueError) as e:
+            if verbose:
+                print(f"[data] could not persist stretch bounds for {self.dir}: {e}")
+            # Still usable for this process even if the store is read-only.
+            self._bounds_cache[(lo_pct, hi_pct)] = out
+            return True
+        self._bounds_cache.pop((lo_pct, hi_pct), None)
+        return self._bounds(lo_pct, hi_pct) is not None
+
+    def stretch_lut(self, i: int, lo_pct: float, hi_pct: float) -> np.ndarray:
+        """Cached (256, 3) uint8 stretch table for tile `i`."""
+        lut = self._lut.get(i)
+        if lut is None:
+            from .preprocess import scene_stretch_bounds, stretch_lut as _mk
+
+            b = self._bounds(lo_pct, hi_pct)
+            if b is not None:
+                lo, hi = np.asarray(b[i, 0]), np.asarray(b[i, 1])
+            else:
+                lo, hi = scene_stretch_bounds(self.rgb_view(i), lo_pct, hi_pct)
+            lut = self._lut[i] = _mk(lo, hi)
+        return lut
+
+    def __getstate__(self):
+        d = dict(self.__dict__)
+        d["_mm"] = {}                # never pickle memmaps into a worker
+        d["_lut"] = {}               # nor a cache built in the parent
+        # The bound tables are memmaps too; a worker re-opens its own. An
+        # in-memory fallback (read-only store) is small enough to inherit.
+        d["_bounds_cache"] = {k: v for k, v in self._bounds_cache.items()
+                              if isinstance(v, np.ndarray)
+                              and not isinstance(v, np.memmap)}
+        return d
+
+
+def store_exists(root: str | Path) -> bool:
+    return (Path(root) / "index.json").is_file()

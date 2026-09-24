@@ -38,7 +38,12 @@ ENCODER = "facebook/dinov3-vitl16-pretrain-sat493m"
 TORCH = "2.10.0"
 TORCH_INDEX = "https://download.pytorch.org/whl/cu128"
 
-_LOCAL = Path(__file__).parent.parent / "V4_Kaggle"
+# Which code tree the image mounts.  Default V4_Kaggle (unchanged for every v4
+# notebook); `DW_CODE=v5` (a sibling directory name, or a path) mounts
+# FineTunning/v5 instead — set it before importing this module.
+_LOCAL = Path(os.environ.get("DW_CODE", "V4_Kaggle"))
+if not _LOCAL.is_absolute():
+    _LOCAL = Path(__file__).parent.parent / _LOCAL
 _REQS = [
     ln.split("#")[0].strip()
     for ln in (_LOCAL / "requirements.txt").read_text().splitlines()
