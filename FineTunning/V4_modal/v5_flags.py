@@ -112,6 +112,9 @@ V5 = {
     # audit.json through `with_audit()` rather than editing these by hand.
     "coarse_label_sources": "dfc23,india_labeled",
     "coarse_pool": "4",
+    # The label resolution in metres; the pool is sized per sample from it
+    # (models/losses.py coarse_pool_px).  4 px was only right at 0.5 m.
+    "coarse_label_m": "2.0",
     "w_coarse": "1.0",
     "coarse_mask_veg": "false",          # provisional until the audit says trees sit at ~0 m
     "coarse_veg_exg": "0.05",
@@ -121,12 +124,18 @@ V5 = {
     "aug_pansharp_lo": "2.0",
     "aug_pansharp_hi": "3.3",
     "aug_gray_p": "0.1",
+    # Head B's bins must cover the labels: max_valid_height_m is 150 above, and
+    # with the default 120 every 120-150 m pixel landed in the top bin.
+    "bin_max_m": "150",
+    # Keep the decoder's AdamW state at the unfreeze and ramp the encoder LR in
+    # over one epoch (config.py `unfreeze_warmup_epochs`).
+    "unfreeze_warmup_epochs": "1.0",
 }
 
 FLAGS = {**INFRA, **KEPT, **REVERTS, **FIXES, **V5}
 
 # The Step 0 outputs, and only those, may be overridden from an audit.
-AUDIT_KEYS = ("coarse_pool", "coarse_mask_veg", "coarse_veg_exg",
+AUDIT_KEYS = ("coarse_pool", "coarse_label_m", "coarse_mask_veg", "coarse_veg_exg",
               "aug_pansharp_lo", "aug_pansharp_hi")
 
 
@@ -182,5 +191,6 @@ if __name__ == "__main__":
                        + ["--data_root", "/scratch/dwdata"])
     print(json.dumps(f, indent=2))
     print(f"[ok] {len(f)} flags parse; detail_branch={cfg.detail_branch} "
-          f"coarse={cfg.coarse_label_sources!r}@{cfg.coarse_pool} "
+          f"coarse={cfg.coarse_label_sources!r}@{cfg.coarse_label_m or cfg.coarse_pool}"
+          f"{' m' if cfg.coarse_label_m else ' px'} bin_max={cfg.bin_max_m} "
           f"val_sample_seed={cfg.val_sample_seed}")

@@ -248,6 +248,11 @@ def audit_resolution(root: Path, stores: dict, n_tiles: int, dfc23_raw: str) -> 
     coarse = [p for n, p in rec.items() if n.startswith(("dfc23", "india"))]
     if coarse:
         out["coarse_pool"] = int(max(set(coarse), key=coarse.count))
+        # the same answer in metres — what the loss actually needs, since the
+        # GSD jitter resamples crops away from the store's packed GSD
+        metres = [p * float(stores[n].gsd_m) for n, p in rec.items()
+                  if n.startswith(("dfc23", "india"))]
+        out["coarse_label_m"] = round(float(np.median(metres)), 2)
     if dfc23_raw:
         out["dfc23_raw"] = raw_pixel_ratio(Path(dfc23_raw))
     return out
@@ -503,6 +508,8 @@ def suggested_flags(rep: dict) -> dict:
     r = rep.get("resolution", {})
     if "coarse_pool" in r:
         f["coarse_pool"] = str(r["coarse_pool"])
+    if "coarse_label_m" in r:
+        f["coarse_label_m"] = str(r["coarse_label_m"])
     v = rep.get("vegetation", {})
     if v.get("coarse_mask_veg") is not None:
         f["coarse_mask_veg"] = "true" if v["coarse_mask_veg"] else "false"

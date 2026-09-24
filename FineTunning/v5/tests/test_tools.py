@@ -74,6 +74,7 @@ def test_audit_finds_coarse_labels_flat_trees_and_pins_classes(tmp_path):
     res = rep["resolution"]
     assert res["recommended_pool"]["dfc23_g050"] == 4, res
     assert rep["flags"]["coarse_pool"] == "4"
+    assert rep["flags"]["coarse_label_m"] == str(round(4 * 0.33, 2))   # in metres
     veg = rep["vegetation"]
     assert veg["coarse_mask_veg"] is True
     assert veg["green_pixel_heights"]["dfc23_g050"]["median_m"] < 1.0
@@ -330,6 +331,8 @@ def test_v5_flags_are_real_fields_and_parse():
     assert cfg.coarse_label_sources == "dfc23,india_labeled" and cfg.coarse_pool == 4
     assert cfg.aug_pansharp_p == 0.5 and cfg.aug_gray_p == 0.1
     assert cfg.output_dir == "/results/v5" and cfg.onnx_opset == 18
+    assert cfg.bin_max_m >= cfg.max_valid_height_m         # Head B covers every label
+    assert cfg.coarse_label_m == 2.0 and cfg.unfreeze_warmup_epochs == 1.0
     assert cfg.datasets.startswith("gamus,")
 
 
