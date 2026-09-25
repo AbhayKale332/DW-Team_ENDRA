@@ -117,3 +117,27 @@ def test_onnx_export_with_the_detail_branch(tmp_path, monkeypatch):
         assert np.abs(got.reshape(ref.shape) - ref).max() < 1e-3
     finally:
         undo()
+
+
+def test_fp16_forward_survives_a_trunk_past_fp16_range(pair):
+    """A bf16-trained trunk (v4) can put features past 65504.  Under fp16
+    autocast that used to be `inf` in the trunk output and NaN in every head.
+    The unnormalised parts now run in fp32 and the heads get a scaled copy,
+    which they cannot tell apart from the original."""
+    _, v5, _, _ = pair
+    with torch.no_grad():
+        v5.trunk.fuse[0].out.weight.mul_(3e4)
+        v5.trunk.fuse[0].out.bias.mul_(3e4)
+        v5.upsampler.net[-1].weight.normal_(0, 0.01)   # a trained, non-bilinear upsampler
+        v5.inject.weight.normal_(0, 0.01)
+    x = torch.randn(2, 3, 64, 64)
+    with torch.no_grad():
+        ref = v5(x)
+        assert v5.trunk(v5.encoder(x)).abs().max() > 65504   # the premise
+        with torch.autocast("cpu", dtype=torch.float16):
+            got = v5(x)
+    for k in ("fused", "a", "b", "alpha", "b_std", "seg", "b_logits", "b_centres"):
+        assert torch.isfinite(got[k]).all(), k
+        # fp16 rounding, not the rescale: the old path gave NaN here, not error
+        err = (got[k].float() - ref[k]).abs().mean().item()
+        assert err < 1e-3 * ref[k].abs().max().item() + 1e-3, (k, err)

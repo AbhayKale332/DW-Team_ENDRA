@@ -20,6 +20,8 @@ Head B a second job, which is another reason for it not to collapse.
 
 from __future__ import annotations
 
+from contextlib import nullcontext
+
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -155,7 +157,7 @@ class GatedFusion(nn.Module):
             nn.Conv2d(dim // 4, 1, 1),
         )
 
-    def forward(self, feat, a, b):
+    def forward(self, feat, a, b, scale=None):
         # `b` arrives in fp32 (HeadB computes its moments there — see HeadB's
         # docstring) while `feat` and `a` are autocast fp16.  `torch.cat` type-
         # promotes, so concatenating them as-is would silently widen all `dim`
@@ -163,7 +165,13 @@ class GatedFusion(nn.Module):
         # profile the log shows sitting at 13-14 of 15 GiB.  The gate is a conv
         # stack autocast would run in fp16 regardless, so the cast is free to
         # make explicit and narrow.
-        g = torch.cat([feat, a.to(feat.dtype), b.to(feat.dtype)], dim=1)
+        #
+        # `scale` is the per-sample factor `feat` was already multiplied by (see
+        # `DepthWizardNet.forward`).  The gate's first conv has no bias and feeds
+        # a GroupNorm, so scaling its whole input leaves alpha unchanged, but
+        # only if `a` and `b` go in scaled along with `feat`.
+        ga, gb = (a, b) if scale is None else (a * scale, b * scale)
+        g = torch.cat([feat, ga.to(feat.dtype), gb.to(feat.dtype)], dim=1)
         alpha = torch.sigmoid(self.gate(g))
         # The blend itself stays in the wider of the two: this is the metric
         # height that every regression loss is computed against.
@@ -278,9 +286,36 @@ class DepthWizardNet(nn.Module):
             nn.init.zeros_(self.inject.bias)
             self.upsampler = ConvexUp2x(d + c2 + 4 * max(8, c2 // 2))
 
+    # Largest |feature| handed to the fp16 heads.  Their first conv sums
+    # 9 x 256 products, so this keeps its output far inside fp16's 65504.
+    FP16_FEAT_MAX = 64.0
+
     def forward(self, image: torch.Tensor) -> dict:
+        """Under fp16 autocast, the parts with no normalisation run in fp32.
+        bf16, fp32 and ONNX export take the same path as before.
+
+        The DPT trunk is a residual stream with no normalisation, and neither
+        the detail `inject` nor the upsampler's first conv (bias, then ReLU) has
+        any either.  v4 was trained in bf16 on the H100, and its stream grows
+        past fp16's 65504 on some tiles.  The first T4 warm start shows what
+        follows: `inf` in the trunk output (NON-FINITE b_centres), NaN on
+        dfc23 val, and 54 % then 97 % of optimiser steps skipped, because one
+        bad micro-batch spoils all 16 in its step.
+
+        The heads, the fusion gate and HeadB's bin-width pool each start with
+        either a bias-free conv followed by GroupNorm or an RMS normalisation.
+        That makes them invariant to a positive per-sample scale on their input.
+        So they stay in fp16 and get a copy of the features scaled down to
+        FP16_FEAT_MAX.  The result is exact apart from GroupNorm's eps.
+        """
         hw = image.shape[-2:]
-        x = self.trunk(self.encoder(image))          # (B, d, H/2, W/2)
+        dev = image.device.type
+        fp16 = (torch.is_autocast_enabled(dev)
+                and torch.get_autocast_dtype(dev) == torch.float16)
+        fp32 = (lambda: torch.autocast(dev, enabled=False)) if fp16 else nullcontext
+        feats = self.encoder(image)
+        with fp32():
+            x = self.trunk([f.float() for f in feats] if fp16 else feats)  # (B, d, H/2, W/2)
         up = lambda t: F.interpolate(t, size=hw, mode="bilinear", align_corners=False)  # noqa: E731
         up_h = up
         if self.detail:
@@ -288,14 +323,21 @@ class DepthWizardNet(nn.Module):
             if s_half.shape[-2:] != x.shape[-2:]:
                 s_half = F.interpolate(s_half, size=x.shape[-2:], mode="bilinear",
                                        align_corners=False)
-            x = x + self.inject(torch.cat([x, s_half.to(x.dtype)], 1))
-            if tuple(hw) == (2 * x.shape[-2], 2 * x.shape[-1]):
-                m = self.upsampler.weights(torch.cat(
-                    [x, s_half.to(x.dtype), F.pixel_unshuffle(s_full, 2).to(x.dtype)], 1))
-                up_h = lambda t: ConvexUp2x.apply(t, m)  # noqa: E731
+            with fp32():
+                x = x + self.inject(torch.cat([x, s_half.to(x.dtype)], 1))
+                if tuple(hw) == (2 * x.shape[-2], 2 * x.shape[-1]):
+                    m = self.upsampler.weights(torch.cat(
+                        [x, s_half.to(x.dtype), F.pixel_unshuffle(s_full, 2).to(x.dtype)], 1))
+                    up_h = lambda t: ConvexUp2x.apply(t, m)  # noqa: E731
+        scale = None
+        if fp16:
+            # Detached, because the heads are blind to it: no gradient flows through it.
+            peak = x.detach().abs().amax(dim=(1, 2, 3), keepdim=True)
+            scale = (self.FP16_FEAT_MAX / peak.clamp_min(1e-12)).clamp_max(1.0)
+            x = (x * scale).to(torch.float16)
         a = self.head_a(x)
         b = self.head_b(x)
-        fused, alpha = self.fusion(x, a, b["height"])
+        fused, alpha = self.fusion(x, a, b["height"], scale)
 
         return {
             "a": up_h(a),
