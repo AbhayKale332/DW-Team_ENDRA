@@ -402,7 +402,13 @@ class Config:
     class_names: tuple = CLASS_NAMES
     output_dir: str = _DEFAULT_OUTPUT_DIR
     n_qualitative: int = 12
-    make_figures: bool = True               # viz/figures.py at the end of the run
+    # Per-dataset sample gallery in the report: source families (prefix-matched
+    # against the stores under data_root, trained on or not), and tiles each.
+    # Each family shows one store, from its val split if it has one, else test,
+    # else train, and the report says which.  "" or 0 turns it off.
+    gallery_sources: str = "synrs3d,dfc23,india_labeled"
+    gallery_tiles: int = 3
+    make_figures: bool = True              # viz/figures.py at the end of the run
     make_report: bool = True                # viz/report_html.py validation report
     export_onnx: bool = True                # infer/export_onnx.py at the end of the run
     onnx_opset: int = 17
@@ -444,6 +450,7 @@ class Config:
         self.cudnn_benchmark = False
         self.eval_every = 1
         self.n_qualitative = 2
+        self.gallery_tiles = 1
         self.final_sliding_eval = False
         self.test_tiles = 4
         self.ema_decay = 0.0

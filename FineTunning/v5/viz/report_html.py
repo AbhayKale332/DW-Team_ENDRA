@@ -58,7 +58,53 @@ footer{margin-top:40px;color:#6a737d;font-size:12px;border-top:1px solid #e1e4e8
 
 def _img(path: Path) -> str:
     b = base64.b64encode(Path(path).read_bytes()).decode("ascii")
-    return f"data:image/png;base64,{b}"
+    mime = "jpeg" if Path(path).suffix.lower() in (".jpg", ".jpeg") else "png"
+    return f"data:image/{mime};base64,{b}"
+
+
+# What each gallery source *is*, so a reader knows what they are looking at.
+# Matched on the store-name prefix (`dfc23_g050` -> `dfc23`).
+_GALLERY_ABOUT = {
+    "synrs3d": "SynRS3D — synthetic remote-sensing scenes rendered with exact "
+               "per-pixel heights. Clean labels, but not real imagery.",
+    "dfc23": "DFC23 Track 2 — real very-high-resolution satellite imagery with "
+             "reference nDSMs, the closest open data to the deployment sensor.",
+    "india_labeled": "India (labelled) — New Delhi tiles carved out of DFC23, the "
+                     "only Indian imagery here with per-pixel reference heights.",
+    "gamus": "GAMUS — US aerial imagery, the primary validation set.",
+}
+
+
+def _gallery(figs: Path) -> str:
+    idx_path = figs / "gallery.json"
+    if not idx_path.is_file():
+        return ""
+    try:
+        index = json.loads(idx_path.read_text())
+    except (OSError, ValueError):
+        return ""
+    body = []
+    for e in index:
+        store = str(e.get("store", ""))
+        about = next((v for k, v in _GALLERY_ABOUT.items()
+                      if store == k or store.startswith(k + "_")), "")
+        where = f"<code>{html.escape(store)}/{html.escape(str(e.get('split', '')))}</code>"
+        if e.get("seen_in_training"):
+            where += (" — <b>training tiles</b>: the model saw these, so their error "
+                      "flatters it")
+        rm = [t["rmse_m"] for t in e.get("tiles") or [] if t.get("rmse_m") is not None]
+        tail = f" Mean per-tile RMSE {sum(rm) / len(rm):.2f} m over {len(rm)} tiles." if rm else ""
+        fig = _fig(figs / str(e.get("file", "")),
+                   f"{html.escape(about)} Tiles from {where}.{tail}")
+        if fig:
+            body.append(f"<h3>{html.escape(store)}</h3>{fig}")
+    if not body:
+        return ""
+    return ("<h2>Sample tiles by dataset</h2>"
+            "<p>A seeded handful of tiles from each source, predicted at native GSD. "
+            "Reference and prediction share one height scale per row; grey is "
+            "NoData in the reference. These are for looking at, not scoring — a "
+            "few tiles say nothing about a dataset's RMSE.</p>" + "".join(body))
 
 
 def _fig(path: Path, caption: str) -> str:
@@ -208,6 +254,7 @@ def build(run_dir: str | Path, out_path: str | Path | None = None,
     ])
     if qual:
         parts.append("<h2>Qualitative</h2>" + qual)
+    parts.append(_gallery(figs))
 
     # ---- training --------------------------------------------------------
     parts.append("<h2>Training</h2>")

@@ -110,3 +110,76 @@ def export_qualitative(model, ds, cfg, spec, device, n: int) -> list:
         out.append((rgb, pred.astype(np.float32), gt.astype(np.float32)))
     print(f"[qual] wrote {len(out)} strips -> {d}  (RGB | pred | GT | |err|)")
     return out
+
+
+def _gallery_stores(cfg) -> list[tuple[str, str, bool]]:
+    """(store, split, seen_in_training) — one store per `gallery_sources` family.
+
+    A family is prefix-matched (`dfc23` -> `dfc23_g050`), preferring a store the
+    run trained on, and the split falls back val -> test -> train.  SynRS3D is
+    packed train-only, so its tiles are training tiles and the report says so.
+    """
+    from dwdata.loaders import val_split_of
+    from dwdata.packed import store_exists
+
+    root = Path(cfg.data_root)
+    trained = set(cfg.labeled_sources())
+    on_disk = sorted(p.name for p in root.iterdir() if p.is_dir()) if root.is_dir() else []
+    out = []
+    for fam in (f.strip() for f in str(cfg.gallery_sources or "").split(",")):
+        if not fam:
+            continue
+        names = [n for n in on_disk if n == fam or n.startswith(fam + "_")]
+        names.sort(key=lambda n: (n not in trained, n))
+        pick = None
+        for name in names:
+            for split in dict.fromkeys(s for s in (val_split_of(name), "test", "train") if s):
+                if store_exists(root / name / split):
+                    pick = (name, split, split == "train" and name in trained)
+                    break
+            if pick:
+                break
+        if pick:
+            out.append(pick)
+        else:
+            print(f"[gallery] no prepared store for '{fam}' under {root}; skipped")
+    return out
+
+
+@torch.no_grad()
+def export_gallery(model, cfg, spec, device) -> list[dict]:
+    """A few predicted tiles per source family, for the report's gallery.
+
+    Returns one entry per store: {store, split, seen_in_training, gsd_m, tiles},
+    each tile {stem, rgb, pred, gt, valid, rmse_m, mae_m}.  Tiles are a seeded
+    sample, not the sorted-stem prefix — the prefix is one city.  The per-tile
+    numbers are captions, not metrics.
+    """
+    from dwdata.dataset import FullTileDataset
+    from dwdata.loaders import _open, sample_indices
+
+    k = int(getattr(cfg, "gallery_tiles", 0) or 0)
+    if k <= 0:
+        return []
+    model.eval()
+    out = []
+    for name, split, seen in _gallery_stores(cfg):
+        st = _open(Path(cfg.data_root), name, split)
+        idx = sample_indices(len(st), min(k, len(st)), 0)
+        ds = FullTileDataset(cfg, st, spec, name, length=min(k, len(st)), indices=idx)
+        tiles = []
+        for i in range(len(ds)):
+            s, rgb, pred = _predict(model, ds, i, cfg, spec, device)
+            gt, valid = s["target"].numpy(), s["valid"].numpy().astype(bool)
+            e = (pred - gt)[valid]
+            tiles.append({
+                "stem": str(s["stem"]), "rgb": rgb, "pred": pred.astype(np.float32),
+                "gt": gt.astype(np.float32), "valid": valid,
+                "rmse_m": float(np.sqrt(np.mean(e ** 2))) if e.size else None,
+                "mae_m": float(np.mean(np.abs(e))) if e.size else None,
+            })
+        out.append({"store": name, "split": split, "seen_in_training": seen,
+                    "gsd_m": float(st.gsd_m), "tiles": tiles})
+        print(f"[gallery] {name}/{split}: {len(tiles)} tiles"
+              + ("  (training tiles — seen by the model)" if seen else ""))
+    return out

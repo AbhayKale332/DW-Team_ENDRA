@@ -51,6 +51,16 @@ def test_train_then_predict_roundtrip(tmp_path, store, monkeypatch):
     undo = use_stub(hidden=32, patch=16, layers=8)
     try:
         data_root = Path(store.dir).parents[1]
+        # a store the run does NOT train on: the report gallery must still show it
+        from dwdata.packed import ShardWriter
+        w = ShardWriter(data_root / "synrs3d_g05" / "train", tile_px=128, gsd_m=0.5,
+                        shard_tiles=4)
+        for i in range(2):
+            h = np.zeros((128, 128), np.float32)
+            h[32:96, 32:96] = 8.0
+            w.add(f"s{i}", np.full((128, 128, 3), 120, np.uint8), h,
+                  np.zeros((128, 128), np.uint8), np.ones((128, 128), bool))
+        w.finalise()
         cfg = _tiny_cfg(tmp_path, data_root)
         monkeypatch.setattr(sys, "argv", ["train.py"])
         import config as config_mod
@@ -74,6 +84,10 @@ def test_train_then_predict_roundtrip(tmp_path, store, monkeypatch):
         assert m["history"][0]["encoder_frozen"] is True
         assert m["history"][1]["encoder_frozen"] is False, "encoder never unfroze"
         assert (out / "viewer_sample" / "pred_ndsm_m.npy").is_file()
+        gal = json.loads((out / "figures" / "gallery.json").read_text())
+        assert [(e["store"], e["split"], e["seen_in_training"]) for e in gal] == \
+            [("synrs3d_g05", "train", False)]
+        assert "Sample tiles by dataset" in (out / "validation_report.html").read_text()
 
         # ---- the contract: the checkpoint carries its own preprocessing ----
         ck = torch.load(out / "best.pt", map_location="cpu", weights_only=False)

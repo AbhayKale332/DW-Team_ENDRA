@@ -4,7 +4,7 @@ Everything here reads `metrics.json` and the packed val store — nothing needs 
 GPU or the checkpoint, so you can re-render the plots from a finished run's
 artefacts on a laptop.
 
-The seven figures, and what each is *for*:
+The figures, and what each is *for*:
 
 | file | question it answers |
 |---|---|
@@ -15,6 +15,7 @@ The seven figures, and what each is *for*:
 | `error_hist.png` | signed error distribution, split flat / tall |
 | `hillshade.png` | what the DSM looks like as a surface, which is what the judge sees |
 | `qualitative.png` | RGB, prediction, GT, error — the contact sheet |
+| `gallery_<store>.jpg` | what SynRS3D / DFC23 / India tiles look like, and how the model does on each |
 
 Matplotlib only, Agg backend, no seaborn: one less dependency to install on a
 box that has to work offline.
@@ -256,9 +257,65 @@ def plot_contact_sheet(strips: list[np.ndarray], out: Path, max_rows: int = 6):
     return out
 
 
+def plot_gallery(entry: dict, out: Path):
+    """One store's tiles: RGB | reference | predicted | |error|, one row each.
+
+    Unlike the contact sheet this carries colour bars in metres and a per-row
+    label, because the rows come from different sources at different GSDs and a
+    reader has no other way to tell a 3 m building from a 30 m one.  JPEG, since
+    these are photographs and the report inlines every byte.
+    """
+    plt = _mpl()
+    tiles = entry.get("tiles") or []
+    if not tiles:
+        return None
+    n = len(tiles)
+    fig, ax = plt.subplots(n, 4, figsize=(11.0, 2.9 * n), squeeze=False)
+    for r, t in enumerate(tiles):
+        valid = t.get("valid")
+        gt = np.where(valid, t["gt"], np.nan) if valid is not None else t["gt"]
+        vmax = float(max(np.nanpercentile(gt, 99.5) if np.isfinite(gt).any() else 0,
+                         np.nanpercentile(t["pred"], 99.5), 1.0))
+        err = np.abs(t["pred"] - gt)
+        emax = max(vmax * 0.4, 1.0)
+        panels = ((t["rgb"], None, None, "RGB"),
+                  (gt, "turbo", (0, vmax), "reference nDSM"),
+                  (t["pred"], "turbo", (0, vmax), "predicted nDSM"),
+                  (err, "inferno", (0, emax), "|error|"))
+        for c, (img, cmap, lim, name) in enumerate(panels):
+            a = ax[r][c]
+            if cmap is None:
+                a.imshow(img)
+            else:
+                # NoData in the reference, grey rather than drawn as 0 m
+                cm = plt.get_cmap(cmap).with_extremes(bad="#bfc4ca")
+                im = a.imshow(img, cmap=cm, vmin=lim[0], vmax=lim[1])
+                cb = fig.colorbar(im, ax=a, fraction=0.046, pad=0.02)
+                cb.ax.tick_params(labelsize=7)
+                cb.set_label("m", fontsize=7)
+            a.set_xticks([])
+            a.set_yticks([])
+            a.grid(False)
+            for sp in a.spines.values():
+                sp.set_visible(False)
+            if r == 0:
+                a.set_title(name, fontsize=9)
+        rm = t.get("rmse_m")
+        ax[r][0].set_ylabel(f"{t.get('stem', '')}\n"
+                            + (f"RMSE {rm:.2f} m · MAE {t['mae_m']:.2f} m"
+                               if rm is not None else "no valid reference"),
+                            fontsize=7.5)
+    fig.suptitle(f"{entry['store']} / {entry['split']}  ·  "
+                 f"{entry.get('gsd_m', 0):.2f} m GSD", fontsize=10)
+    fig.tight_layout()
+    fig.savefig(out, bbox_inches="tight", dpi=110, pil_kwargs={"quality": 85})
+    plt.close(fig)
+    return out
+
+
 # ---------------------------------------------------------------------
 def make_all(out_dir: Path, metrics: dict, samples: list | None = None,
-             gsd_m: float = 0.5) -> dict:
+             gsd_m: float = 0.5, gallery: list | None = None) -> dict:
     """Render every figure that the available data supports.
 
     `samples` is a list of (rgb_u8, pred_m, gt_m) triples; without it the
@@ -289,6 +346,21 @@ def make_all(out_dir: Path, metrics: dict, samples: list | None = None,
                                          out_dir / "hillshade.png", gsd_m))
         keep("qualitative", plot_contact_sheet(
             [strip(*s) for s in samples], out_dir / "qualitative.png"))
+    if gallery:
+        # The report reads gallery.json, not the directory, so a stale
+        # gallery_*.jpg from an earlier render cannot sneak back in.
+        index = []
+        for e in gallery:
+            p = plot_gallery(e, out_dir / f"gallery_{e['store']}.jpg")
+            if p is None:
+                continue
+            keep(f"gallery_{e['store']}", p)
+            index.append({"file": Path(p).name, "store": e["store"], "split": e["split"],
+                          "seen_in_training": bool(e.get("seen_in_training")),
+                          "gsd_m": e.get("gsd_m"),
+                          "tiles": [{"stem": t.get("stem"), "rmse_m": t.get("rmse_m"),
+                                     "mae_m": t.get("mae_m")} for t in e["tiles"]]})
+        (out_dir / "gallery.json").write_text(json.dumps(index, indent=2))
     print(f"[viz] {len(made)} figures -> {out_dir}")
     return made
 

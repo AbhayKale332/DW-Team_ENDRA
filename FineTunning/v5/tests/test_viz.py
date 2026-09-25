@@ -111,3 +111,53 @@ def test_colorize_and_strip_shapes():
     rgb, pred, gt = _sample(64)
     s = strip(rgb, pred, gt)
     assert s.shape == (64, 64 * 4, 3)
+
+
+def _gallery_entry(store, split, seen=False, n=2):
+    tiles = []
+    for i in range(n):
+        rgb, pred, gt = _sample(64)
+        valid = np.ones_like(gt, bool)
+        valid[:4] = False                         # a NoData band, drawn grey
+        tiles.append({"stem": f"{store}_{i}", "rgb": rgb, "pred": pred, "gt": gt,
+                      "valid": valid, "rmse_m": 1.5, "mae_m": 0.8})
+    return {"store": store, "split": split, "seen_in_training": seen,
+            "gsd_m": 0.5, "tiles": tiles}
+
+
+def test_gallery_renders_into_the_report(tmp_path):
+    gallery = [_gallery_entry("synrs3d_g05", "train", seen=True),
+               _gallery_entry("dfc23_g050", "val"),
+               _gallery_entry("india_labeled", "val"),
+               {"store": "empty", "split": "val", "tiles": []}]
+    (tmp_path / "metrics.json").write_text(json.dumps(_metrics()))
+    made = make_all(tmp_path / "figures", _metrics(), [_sample()], 0.5, gallery=gallery)
+    for s in ("synrs3d_g05", "dfc23_g050", "india_labeled"):
+        assert (tmp_path / "figures" / made[f"gallery_{s}"]).stat().st_size > 5000
+    assert "gallery_empty" not in made
+    index = json.loads((tmp_path / "figures" / "gallery.json").read_text())
+    assert [e["store"] for e in index] == ["synrs3d_g05", "dfc23_g050", "india_labeled"]
+    assert "rgb" not in index[0]["tiles"][0]      # metadata only, no arrays
+    html = build(tmp_path).read_text()
+    assert "Sample tiles by dataset" in html
+    assert html.count("src=\"data:image/jpeg;base64,") == 3
+    assert "SynRS3D" in html and "DFC23" in html and "New Delhi" in html
+    assert "training tiles" in html               # synrs3d is train-only; say so
+
+
+def test_gallery_store_resolution(tmp_path):
+    from config import Config
+    from eval.report import _gallery_stores
+
+    for name, split in (("synrs3d_g05", "train"), ("synrs3d_g1", "train"),
+                        ("dfc23_g050", "train"), ("dfc23_g050", "val"),
+                        ("india_labeled", "val")):
+        d = tmp_path / name / split
+        d.mkdir(parents=True)
+        (d / "index.json").write_text("{}")
+    cfg = Config(data_root=str(tmp_path), datasets="gamus,synrs3d_g1",
+                 gallery_sources="synrs3d,dfc23,india_labeled,geonrw")
+    got = _gallery_stores(cfg)
+    # the store this run trained on wins; val beats train; untrained is fine
+    assert got == [("synrs3d_g1", "train", True), ("dfc23_g050", "val", False),
+                   ("india_labeled", "val", False)]
