@@ -54,6 +54,7 @@ import json
 import math
 import os
 import random
+import shutil
 import sys
 import time
 import traceback
@@ -656,6 +657,19 @@ def main() -> None:
                  f"({src}) instead of restarting from "
                  f"{100.0 * schedule_progress(cfg, start_epoch - 1, elapsed_min):.0f} %"
                  if sched_anchor else ""))
+        # `best` came back, but the file it names lives in the previous
+        # session's (read-only) output: `best.pt` is only written on a NEW best,
+        # so a resume that never beats it leaves none here, and the final eval
+        # silently scores the last weights while the notebook's test cell dies
+        # on FileNotFoundError (the v5 v4init resume, best 2.804 m at e10).
+        prev_best = Path(cfg.resume).parent / "best.pt"
+        if is_main and not (out_dir / "best.pt").is_file():
+            if prev_best.is_file():
+                shutil.copy2(prev_best, out_dir / "best.pt")
+                print(f"[resume] best.pt ({best:.3f} m) carried over from {prev_best.parent}")
+            else:
+                print(f"[resume] [!] no best.pt next to {cfg.resume} — unless this "
+                      f"session beats {best:.3f} m, {out_dir}/best.pt will not exist")
         del full_ck
 
     t_session = time.time()          # this session's own clock (session_minutes)
