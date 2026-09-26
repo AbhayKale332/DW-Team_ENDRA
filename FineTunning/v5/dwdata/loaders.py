@@ -159,9 +159,9 @@ def build_loaders(cfg, spec, rank: int = 0, world_size: int = 1,
         # The GSD jitter range in the config is a *request*; what a store can
         # actually deliver is bounded by its own extent, because v3 moved to
         # picking the crop in source pixels first (see dwdata/augment.py).  A
-        # 1024 px / 0.33 m GAMUS tile caps at 1024*0.33/512 = 0.66 m, so the
+        # 1024 px / 0.25 m GAMUS tile caps at 1024*0.25/512 = 0.5 m, so the
         # configured 1.20 m upper bound is silently unreachable and the real
-        # scale span is 2.2x, not 4x.  That clamp is correct — it is what stops
+        # scale span is 1.7x, not 4x.  That clamp is correct — it is what stops
         # v2's zero-padding bug — but it was invisible, so print it: mixing a
         # coarse source (DFC2019 at 1.3 m) is the only way to actually train the
         # coarse end, and you cannot tell that from the config alone.

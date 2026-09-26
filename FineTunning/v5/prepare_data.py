@@ -54,7 +54,11 @@ os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 
 from dwdata.packed import NO_LABEL, ShardWriter, store_exists  # noqa: E402
 
-GAMUS_GSD_M = 0.33
+# Measured, not the paper's "0.33 m": regulation tennis courts and a football
+# field (lengths checked against their painted inner lines) give 0.2529 m/px in
+# PHL (n=9), 0.2507 NYC (7) and 0.2562 DC (3), 2026-09-26.  Every store packed
+# before then says 0.33 in its index.json.
+GAMUS_GSD_M = 0.25
 # GAMUS names its RGB rasters two ways -- `_RGB.h5` for most tiles and `_IMG.h5`
 # for the NYC ones.  Heights and classes are always `_AGL`/`_CLS`; only images/
 # is inconsistent.
@@ -82,8 +86,8 @@ GEONRW_GSD_M = 1.0
 _SYN_GSD = {"g005": 0.175, "g05": 0.45, "g1": 0.8}
 
 # g1 first, and it is the only family that serves the reason this source exists.
-# GAMUS's 1024 px / 0.33 m tiles cap at 1024*0.33/512 = 0.66 m
-# (dwdata/augment.py:achievable_gsd_range), so anything coarser has to come from
+# GAMUS's 1024 px / 0.25 m tiles cap at 1024*0.25/512 = 0.5 m (0.66 m while they
+# were labelled 0.33; dwdata/augment.py:achievable_gsd_range), so anything coarser has to come from
 # somewhere else — and the list here used to start with g05, which tops out at
 # 0.60 m, while carrying a comment claiming it supplied the ">0.66 m scale
 # range".  No g1 archive was in the list at all.  These three are the 5,537
@@ -964,9 +968,15 @@ def _dfc23_height_check(out: Path, label: str, tall_m: float = 100.0,
 # each tile location, 2014-2016.  The val split is therefore by *location*: a
 # view-level split puts other dates of every val tile into training.
 #
-# GAMUS also covers Jacksonville and Omaha, from aerial imagery over the same
-# public LiDAR, so these tiles can sit over the same streets as gamus/test ones.
-US3D_GSD_M = 0.3
+# No overlap with GAMUS: its paper lists Omaha and Jacksonville, but its release
+# dropped them ("Remove the cities (OMA and JAX) from the DFC 2019 dataset",
+# EarthNets/RSI-MMSegmentation README); every GAMUS tile is DC, NYC or PHL.
+#
+# The GeoTIFFs carry no transform, so this is measured: 26 known-size objects in
+# 13 views of 5 locations (court / field lines as the internal check) give a
+# median 0.321 m/px, JAX 0.313, OMA 0.337, up to ~10 % between views of one
+# location; off-nadir views are not always square-pixelled.
+US3D_GSD_M = 0.32
 # ASPRS LAS codes -> GAMUS ids (config.CLASS_NAMES).  Packed straight into the
 # GAMUS space, so us3d must NOT join config.SHARED_SPACE_SOURCES.  17 is an
 # elevated road / bridge: raised, so not GAMUS's road (a flat class).  65
