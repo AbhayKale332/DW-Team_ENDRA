@@ -977,6 +977,25 @@ def _dfc23_height_check(out: Path, label: str, tall_m: float = 100.0,
 # median 0.321 m/px, JAX 0.313, OMA 0.337, up to ~10 % between views of one
 # location; off-nadir views are not always square-pixelled.
 US3D_GSD_M = 0.32
+
+# What each store's index.json must say now.  Stores packed before these were
+# measured say gamus 0.33 / us3d 0.30, and a Kaggle input stays on the version
+# it was attached at (depthwizard-gamus v2+, depthwizard-us3d v3+ carry these),
+# so the Kaggle notebooks call `stale_gsd_stores` before training.
+MEASURED_GSD_M = {"gamus": GAMUS_GSD_M, "us3d": US3D_GSD_M}
+
+
+def stale_gsd_stores(root) -> list[str]:
+    """`<root>/<store>/<split>` whose gsd_m disagrees with MEASURED_GSD_M."""
+    import json
+
+    out = []
+    for name, want in MEASURED_GSD_M.items():
+        for idx in sorted(Path(root).glob(f"{name}/*/index.json")):
+            got = float(json.loads(idx.read_text())["gsd_m"])
+            if abs(got - want) > 1e-6:
+                out.append(f"{name}/{idx.parent.name}: gsd_m {got}, want {want}")
+    return out
 # ASPRS LAS codes -> GAMUS ids (config.CLASS_NAMES).  Packed straight into the
 # GAMUS space, so us3d must NOT join config.SHARED_SPACE_SOURCES.  17 is an
 # elevated road / bridge: raised, so not GAMUS's road (a flat class).  65

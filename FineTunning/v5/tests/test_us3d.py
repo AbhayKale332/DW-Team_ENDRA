@@ -73,3 +73,22 @@ def test_split_holds_out_whole_locations_and_keeps_trees(tmp_path):
     assert (seg[16:-4] == CLASS_NAMES.index("ground")).all()
     assert (seg[-4:] == SEG_IGNORE_INDEX).all()       # 65 = unlabelled
     assert US3D_TO_GAMUS[6] == CLASS_NAMES.index("building")
+
+
+def test_stale_gsd_stores_names_an_old_version_only(tmp_path):
+    from dwdata.packed import ShardWriter
+    from prepare_data import GAMUS_GSD_M, US3D_GSD_M, stale_gsd_stores
+
+    def store(name, split, gsd):
+        w = ShardWriter(tmp_path / name / split, tile_px=8, gsd_m=gsd, shard_tiles=2)
+        w.add("a", np.zeros((8, 8, 3), np.uint8), np.zeros((8, 8)), None, None)
+        w.finalise()
+
+    store("gamus", "train", GAMUS_GSD_M)
+    store("us3d", "train", US3D_GSD_M)
+    store("synrs3d_g05", "train", 0.45)               # not a measured store: ignored
+    assert stale_gsd_stores(tmp_path) == []
+    store("gamus", "val", 0.33)                       # attached at the pre-fix version
+    store("us3d", "val", 0.3)
+    assert stale_gsd_stores(tmp_path) == [f"gamus/val: gsd_m 0.33, want {GAMUS_GSD_M}",
+                                          f"us3d/val: gsd_m 0.3, want {US3D_GSD_M}"]
