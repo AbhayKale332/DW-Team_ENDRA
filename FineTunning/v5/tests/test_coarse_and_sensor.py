@@ -79,6 +79,33 @@ def test_veg_mask_drops_zeroed_trees_from_coarse_samples():
     assert m[:4].all() and not m[4:].any()
 
 
+def test_veg_mask_lets_a_coarse_sample_keep_its_trees():
+    """DFC23 labels trees 0 m.  With the mask on, predicting a canopy there is free."""
+    cfg = Config()
+    cfg.coarse_label_sources = "dfc23"
+    B, S = 1, 32
+    tgt = torch.zeros(B, 1, S, S)
+    tgt[..., 20:, :] = 10.0                            # a building the label does know
+    veg = torch.zeros(B, 1, S, S, dtype=torch.bool)
+    veg[..., :16, :] = True                            # a canopy it put at 0 m
+    tree = tgt.clone()
+    tree[..., :16, :] = 8.0
+    batch = {"target": tgt, "valid": torch.ones(B, 1, S, S, dtype=torch.bool),
+             "cls": torch.full((B, S, S), 7), "gsd_m": torch.full((B,), 0.5),
+             "src": ["dfc23_g050"], "veg": veg}
+    torch.manual_seed(0)
+    o0 = _out(tgt.clone(), B, S)
+    torch.manual_seed(0)
+    o1 = _out(tree, B, S)
+    cfg.coarse_mask_veg = False
+    _, off = compute_losses(o1, batch, cfg, StratumBalancer(0.0))
+    assert float(off["coarse"]) > 0.1                  # unmasked: the canopy is an error
+    cfg.coarse_mask_veg = True
+    _, flat = compute_losses(o0, batch, cfg, StratumBalancer(0.0))
+    _, on = compute_losses(o1, batch, cfg, StratumBalancer(0.0))
+    assert abs(float(on["coarse"]) - float(flat["coarse"])) < 1e-6
+
+
 def test_pansharpen_sim_blurs_colour_not_luminance():
     from dwdata.gpu_aug import sensor_augment
 
