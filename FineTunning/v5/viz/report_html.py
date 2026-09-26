@@ -107,6 +107,91 @@ def _gallery(figs: Path) -> str:
             "few tiles say nothing about a dataset's RMSE.</p>" + "".join(body))
 
 
+_LANDSCAPE_ABOUT = {
+    "urban": "built-up: tall structures cover the tile and their tops are smooth "
+             "(roofs).",
+    "sparse": "open ground: under 12 % of the tile stands above 3 m — fields, "
+              "parking, scattered houses.",
+    "forested": "tall pixels are rough relative to their own height — tree "
+                "canopy rather than roofs.",
+    "hilly": "large-scale relief in the ground surface itself.",
+}
+
+
+def _landscapes(figs: Path) -> tuple[str, str]:
+    """(per-class example tiles, shadow section) from `landscape_gallery.json`."""
+    p = figs / "landscape_gallery.json"
+    if not p.is_file():
+        return "", ""
+    try:
+        idx = json.loads(p.read_text())
+    except (OSError, ValueError):
+        return "", ""
+    where = (f"<code>{html.escape(str(idx.get('store', '')))}/"
+             f"{html.escape(str(idx.get('split', '')))}</code>")
+    counts = idx.get("counts") or {}
+    body = []
+    for c in ("urban", "sparse", "forested", "hilly"):
+        e = (idx.get("classes") or {}).get(c)
+        if not e:
+            if c in counts:
+                body.append(f"<h3>{c}</h3><p class=sub>None of the {idx.get('scanned', '?')}"
+                            f" scanned tiles classified as {c}; nothing to show.</p>")
+            continue
+        rm = [t["rmse_m"] for t in e.get("tiles") or [] if t.get("rmse_m") is not None]
+        tail = (f" Mean per-tile RMSE {sum(rm) / len(rm):.2f} m over {len(rm)} tiles."
+                if rm else "")
+        fig = _fig(figs / str(e.get("file", "")),
+                   f"<b>{c}</b> — {html.escape(_LANDSCAPE_ABOUT.get(c, ''))}{tail}")
+        if fig:
+            body.append(f"<h3>{c}</h3>{fig}")
+    land = ""
+    if body:
+        seen = (" These are <b>training tiles</b>; their error flatters the model."
+                if idx.get("seen_in_training") else "")
+        land = ("<h3>What each landscape looks like</h3>"
+                f"<p>Example tiles from {where}, classified by the same rule as the "
+                f"table above. Of {idx.get('scanned', '?')} scanned tiles: "
+                + ", ".join(f"{k} {v}" for k, v in counts.items())
+                + f".{seen} RGB | reference | predicted | |error|; one height scale "
+                  "per row, grey is NoData.</p>" + "".join(body))
+
+    shadow = ""
+    rows = [(c, t) for c, e in (idx.get("classes") or {}).items()
+            for t in e.get("tiles") or [] if t.get("shadow")]
+    fig = _fig(figs / str(idx.get("shadows") or ""),
+               "Per tile: RGB, shadows detected in the image (yellow), shadows cast "
+               "by the reference and by the predicted heights (orange), and where the "
+               "prediction's shadows agree with the image's. Red is a shadow the "
+               "prediction casts that the image lacks (too tall or a phantom "
+               "structure); blue is an image shadow it fails to cast (too short or a "
+               "missed structure).") if idx.get("shadows") else ""
+    if fig and rows:
+        shadow = ("<h2>Shadow consistency</h2>"
+                  "<p>A label-free check: if the heights are right, the shadows they "
+                  "cast under the scene's sun should land where the image has shadows. "
+                  "Image shadows come from the HSI-ratio detector (Tsai 2006). GAMUS "
+                  "carries no sun metadata, so the sun is fitted per tile on the "
+                  "<i>reference</i> heights and the prediction is cast under that same "
+                  "sun — it is never fitted on the prediction, which would let it grade "
+                  "itself. The reference IoU is the ceiling for that tile: detector "
+                  "noise, trees and NoData keep it well below 1.</p>"
+                  + _table(["landscape", "tile", "sun az / el", "image shadow",
+                            "IoU ref", "IoU pred", "pred / ref"],
+                           [[c, html.escape(str(t.get("stem", ""))),
+                             (f"{t['shadow']['azimuth_deg']:.0f}° / "
+                              f"{t['shadow']['elevation_deg']:.0f}°"),
+                             f"{t['shadow'].get('image_shadow_frac', 0) * 100:.1f}%",
+                             _num(t["shadow"].get("iou_ref"), 2),
+                             _num(t["shadow"].get("iou_pred"), 2),
+                             _num((t["shadow"].get("iou_pred") or 0)
+                                  / t["shadow"]["iou_ref"], 2)
+                             if t["shadow"].get("iou_ref") else "—"]
+                            for c, t in rows])
+                  + fig)
+    return land, shadow
+
+
 def _fig(path: Path, caption: str) -> str:
     if not Path(path).is_file():
         return ""
@@ -220,6 +305,11 @@ def build(run_dir: str | Path, out_path: str | Path | None = None,
              for k, v in sorted(per_l.items(), key=lambda kv: -kv[1].get("rmse_m", 0))]))
         parts.append(_fig(figs / "per_landscape.png",
                           "RMSE by landscape class; dashed line is the global RMSE."))
+    land_html, shadow_html = _landscapes(figs)
+    if land_html:
+        if not per_l:
+            parts.append("<h2>Landscapes</h2>")
+        parts.append(land_html)
 
     # ---- height strata -------------------------------------------------
     per_s = {k: v for k, v in (res.get("per_stratum") or {}).items() if v.get("n")}
@@ -254,6 +344,7 @@ def build(run_dir: str | Path, out_path: str | Path | None = None,
     ])
     if qual:
         parts.append("<h2>Qualitative</h2>" + qual)
+    parts.append(shadow_html)
     parts.append(_gallery(figs))
 
     # ---- training --------------------------------------------------------

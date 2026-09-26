@@ -408,6 +408,15 @@ class Config:
     # else train, and the report says which.  "" or 0 turns it off.
     gallery_sources: str = "synrs3d,dfc23,india_labeled"
     gallery_tiles: int = 3
+    # Per-landscape examples in the report: tiles per class (urban / sparse /
+    # hilly / forested, the same GT rule as `per_landscape`) from one store,
+    # found by scanning a seeded `landscape_gallery_scan` tiles of it.  With
+    # `landscape_gallery_shadows` each tile also gets image shadows vs the
+    # shadows cast by the reference and by the prediction.  0 turns it off.
+    landscape_gallery_source: str = "gamus"
+    landscape_gallery_tiles: int = 2
+    landscape_gallery_scan: int = 300
+    landscape_gallery_shadows: bool = True
     make_figures: bool = True              # viz/figures.py at the end of the run
     make_report: bool = True                # viz/report_html.py validation report
     export_onnx: bool = True                # infer/export_onnx.py at the end of the run
@@ -451,6 +460,8 @@ class Config:
         self.eval_every = 1
         self.n_qualitative = 2
         self.gallery_tiles = 1
+        self.landscape_gallery_tiles = 1
+        self.landscape_gallery_scan = 8
         self.final_sliding_eval = False
         self.test_tiles = 4
         self.ema_decay = 0.0

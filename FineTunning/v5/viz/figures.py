@@ -16,6 +16,8 @@ The figures, and what each is *for*:
 | `hillshade.png` | what the DSM looks like as a surface, which is what the judge sees |
 | `qualitative.png` | RGB, prediction, GT, error — the contact sheet |
 | `gallery_<store>.jpg` | what SynRS3D / DFC23 / India tiles look like, and how the model does on each |
+| `landscape_<class>.jpg` | GAMUS tiles the landscape rule called urban / sparse / hilly / forested |
+| `shadows.jpg` | image shadows vs the shadows the reference and the prediction cast |
 
 Matplotlib only, Agg backend, no seaborn: one less dependency to install on a
 box that has to work offline.
@@ -305,7 +307,7 @@ def plot_gallery(entry: dict, out: Path):
                             + (f"RMSE {rm:.2f} m · MAE {t['mae_m']:.2f} m"
                                if rm is not None else "no valid reference"),
                             fontsize=7.5)
-    fig.suptitle(f"{entry['store']} / {entry['split']}  ·  "
+    fig.suptitle(entry.get("title") or f"{entry['store']} / {entry['split']}  ·  "
                  f"{entry.get('gsd_m', 0):.2f} m GSD", fontsize=10)
     fig.tight_layout()
     fig.savefig(out, bbox_inches="tight", dpi=110, pil_kwargs={"quality": 85})
@@ -313,9 +315,109 @@ def plot_gallery(entry: dict, out: Path):
     return out
 
 
+def plot_shadows(tiles: list[dict], out: Path):
+    """Per tile: RGB | shadows in the image | cast by reference | cast by prediction
+    | agreement of the prediction's shadows with the image's.
+
+    The last panel is the one to read: green where both say shadow, red where the
+    prediction casts a shadow the image does not have (heights too tall, or a
+    phantom structure), blue where the image has a shadow the prediction does not
+    cast (heights too short, or a missed structure).
+    """
+    plt = _mpl()
+    rows = [t for t in tiles if t.get("shadow")]
+    if not rows:
+        return None
+    n = len(rows)
+    fig, ax = plt.subplots(n, 5, figsize=(13.0, 2.75 * n), squeeze=False)
+    for r, t in enumerate(rows):
+        sh = t["shadow"]
+        m, cg, cp, v = sh["image"], sh["cast_ref"], sh["cast_pred"], sh["valid"]
+        H, W = m.shape
+        s = max(1, round(t["rgb"].shape[0] / H))
+        rgb = t["rgb"][::s, ::s][:H, :W]
+
+        def overlay(mask, color, rgb=rgb, v=v):
+            o = rgb.astype(np.float32) * 0.55
+            o[mask] = o[mask] * 0.3 + np.array(color, np.float32) * 0.7
+            if v is not None:
+                o[~v] = 190
+            return o.clip(0, 255).astype(np.uint8)
+
+        agree = rgb.astype(np.float32) * 0.45
+        agree[cp & m] = (40, 190, 80)
+        agree[cp & ~m] = (225, 60, 50)
+        agree[~cp & m] = (60, 120, 230)
+        if v is not None:
+            agree[~v] = 190
+        panels = ((rgb, "RGB"),
+                  (overlay(m, (255, 220, 0)), "shadows in the image"),
+                  (overlay(cg, (255, 140, 0)), f"cast by reference  IoU {sh['iou_ref']:.2f}"),
+                  (overlay(cp, (255, 140, 0)), f"cast by prediction  IoU {sh['iou_pred']:.2f}"),
+                  (agree.clip(0, 255).astype(np.uint8), "prediction vs image"))
+        for c, (img, name) in enumerate(panels):
+            a = ax[r][c]
+            a.imshow(img)
+            a.set_xticks([])
+            a.set_yticks([])
+            a.grid(False)
+            for sp in a.spines.values():
+                sp.set_visible(False)
+            a.set_title(name, fontsize=8)
+        ax[r][0].set_ylabel(f"{t.get('landscape', '')} · {t.get('stem', '')}\n"
+                            f"sun az {sh['azimuth_deg']:.0f}° el {sh['elevation_deg']:.0f}°",
+                            fontsize=7.5)
+    from matplotlib.patches import Patch
+
+    fig.legend(handles=[Patch(color=(40 / 255, 190 / 255, 80 / 255), label="both"),
+                        Patch(color=(225 / 255, 60 / 255, 50 / 255),
+                              label="prediction only"),
+                        Patch(color=(60 / 255, 120 / 255, 230 / 255), label="image only")],
+               loc="lower right", ncol=3, frameon=False, fontsize=8)
+    fig.tight_layout(rect=(0, 0.02, 1, 1))
+    fig.savefig(out, bbox_inches="tight", dpi=110, pil_kwargs={"quality": 85})
+    plt.close(fig)
+    return out
+
+
+def _landscape_figures(out_dir: Path, lg: dict, keep) -> None:
+    """`landscape_<class>.jpg` per class, `shadows.jpg`, and `landscape_gallery.json`."""
+    index = {"store": lg.get("store"), "split": lg.get("split"),
+             "seen_in_training": bool(lg.get("seen_in_training")),
+             "gsd_m": lg.get("gsd_m"), "scanned": lg.get("scanned"),
+             "counts": lg.get("counts") or {}, "classes": {}, "shadows": None}
+    every = []
+    for c, tiles in (lg.get("classes") or {}).items():
+        if not tiles:
+            continue
+        p = plot_gallery({"store": lg["store"], "split": lg["split"], "tiles": tiles,
+                          "title": f"{c}  ·  {lg['store']} / {lg['split']}  ·  "
+                                   f"{lg.get('gsd_m', 0):.2f} m GSD"},
+                         out_dir / f"landscape_{c}.jpg")
+        if p is None:
+            continue
+        keep(f"landscape_{c}", p)
+        every += tiles
+        index["classes"][c] = {
+            "file": Path(p).name,
+            "tiles": [{"stem": t.get("stem"), "rmse_m": t.get("rmse_m"),
+                       "mae_m": t.get("mae_m"), "bias_m": t.get("bias_m"),
+                       "descriptors": t.get("descriptors"),
+                       "shadow": ({k: v for k, v in t["shadow"].items()
+                                   if not isinstance(v, np.ndarray)}
+                                  if t.get("shadow") else None)} for t in tiles]}
+    p = plot_shadows(every, out_dir / "shadows.jpg")
+    if p is not None:
+        keep("shadows", p)
+        index["shadows"] = Path(p).name
+    (out_dir / "landscape_gallery.json").write_text(json.dumps(index, indent=2,
+                                                               default=float))
+
+
 # ---------------------------------------------------------------------
 def make_all(out_dir: Path, metrics: dict, samples: list | None = None,
-             gsd_m: float = 0.5, gallery: list | None = None) -> dict:
+             gsd_m: float = 0.5, gallery: list | None = None,
+             landscape_gallery: dict | None = None) -> dict:
     """Render every figure that the available data supports.
 
     `samples` is a list of (rgb_u8, pred_m, gt_m) triples; without it the
@@ -361,6 +463,8 @@ def make_all(out_dir: Path, metrics: dict, samples: list | None = None,
                           "tiles": [{"stem": t.get("stem"), "rmse_m": t.get("rmse_m"),
                                      "mae_m": t.get("mae_m")} for t in e["tiles"]]})
         (out_dir / "gallery.json").write_text(json.dumps(index, indent=2))
+    if landscape_gallery and landscape_gallery.get("classes"):
+        _landscape_figures(out_dir, landscape_gallery, keep)
     print(f"[viz] {len(made)} figures -> {out_dir}")
     return made
 

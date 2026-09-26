@@ -161,3 +161,66 @@ def test_gallery_store_resolution(tmp_path):
     # the store this run trained on wins; val beats train; untrained is fine
     assert got == [("synrs3d_g1", "train", True), ("dfc23_g050", "val", False),
                    ("india_labeled", "val", False)]
+
+
+def _shadowed_scene(n=96):
+    """A 12 m block lit from the south-east, its shadow painted dark-blue in the RGB."""
+    from viz.shadow import cast_shadows
+
+    gt = np.zeros((n, n), np.float32)
+    gt[30:50, 30:50] = 12.0
+    shade = cast_shadows(gt, 0.5, 135.0, 45.0)
+    rgb = np.full((n, n, 3), (150, 140, 120), np.uint8)
+    rgb[gt > 0] = (200, 190, 180)
+    rgb[shade] = (20, 25, 60)
+    pred = gt * 0.8
+    return rgb, pred, gt, shade
+
+
+def test_tile_shadows_fit_the_sun_on_the_reference():
+    from viz.shadow import reference_sun_check
+
+    rgb, pred, gt, _ = _shadowed_scene()
+    sh = reference_sun_check(rgb, gt, pred, np.ones_like(gt, bool), 0.5)
+    assert sh is not None and sh["image"].any()
+    assert sh["iou_ref"] > 0.5
+    # a 20 % short prediction casts a 20 % short shadow: close, not better
+    assert 0 < sh["iou_pred"] <= sh["iou_ref"] + 1e-6
+
+
+def test_landscape_gallery_and_shadows_render_into_the_report(tmp_path):
+    from viz.shadow import reference_sun_check
+
+    classes = {}
+    for c in ("urban", "sparse", "forested"):
+        rgb, pred, gt, _ = _shadowed_scene()
+        valid = np.ones_like(gt, bool)
+        classes[c] = [{"stem": f"{c}_0", "rgb": rgb, "pred": pred, "gt": gt,
+                       "valid": valid, "landscape": c, "rmse_m": 1.0, "mae_m": 0.5,
+                       "bias_m": -0.4, "descriptors": {"frac_tall": 0.04},
+                       "shadow": reference_sun_check(rgb, gt, pred, valid, 0.5)}]
+    lg = {"store": "gamus", "split": "val", "gsd_m": 0.5, "scanned": 40,
+          "counts": {"urban": 30, "sparse": 7, "hilly": 0, "forested": 3},
+          "classes": classes}
+    (tmp_path / "metrics.json").write_text(json.dumps(_metrics()))
+    made = make_all(tmp_path / "figures", _metrics(), [_sample()], 0.5,
+                    landscape_gallery=lg)
+    for c in classes:
+        assert (tmp_path / "figures" / made[f"landscape_{c}"]).stat().st_size > 5000
+    assert "shadows" in made
+    index = json.loads((tmp_path / "figures" / "landscape_gallery.json").read_text())
+    assert "image" not in index["classes"]["urban"]["tiles"][0]["shadow"]  # no arrays
+    html = build(tmp_path).read_text()
+    assert "What each landscape looks like" in html
+    assert "<h3>forested</h3>" in html and "<h3>sparse</h3>" in html
+    assert "classified as hilly" in html          # absent class is said, not hidden
+    assert "Shadow consistency" in html
+    assert html.count("src=\"data:image/jpeg;base64,") == 4
+
+
+def test_landscape_gallery_absent_is_quiet(tmp_path):
+    (tmp_path / "metrics.json").write_text(json.dumps(_metrics()))
+    make_all(tmp_path / "figures", _metrics(), [_sample()], 0.5, landscape_gallery=None)
+    html = build(tmp_path).read_text()
+    assert "What each landscape looks like" not in html
+    assert "Shadow consistency" not in html

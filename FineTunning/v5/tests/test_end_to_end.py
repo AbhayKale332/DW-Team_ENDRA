@@ -87,7 +87,15 @@ def test_train_then_predict_roundtrip(tmp_path, store, monkeypatch):
         gal = json.loads((out / "figures" / "gallery.json").read_text())
         assert [(e["store"], e["split"], e["seen_in_training"]) for e in gal] == \
             [("synrs3d_g05", "train", False)]
-        assert "Sample tiles by dataset" in (out / "validation_report.html").read_text()
+        report = (out / "validation_report.html").read_text()
+        assert "Sample tiles by dataset" in report
+        # gamus has only a train split here, so the landscape examples come from
+        # it and say so; one 12 m block on 14 % of the tile is "urban"
+        land = json.loads((out / "figures" / "landscape_gallery.json").read_text())
+        assert (land["store"], land["split"], land["seen_in_training"]) == \
+            ("gamus", "train", True)
+        assert "urban" in land["classes"]
+        assert "What each landscape looks like" in report
 
         # ---- the contract: the checkpoint carries its own preprocessing ----
         ck = torch.load(out / "best.pt", map_location="cpu", weights_only=False)

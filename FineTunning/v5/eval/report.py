@@ -183,3 +183,89 @@ def export_gallery(model, cfg, spec, device) -> list[dict]:
         print(f"[gallery] {name}/{split}: {len(tiles)} tiles"
               + ("  (training tiles — seen by the model)" if seen else ""))
     return out
+
+
+@torch.no_grad()
+def export_landscape_gallery(model, cfg, spec, device) -> dict | None:
+    """A few tiles per landscape class from one store (GAMUS by default).
+
+    Classes come from the same GT-geometry rule the per-landscape metric uses
+    (`eval.landscape.classify`), over a seeded scan of `landscape_gallery_scan`
+    tiles, so "forested" here means the same thing as the "forested" row of the
+    table.  A class the scan never hits is reported as absent, not faked.
+    Returns {store, split, gsd_m, scanned, counts, classes: {name: [tile]}}.
+    """
+    from config import LANDSCAPE_NAMES
+    from dwdata.dataset import FullTileDataset
+    from dwdata.loaders import _open, sample_indices
+    from eval.landscape import classify
+    from viz.shadow import reference_sun_check
+
+    k = int(getattr(cfg, "landscape_gallery_tiles", 0) or 0)
+    fam = str(getattr(cfg, "landscape_gallery_source", "") or "").strip()
+    if k <= 0 or not fam:
+        return None
+    picked = _gallery_stores(_Families(cfg, fam))
+    if not picked:
+        return None
+    name, split, seen = picked[0]
+    st = _open(Path(cfg.data_root), name, split)
+    n_scan = min(int(getattr(cfg, "landscape_gallery_scan", 300) or len(st)), len(st))
+    idx = sample_indices(len(st), n_scan, 1)
+    idx = np.arange(len(st))[:n_scan] if idx is None else idx
+    gsd = float(st.gsd_m)
+    by_class: dict[str, list] = {c: [] for c in LANDSCAPE_NAMES}
+    counts = {c: 0 for c in LANDSCAPE_NAMES}
+    for j in idx:
+        _, hgt, _, valid = st.get(int(j))
+        hgt = np.asarray(hgt, np.float32)
+        valid = (np.asarray(valid, bool) & np.isfinite(hgt) & (hgt >= 0.0)
+                 & (hgt <= cfg.max_valid_height_m))
+        if valid.mean() < 0.05:
+            continue
+        c, desc = classify(np.where(valid, hgt, 0.0), valid, gsd)
+        counts[c] += 1
+        if len(by_class[c]) < k:
+            by_class[c].append((int(j), desc))
+
+    model.eval()
+    shadows = bool(getattr(cfg, "landscape_gallery_shadows", True))
+    classes = {}
+    for c, picks in by_class.items():
+        if not picks:
+            continue
+        ds = FullTileDataset(cfg, st, spec, name, length=len(picks),
+                             indices=[j for j, _ in picks])
+        tiles = []
+        for i, (_, desc) in enumerate(picks):
+            s, rgb, pred = _predict(model, ds, i, cfg, spec, device)
+            gt, valid = s["target"].numpy(), s["valid"].numpy().astype(bool)
+            e = (pred - gt)[valid]
+            t = {"stem": str(s["stem"]), "rgb": rgb, "pred": pred.astype(np.float32),
+                 "gt": gt.astype(np.float32), "valid": valid, "landscape": c,
+                 "descriptors": desc,
+                 "rmse_m": float(np.sqrt(np.mean(e ** 2))) if e.size else None,
+                 "mae_m": float(np.mean(np.abs(e))) if e.size else None,
+                 "bias_m": float(np.mean(e)) if e.size else None}
+            if shadows:
+                try:
+                    t["shadow"] = reference_sun_check(rgb, gt, pred, valid, gsd)
+                except Exception as ex:  # noqa: BLE001 — a caption, never a lost run
+                    print(f"[landscape] shadow skipped for {t['stem']}: {ex}")
+            tiles.append(t)
+        classes[c] = tiles
+    print(f"[landscape] {name}/{split}: scanned {len(idx)} tiles "
+          + ", ".join(f"{c}={n}" for c, n in counts.items())
+          + f"; showing {sum(len(v) for v in classes.values())}")
+    return {"store": name, "split": split, "seen_in_training": seen, "gsd_m": gsd,
+            "scanned": len(idx), "counts": counts, "classes": classes}
+
+
+class _Families:
+    """`cfg` with `gallery_sources` swapped, so `_gallery_stores` resolves one family."""
+
+    def __init__(self, cfg, fam: str):
+        self._cfg, self.gallery_sources = cfg, fam
+
+    def __getattr__(self, k):
+        return getattr(self._cfg, k)

@@ -61,7 +61,11 @@ def detect_image_shadows(rgb_u8: np.ndarray, valid: np.ndarray | None = None,
     v = np.ones(ratio.shape, bool) if valid is None else valid
     t_r = _otsu(ratio[v])
     t_i = _otsu(inten[v])
-    m = (ratio > t_r) & (inten < t_i) & v
+    return _despeckle((ratio > t_r) & (inten < t_i) & v, min_blob_px)
+
+
+def _despeckle(m: np.ndarray, min_blob_px: int = 8) -> np.ndarray:
+    """3x3 opening, then drop blobs under `min_blob_px`."""
     try:
         from scipy import ndimage as ndi
 
@@ -177,6 +181,33 @@ def shadow_scale_check(height: np.ndarray, gsd_m: float, az: float, el: float,
     i1 = iou(cast_shadows(h, g, az, el), m, v)
     return {"best_scale": s_best, "iou_best": i_best, "iou_at_1": i1,
             "curve": curve, "informative": bool(i_best - min(c[1] for c in curve) > 0.02)}
+
+
+def reference_sun_check(rgb, gt, pred, valid, gsd_m: float) -> dict | None:
+    """Image shadows vs the shadows the reference and the prediction would cast.
+
+    GAMUS ships no sun metadata, so the sun is fitted on the *reference* heights
+    against the image's own shadows (`fit_sun`), then the prediction is cast under
+    that same sun.  Fitting on the prediction would let it grade itself.  Masks
+    are at the working resolution `_working` picks (<= 1024 px), and both cast
+    masks get the image detector's despeckle: sub-metre texture in a predicted
+    ground plane otherwise casts pixel-sized "shadows" everywhere and the IoU
+    measures that noise instead of the structures.
+    """
+    img = detect_image_shadows(rgb, valid)
+    if not img[valid].any():
+        return None
+    sun = fit_sun(np.where(valid, gt, 0.0), gsd_m, img, valid)
+    az, el = sun["azimuth_deg"], sun["elevation_deg"]
+    g, m, v, gg = _working(np.where(valid, gt, 0.0), img, valid, gsd_m)
+    p = _working(pred, img, valid, gsd_m)[0]
+    cast_g = _despeckle(cast_shadows(g, gg, az, el))
+    cast_p = _despeckle(cast_shadows(p, gg, az, el))
+    return {"azimuth_deg": az, "elevation_deg": el,
+            "image": m, "cast_ref": cast_g, "cast_pred": cast_p, "valid": v,
+            "iou_ref": iou(cast_g, m, v), "iou_pred": iou(cast_p, m, v),
+            "iou_pred_ref": iou(cast_p, cast_g, v),
+            "image_shadow_frac": float(m[v].mean()) if v.any() else 0.0}
 
 
 def shadow_products(out_dir, rgb_u8: np.ndarray, height_m: np.ndarray, meta) -> dict:

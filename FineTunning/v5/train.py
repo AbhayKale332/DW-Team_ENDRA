@@ -76,7 +76,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import Config, parse_config, safe_config_dict
 from dwdata.preprocess import PreprocSpec
 from eval.metrics import evaluate, format_line
-from eval.report import (export_gallery, export_qualitative, export_viewer_sample,
+from eval.report import (export_gallery, export_landscape_gallery,
+                         export_qualitative, export_viewer_sample,
                          write_metrics_json)
 from models.ema import ModelEMA
 from models.heads import DepthWizardNet
@@ -1203,6 +1204,11 @@ def main() -> None:
         gallery = export_gallery(core, cfg, spec, device)
     except Exception:  # noqa: BLE001
         print(f"[gallery] skipped:\n{traceback.format_exc()}")
+    landscape_gallery = None
+    try:
+        landscape_gallery = export_landscape_gallery(core, cfg, spec, device)
+    except Exception:  # noqa: BLE001
+        print(f"[landscape] gallery skipped:\n{traceback.format_exc()}")
 
     write_metrics_json(out_dir / "metrics.json", cfg, spec, history, best,
                        (time.time() - t0) / 60, extra=final)
@@ -1219,7 +1225,8 @@ def main() -> None:
 
             make_all(out_dir / "figures",
                      _json.loads((out_dir / "metrics.json").read_text()),
-                     samples[:6], cfg.canonical_gsd_m, gallery=gallery)
+                     samples[:6], cfg.canonical_gsd_m, gallery=gallery,
+                     landscape_gallery=landscape_gallery)
         except Exception:  # noqa: BLE001
             print(f"[viz] figures skipped:\n{traceback.format_exc()}")
 
