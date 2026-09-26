@@ -145,6 +145,65 @@ def lr_scale(progress: float, warmup: float = 0.05, final_div: float = 1e2) -> f
     return floor + (1.0 - floor) * 0.5 * (1.0 + math.cos(math.pi * q))
 
 
+def schedule_progress(cfg: Config, epoch_pos: float, elapsed_min: float,
+                      anchor: tuple | None = None) -> float:
+    """The `progress` fed to `lr_scale`: max(epoch fraction, clock fraction).
+
+    `anchor` = (p0, epoch_pos0, elapsed_min0) is where a full-state resume joins
+    the schedule.  Without it, a resume that changes --epochs/--max_minutes
+    re-derives progress from the NEW budget: the v5 v4init run ended its first
+    session at 100 % of the cosine (lr 3e-06), was resumed 14 -> 20 epochs and
+    540 -> 1086 min, and restarted at 50 % — lr 1.64e-04, 40x up — which cost
+    three epochs of GAMUS RMSE (2.804 -> 2.825) just to anneal back to 2.807.
+    With it, the remaining (1 - p0) of the cosine is spread over the remaining
+    budget, so progress never goes backwards.  `resume_anchor` only installs
+    one when the budget changed enough to need it.
+    """
+    # Clamped: the clock overshoots max_minutes by however long the last
+    # epoch's tail and eval take, and a saved p0 > 1 would make (1 - p0) < 0.
+    p = min(1.0, max(epoch_pos / max(1, cfg.epochs),
+                     elapsed_min / max(1e-8, cfg.max_minutes)))
+    if anchor is None:
+        return p
+    p0, e0, m0 = anchor
+    p0 = min(max(p0, 0.0), 1.0)
+    local = max((epoch_pos - e0) / max(1e-8, cfg.epochs - e0),
+                (elapsed_min - m0) / max(1e-8, cfg.max_minutes - m0))
+    return max(p, p0 + (1.0 - p0) * min(max(local, 0.0), 1.0))
+
+
+def resume_anchor(cfg: Config, p0: float | None, epoch_pos0: float,
+                  elapsed_min0: float) -> tuple | None:
+    """The `schedule_progress` anchor for a resume, or None when the plain
+    fraction under this session's budget already starts at or past `p0` — an
+    unchanged --epochs/--max_minutes then resumes exactly as it always has."""
+    if p0 is None:
+        return None
+    p0 = min(max(float(p0), 0.0), 1.0)
+    if schedule_progress(cfg, epoch_pos0, elapsed_min0) >= p0 - 1e-6:
+        return None
+    return (p0, float(epoch_pos0), float(elapsed_min0))
+
+
+def progress_from_lr(opt, base_lrs, warmup: float = 0.05,
+                     final_div: float = 1e2) -> float | None:
+    """Recover the schedule progress from a restored optimiser's decoder LR.
+
+    For `last_full.pt` files written before `sched_progress` was saved.  The
+    decoder groups carry no encoder ramp, so lr / base_lr is `lr_scale(p)`
+    exactly; inverted on the cosine side (a full-state save always lands past
+    the 5 % warmup in practice).
+    """
+    floor = 1.0 / final_div
+    for g, b in zip(opt.param_groups, base_lrs):
+        if str(g.get("name", "")).startswith("enc") or b <= 0:
+            continue
+        sc = float(g["lr"]) / float(b)
+        c = min(max(2.0 * (sc - floor) / (1.0 - floor) - 1.0, -1.0), 1.0)
+        return warmup + (math.acos(c) / math.pi) * (1.0 - warmup)
+    return None
+
+
 def build_optimizer(cfg: Config, model: DepthWizardNet, with_encoder: bool):
     decay, no_decay = [], []
     for n, p in model.named_parameters():
@@ -557,6 +616,8 @@ def main() -> None:
     t0 = time.time()
     stop = False
     dead_epochs = 0                  # consecutive epochs with zero applied steps
+    sched_anchor = None              # (p0, epoch_pos0, elapsed0) on a full resume
+    progress = 0.0
 
     if full_ck is not None:
         # The optimiser's param-group structure has to match what was saved,
@@ -581,8 +642,20 @@ def main() -> None:
         elapsed_min = float(full_ck.get("elapsed_min", 0.0))
         t0 = time.time() - elapsed_min * 60.0
         _restore_rng(full_ck.get("rng"))
+        # Where the previous session left the cosine, so a changed budget
+        # cannot send it back up (see `schedule_progress`).
+        p0, src = full_ck.get("sched_progress"), "saved"
+        if p0 is None:
+            p0, src = progress_from_lr(opt, base_lrs, cfg.warmup_frac), "from optimiser lr"
+        if p0 is not None:
+            progress = min(max(float(p0), 0.0), 1.0)
+        sched_anchor = resume_anchor(cfg, p0, start_epoch - 1, elapsed_min)
         print(f"[resume] continuing at epoch {start_epoch}, best {best:.3f} m, "
-              f"{elapsed_min:.0f} min of --max_minutes {cfg.max_minutes:.0f} used")
+              f"{elapsed_min:.0f} min of --max_minutes {cfg.max_minutes:.0f} used"
+              + (f"; budget changed, cosine held at {100.0 * sched_anchor[0]:.0f} % "
+                 f"({src}) instead of restarting from "
+                 f"{100.0 * schedule_progress(cfg, start_epoch - 1, elapsed_min):.0f} %"
+                 if sched_anchor else ""))
         del full_ck
 
     t_session = time.time()          # this session's own clock (session_minutes)
@@ -597,11 +670,19 @@ def main() -> None:
         used = (time.time() - t0) / 60.0
         at_cap = (used + cfg.session_minutes if cfg.session_minutes > 0
                   else cfg.max_minutes)
-        p_clock = min(1.0, at_cap / max(1e-8, cfg.max_minutes))
+        p_clock = min(1.0, schedule_progress(cfg, start_epoch - 1, at_cap, sched_anchor))
         lr_end = cfg.learning_rate * lr_scale(p_clock, cfg.warmup_frac)
         tail = "" if p_clock >= 1.0 - 1e-6 else (
             f"  [!] the anneal does NOT complete this session — "
             f"{'resume to finish it' if cfg.save_full_state else 'and save_full_state is OFF, so it cannot be resumed'}")
+        if sched_anchor is not None:
+            p_start = schedule_progress(cfg, start_epoch - 1, used, sched_anchor)
+            tail += (f"  [resume: starts at {100.0 * p_start:.0f} %, lr "
+                     f"{cfg.learning_rate * lr_scale(p_start, cfg.warmup_frac):.2e}]")
+            if sched_anchor[0] >= 0.99:
+                tail += ("  [!] the resumed run had already finished its anneal, so "
+                         "this session trains at the floor lr — for a deliberate "
+                         "restart, warm-start from best.pt instead of last_full.pt")
         print(f"[sched] {cfg.epochs} epochs, budget {cfg.max_minutes:.0f} min"
               f"{f' (session cap {cfg.session_minutes:.0f} min)' if cfg.session_minutes > 0 else ''}"
               f"{f', {used:.0f} min already spent' if used > 1.0 else ''}"
@@ -665,10 +746,8 @@ def main() -> None:
         n_run = 0        # skips since the last applied step
 
         for step, batch in enumerate(dl_tr):
-            progress = max(
-                (epoch - 1 + step / n_steps) / max(1, cfg.epochs),
-                ((time.time() - t0) / 60.0) / max(1e-8, cfg.max_minutes),
-            )
+            progress = schedule_progress(cfg, epoch - 1 + step / n_steps,
+                                         (time.time() - t0) / 60.0, sched_anchor)
             sc = lr_scale(progress, cfg.warmup_frac)
             ramp = encoder_lr_ramp(cfg, epoch - 1 + step / n_steps)
             for g, b in zip(opt.param_groups, base_lrs):
@@ -969,7 +1048,7 @@ def main() -> None:
                     or epoch == cfg.epochs):
                 _save_full(out_dir / "last_full.pt", core, opt, scaler, ema,
                            teacher, epoch, base_lrs, best, history,
-                           (time.time() - t0) / 60)
+                           (time.time() - t0) / 60, progress)
             write_metrics_json(out_dir / "metrics.json", cfg, spec, history, best,
                                (time.time() - t0) / 60)
         else:
@@ -1196,7 +1275,8 @@ def _restore_rng(rng) -> None:
 
 
 def _save_full(path: Path, core, opt, scaler, ema, teacher, epoch: int,
-               base_lrs, best: float, history: list, elapsed_min: float) -> None:
+               base_lrs, best: float, history: list, elapsed_min: float,
+               sched_progress: float = 0.0) -> None:
     """The resume artefact, deliberately separate from best.pt / last.pt.
 
     `best.pt` and `last.pt` carry EMA-*merged* weights, which is right for
@@ -1219,6 +1299,9 @@ def _save_full(path: Path, core, opt, scaler, ema, teacher, epoch: int,
         "teacher_n": getattr(teacher, "n", 0),
         "epoch": epoch,
         "elapsed_min": float(elapsed_min),
+        # Where the cosine got to, so a resume under a different
+        # --epochs/--max_minutes continues from here (`schedule_progress`).
+        "sched_progress": float(sched_progress),
         "best": float(best),
         "history": history,
         "encoder_frozen": bool(core.encoder.frozen),

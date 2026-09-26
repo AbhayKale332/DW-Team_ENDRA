@@ -75,7 +75,8 @@ def test_last_full_roundtrips_the_whole_training_state(tmp_path, store, monkeypa
 
         # Everything a resume needs, and the things `last.pt` deliberately lacks.
         for key in ("model", "opt", "scaler", "ema", "ema_n", "epoch",
-                    "elapsed_min", "best", "history", "encoder_frozen", "rng"):
+                    "elapsed_min", "sched_progress", "best", "history",
+                    "encoder_frozen", "rng"):
             assert key in ck, f"last_full.pt is missing {key!r}"
         assert ck["epoch"] == cfg.epochs
         assert ck["encoder_frozen"] is False, "saved before the unfreeze?"
@@ -165,6 +166,77 @@ def test_save_full_state_is_off_by_default(tmp_path, store, monkeypatch):
         assert not (Path(cfg.output_dir) / "last_full.pt").exists()
     finally:
         undo()
+
+
+# ---------------------------------------------------------------------
+# A resume under a longer budget must not send the cosine back up.
+# ---------------------------------------------------------------------
+def _sched_cfg(epochs, minutes):
+    c = Config()
+    c.epochs, c.max_minutes = epochs, minutes
+    return c
+
+
+def test_extended_resume_does_not_rewarm_the_lr():
+    """The v5 v4init run: 14 ep / 540 min, capped at e10 with the cosine done,
+    resumed as 20 ep / 1086 min.  The plain fraction restarts at ~50 %
+    (lr 1.64e-04); anchored, it stays at the end of the anneal."""
+    from train import lr_scale, schedule_progress
+
+    old = _sched_cfg(14, 540)
+    p0 = schedule_progress(old, 10.0, 544.0)
+    assert p0 == 1.0
+    new = _sched_cfg(20, 1086)
+    anchor = (p0, 10.0, 544.0)
+    assert schedule_progress(new, 10.0, 544.0) < 0.55          # the bug
+    for e, m in ((10.0, 544.0), (12.5, 700.0), (19.9, 1080.0)):
+        assert schedule_progress(new, e, m, anchor) == 1.0
+    assert lr_scale(schedule_progress(new, 10.0, 544.0, anchor)) == \
+        lr_scale(1.0)
+
+
+def test_mid_anneal_resume_spreads_the_rest_over_the_new_budget():
+    from train import schedule_progress
+
+    new = _sched_cfg(20, 1000)
+    anchor = (0.6, 5.0, 300.0)
+    ps = [schedule_progress(new, e, 300.0 + (e - 5.0) * 10.0, anchor)
+          for e in (5.0, 8.0, 12.5, 16.0, 20.0)]
+    assert ps[0] == 0.6                          # joins where it left off
+    assert ps == sorted(ps)                      # never goes backwards
+    assert abs(ps[2] - 0.8) < 1e-9               # half the rest, half the epochs
+    assert ps[-1] == 1.0                         # and still finishes the anneal
+
+
+def test_unchanged_budget_resumes_exactly_as_before():
+    """Same --epochs/--max_minutes: the plain fraction already starts at or past
+    where the last session stopped, so no anchor is installed at all."""
+    from train import resume_anchor, schedule_progress
+
+    cfg = _sched_cfg(20, 1000)
+    for e, m in ((8.0, 420.0), (8.0, 300.0), (14.0, 1003.0)):
+        # the last step's progress sits just behind the epoch-end save
+        p0 = schedule_progress(cfg, e - 0.01, m - 0.5)
+        assert resume_anchor(cfg, p0, e, m) is None
+    assert resume_anchor(_sched_cfg(20, 1086), 1.0, 10.0, 544.0) is not None
+    assert resume_anchor(cfg, None, 8.0, 420.0) is None
+
+
+def test_progress_is_recovered_from_a_legacy_checkpoints_lr():
+    """Older last_full.pt files carry no `sched_progress`; the decoder group's
+    lr / base_lr is lr_scale(p), which inverts on the cosine side."""
+    from train import lr_scale, progress_from_lr
+
+    class _Opt:
+        def __init__(self, groups):
+            self.param_groups = groups
+
+    for p in (0.1, 0.5, 0.83, 1.0):
+        sc = lr_scale(p)
+        opt = _Opt([{"name": "dec", "lr": 3e-4 * sc},
+                    {"name": "enc.23", "lr": 1e-5 * sc * 0.3}])
+        assert abs(progress_from_lr(opt, [3e-4, 1e-5]) - p) < 1e-6
+    assert progress_from_lr(_Opt([{"name": "enc.0", "lr": 1e-6}]), [1e-5]) is None
 
 
 # ---------------------------------------------------------------------
