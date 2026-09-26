@@ -17,7 +17,7 @@ licence, GSD and label format before building a loader for any of them.
 | NAIP + USGS 3DEP | 0.6 m aerial | LiDAR DSM − DTM (you build it) | No | High | Best GSD match to Cartosat |
 | FLAIR #1 (IGN) | 0.2 m aerial | Height band in the patch | No | Medium | Check the band first |
 | ISPRS Potsdam / Vaihingen | 5–9 cm aerial | Photogrammetric nDSM | No | Low–medium | Too small to matter much |
-| US3D (DFC19) | 0.3 m WorldView-3 | LiDAR AGL | No | Medium | Closest real satellite domain, but it's DFC |
+| US3D (DFC19) | 0.3 m WorldView-3 | LiDAR AGL | Yes (`--datasets us3d`) | Low | Closest real satellite domain; labels keep trees |
 
 ## GeoNRW (already supported)
 

@@ -14,6 +14,10 @@ training run starts instantly).  Training never touches the network afterwards.
     python prepare_data.py --datasets india_unlabeled --india_dir ~/bhuvan_tiles
     python prepare_data.py --datasets india_unlabeled --india_tile_url 'https://…/{z}/{x}/{y}.png'
 
+    # US3D (DFC2019 Track 1), from the IEEE DataPort zips unpacked into
+    # <dir>/rgb/*_RGB.tif, <dir>/agl/*_AGL.tif, <dir>/cls/*_CLS.tif:
+    python prepare_data.py --datasets us3d --us3d_dir ~/DFC2019-Track1/train
+
 Disk cost, packed (uint8 RGB + fp16 height + uint8 class + bool valid):
     GAMUS   1024 px tile  ~ 6.3 MB/tile   -> 4000 tiles ~ 25 GB
     SynRS3D  512 px tile  ~ 1.6 MB/tile   -> 1 archive  ~ 6-10 GB
@@ -949,6 +953,100 @@ def _dfc23_height_check(out: Path, label: str, tall_m: float = 100.0,
               f"pixels vs {f_i:.3f} % of interior{flag}")
 
 
+# ---------------------------------------------------------------------
+# US3D  (DFC2019 Track 1)
+# ---------------------------------------------------------------------
+# WorldView-3 satellite RGB over Jacksonville and Omaha with an airborne-LiDAR
+# height above ground: real satellite optics (unlike GAMUS's aerial orthophotos)
+# and a height label that keeps the trees (unlike DFC23's building-only one).
+#
+# Names are CITY_TILE_VIEW (`JAX_004_006_RGB.tif`): up to ~26 acquisitions of
+# each tile location, 2014-2016.  The val split is therefore by *location*: a
+# view-level split puts other dates of every val tile into training.
+#
+# GAMUS also covers Jacksonville and Omaha, from aerial imagery over the same
+# public LiDAR, so these tiles can sit over the same streets as gamus/test ones.
+US3D_GSD_M = 0.3
+# ASPRS LAS codes -> GAMUS ids (config.CLASS_NAMES).  Packed straight into the
+# GAMUS space, so us3d must NOT join config.SHARED_SPACE_SOURCES.  17 is an
+# elevated road / bridge: raised, so not GAMUS's road (a flat class).  65
+# (unlabelled) and anything else -> NO_LABEL.
+US3D_TO_GAMUS = {2: 1, 5: 6, 6: 3, 9: 4, 17: 0}
+
+
+def _us3d_pairs(src: Path) -> list[dict]:
+    """`rgb/K_RGB.tif` + `agl/K_AGL.tif` (+ `cls/K_CLS.tif`), K = CITY_TILE_VIEW."""
+    recs = []
+    for r in sorted((src / "rgb").glob("*_RGB.tif")):
+        key = r.name[: -len("_RGB.tif")]
+        agl = src / "agl" / f"{key}_AGL.tif"
+        if not agl.exists():
+            continue
+        cls = src / "cls" / f"{key}_CLS.tif"
+        recs.append({"stem": key, "loc": "_".join(key.split("_")[:2]),
+                     "rgb": r, "hgt": agl, "cls": cls if cls.exists() else None})
+    return recs
+
+
+def prepare_us3d(root: Path, a) -> None:
+    """US3D Track 1 -> `us3d/{train,val}`, whole tiles, split by tile location."""
+    from dwdata.india import raster_gsd_m, read_raster
+    from dwdata.preprocess import _to_uint8_rgb
+
+    src = Path(a.us3d_dir).expanduser()
+    recs = _us3d_pairs(src) if a.us3d_dir and src.is_dir() else []
+    if not recs:
+        print(f"[us3d] needs --us3d_dir holding rgb/*_RGB.tif + agl/*_AGL.tif "
+              f"(got {a.us3d_dir!r}); skipping")
+        return
+    locs = sorted({r["loc"] for r in recs})
+    n_val = max(1, int(round(len(locs) * a.us3d_val_frac))) if len(locs) > 4 else 0
+    val_locs = {locs[i] for i in np.random.default_rng(0).permutation(len(locs))[:n_val]}
+    # The GeoTIFF transform when there is one; US3D ships RPCs, so often not.
+    gsd = float(np.median([raster_gsd_m(r["rgb"], a.us3d_gsd) for r in recs[:20]]))
+    tile = int(read_raster(recs[0]["rgb"]).shape[0])
+    print(f"[us3d] {len(recs)} views of {len(locs)} tile locations "
+          f"({', '.join(sorted({x.split('_')[0] for x in locs}))}) @ {gsd:.3f} m, "
+          f"{tile} px -> val {n_val} locations (split by location)")
+    for split in ("train", "val"):
+        grp = [r for r in recs if (r["loc"] in val_locs) == (split == "val")]
+        out = root / "us3d" / split
+        if not grp:
+            continue
+        if store_exists(out) and not a.force:
+            print(f"[us3d/{split}] already prepared -> {out}")
+            continue
+        w = ShardWriter(out, tile_px=tile, gsd_m=gsd, shard_tiles=128,
+                        has_seg=any(r["cls"] is not None for r in grp))
+        n = skipped = 0
+        for r in grp:
+            try:
+                rgb = _to_uint8_rgb(read_raster(r["rgb"]))
+                h = np.asarray(read_raster(r["hgt"]), np.float32)
+                if rgb.shape[:2] != (tile, tile) or h.shape != (tile, tile):
+                    skipped += 1
+                    continue
+                cls = (_remap(np.asarray(read_raster(r["cls"])), US3D_TO_GAMUS)
+                       if r["cls"] is not None else None)
+                valid = np.isfinite(h) & (h > -2.0) & (h < 500.0)
+                valid &= ~(rgb == 0).all(axis=-1)       # no image, no label
+                if a.us3d_max_height_m > 0:
+                    valid &= h <= a.us3d_max_height_m
+                if valid.mean() < 0.5:
+                    skipped += 1
+                    continue
+                w.add(r["stem"], rgb, np.where(valid, np.clip(h, 0, None), 0.0), cls, valid)
+                n += 1
+            except Exception as e:  # noqa: BLE001
+                print(f"[us3d/{split}] skip {r['stem']}: {e}")
+                skipped += 1
+            if n and n % 200 == 0:
+                print(f"  {n}/{len(grp)}", flush=True)
+        idx = w.finalise()
+        print(f"[us3d/{split}] packed {idx['n']} tiles ({skipped} skipped) "
+              f"from {len({r['loc'] for r in grp})} locations")
+
+
 def prepare_india_unlabeled(root: Path, a) -> None:
     """RGB-only Indian tiles -> `india_unlabeled/train` for the mean-teacher branch."""
     from dwdata.india import INDIA_AOIS, fetch_xyz_tiles, pack_unlabeled, tile_gsd_m
@@ -1036,6 +1134,16 @@ def main() -> None:
     ap.add_argument("--dfc23_absolute_dsm", action="store_true",
                     help="the height rasters are elevation ASL, not height AGL "
                          "(DFC23 Track 2 ships nDSM, so normally leave this off)")
+    ap.add_argument("--us3d_dir", default="",
+                    help="DFC2019 Track 1 train dir holding rgb/*_RGB.tif, "
+                         "agl/*_AGL.tif and cls/*_CLS.tif")
+    ap.add_argument("--us3d_val_frac", type=float, default=0.1,
+                    help="fraction of US3D tile *locations* (not views) held out")
+    ap.add_argument("--us3d_gsd", type=float, default=US3D_GSD_M,
+                    help="fallback metres/pixel when a tile has no GeoTIFF transform")
+    ap.add_argument("--us3d_max_height_m", type=float, default=150.0,
+                    help="mark AGL pixels above this INVALID (0 = off); the v5 "
+                         "profile's max_valid_height_m")
     ap.add_argument("--hf_token", default="")
     ap.add_argument("--workers", type=int, default=12)
     ap.add_argument("--force", action="store_true")
@@ -1068,6 +1176,8 @@ def main() -> None:
         prepare_india_labeled(root, a)
     if "india_unlabeled" in names:
         prepare_india_unlabeled(root, a)
+    if "us3d" in names:
+        prepare_us3d(root, a)
 
     print("\nprepared stores:")
     for p in sorted(root.rglob("index.json")):

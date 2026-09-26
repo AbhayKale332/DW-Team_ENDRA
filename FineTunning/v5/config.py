@@ -111,7 +111,7 @@ LANDSCAPE_NAMES: tuple[str, ...] = ("urban", "sparse", "hilly", "forested")
 class Config:
     # ----- data ------------------------------------------------------
     # Comma list of prepared store names:
-    #   gamus  geonrw  india_labeled  india_unlabeled
+    #   gamus  geonrw  india_labeled  india_unlabeled  us3d
     #   synrs3d_g005 / synrs3d_g05 / synrs3d_g1   (one store per GSD family)
     #   dfc23_g050 / dfc23_g080 / …               (one store per measured GSD)
     # A source that was not prepared is skipped with a printed note.  The
