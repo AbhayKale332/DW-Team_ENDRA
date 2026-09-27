@@ -29,7 +29,8 @@ from .packed import PackedStore, store_exists
 # and `build_loaders` then silently scores a slice of the first *train* store
 # instead, which is a val number that means nothing.
 _VAL_SPLIT = {"gamus": "val", "geonrw": "test", "synrs3d": None,
-              "india_labeled": "val", "india_unlabeled": None, "us3d": "val"}
+              "india_labeled": "val", "india_unlabeled": None, "us3d": "val",
+              "mvs3dm": "val"}
 _VAL_SPLIT_PREFIX = (("synrs3d_", None), ("dfc23_", "val"))
 
 

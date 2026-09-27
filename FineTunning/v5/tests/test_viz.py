@@ -130,21 +130,23 @@ def test_gallery_renders_into_the_report(tmp_path):
                _gallery_entry("dfc23_g050", "val"),
                _gallery_entry("india_labeled", "val"),
                _gallery_entry("us3d", "val"),
+               _gallery_entry("mvs3dm", "val"),
                {"store": "empty", "split": "val", "tiles": []}]
     (tmp_path / "metrics.json").write_text(json.dumps(_metrics()))
     made = make_all(tmp_path / "figures", _metrics(), [_sample()], 0.5, gallery=gallery)
-    for s in ("synrs3d_g05", "dfc23_g050", "india_labeled", "us3d"):
+    for s in ("synrs3d_g05", "dfc23_g050", "india_labeled", "us3d", "mvs3dm"):
         assert (tmp_path / "figures" / made[f"gallery_{s}"]).stat().st_size > 5000
     assert "gallery_empty" not in made
     index = json.loads((tmp_path / "figures" / "gallery.json").read_text())
     assert [e["store"] for e in index] == ["synrs3d_g05", "dfc23_g050", "india_labeled",
-                                    "us3d"]
+                                    "us3d", "mvs3dm"]
     assert "rgb" not in index[0]["tiles"][0]      # metadata only, no arrays
     html = build(tmp_path).read_text()
     assert "Sample tiles by dataset" in html
-    assert html.count("src=\"data:image/jpeg;base64,") == 4
+    assert html.count("src=\"data:image/jpeg;base64,") == 5
     assert "SynRS3D" in html and "DFC23" in html and "New Delhi" in html
     assert "US3D" in html and "WorldView-3" in html
+    assert "MVS3DM" in html and "Buenos Aires" in html
     assert "training tiles" in html               # synrs3d is train-only; say so
 
 
@@ -154,16 +156,18 @@ def test_gallery_store_resolution(tmp_path):
 
     for name, split in (("synrs3d_g05", "train"), ("synrs3d_g1", "train"),
                         ("dfc23_g050", "train"), ("dfc23_g050", "val"),
-                        ("india_labeled", "val"), ("us3d", "train"), ("us3d", "val")):
+                        ("india_labeled", "val"), ("us3d", "train"), ("us3d", "val"),
+                        ("mvs3dm", "train"), ("mvs3dm", "val"), ("mvs3dm", "test")):
         d = tmp_path / name / split
         d.mkdir(parents=True)
         (d / "index.json").write_text("{}")
     cfg = Config(data_root=str(tmp_path), datasets="gamus,synrs3d_g1",
-                 gallery_sources="synrs3d,dfc23,india_labeled,us3d,geonrw")
+                 gallery_sources="synrs3d,dfc23,india_labeled,us3d,mvs3dm,geonrw")
     got = _gallery_stores(cfg)
     # the store this run trained on wins; val beats train; untrained is fine
     assert got == [("synrs3d_g1", "train", True), ("dfc23_g050", "val", False),
-                   ("india_labeled", "val", False), ("us3d", "val", False)]
+                   ("india_labeled", "val", False), ("us3d", "val", False),
+                   ("mvs3dm", "val", False)]
 
 
 def _shadowed_scene(n=96):

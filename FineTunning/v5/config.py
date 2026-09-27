@@ -111,7 +111,7 @@ LANDSCAPE_NAMES: tuple[str, ...] = ("urban", "sparse", "hilly", "forested")
 class Config:
     # ----- data ------------------------------------------------------
     # Comma list of prepared store names:
-    #   gamus  geonrw  india_labeled  india_unlabeled  us3d
+    #   gamus  geonrw  india_labeled  india_unlabeled  us3d  mvs3dm
     #   synrs3d_g005 / synrs3d_g05 / synrs3d_g1   (one store per GSD family)
     #   dfc23_g050 / dfc23_g080 / …               (one store per measured GSD)
     # A source that was not prepared is skipped with a printed note.  The
@@ -406,7 +406,7 @@ class Config:
     # against the stores under data_root, trained on or not), and tiles each.
     # Each family shows one store, from its val split if it has one, else test,
     # else train, and the report says which.  "" or 0 turns it off.
-    gallery_sources: str = "synrs3d,dfc23,india_labeled,us3d"
+    gallery_sources: str = "synrs3d,dfc23,india_labeled,us3d,mvs3dm"
     gallery_tiles: int = 3
     # Per-landscape examples in the report: tiles per class (urban / sparse /
     # hilly / forested, the same GT rule as `per_landscape`) from one store,

@@ -74,6 +74,9 @@ _GALLERY_ABOUT = {
     "gamus": "GAMUS — US aerial imagery, the primary validation set.",
     "us3d": "US3D (DFC2019 Track 1) — WorldView-3 satellite imagery of "
             "Jacksonville and Omaha with LiDAR heights that keep the trees.",
+    "mvs3dm": "MVS3DM (IARPA) — pansharpened WorldView-3 views of Buenos Aires, up "
+              "to 26° off-nadir, against 20 cm airborne LiDAR that keeps the trees; "
+              "val and test locations are never trained on.",
 }
 
 

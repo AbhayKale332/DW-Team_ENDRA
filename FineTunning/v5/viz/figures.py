@@ -15,7 +15,7 @@ The figures, and what each is *for*:
 | `error_hist.png` | signed error distribution, split flat / tall |
 | `hillshade.png` | what the DSM looks like as a surface, which is what the judge sees |
 | `qualitative.png` | RGB, prediction, GT, error — the contact sheet |
-| `gallery_<store>.jpg` | what SynRS3D / DFC23 / India / US3D tiles look like, and how the model does on each |
+| `gallery_<store>.jpg` | what SynRS3D / DFC23 / India / US3D / MVS3DM tiles look like, and how the model does on each |
 | `landscape_<class>.jpg` | GAMUS tiles the landscape rule called urban / sparse / hilly / forested |
 | `shadows.jpg` | image shadows vs the shadows the reference and the prediction cast |
 
