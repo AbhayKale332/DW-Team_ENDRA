@@ -406,7 +406,7 @@ class Config:
     # against the stores under data_root, trained on or not), and tiles each.
     # Each family shows one store, from its val split if it has one, else test,
     # else train, and the report says which.  "" or 0 turns it off.
-    gallery_sources: str = "synrs3d,dfc23,india_labeled"
+    gallery_sources: str = "synrs3d,dfc23,india_labeled,us3d"
     gallery_tiles: int = 3
     # Per-landscape examples in the report: tiles per class (urban / sparse /
     # hilly / forested, the same GT rule as `per_landscape`) from one store,

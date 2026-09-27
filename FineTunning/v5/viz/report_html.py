@@ -72,6 +72,8 @@ _GALLERY_ABOUT = {
     "india_labeled": "India (labelled) — New Delhi tiles carved out of DFC23, the "
                      "only Indian imagery here with per-pixel reference heights.",
     "gamus": "GAMUS — US aerial imagery, the primary validation set.",
+    "us3d": "US3D (DFC2019 Track 1) — WorldView-3 satellite imagery of "
+            "Jacksonville and Omaha with LiDAR heights that keep the trees.",
 }
 
 

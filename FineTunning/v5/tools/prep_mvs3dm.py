@@ -160,6 +160,10 @@ def prep_site(gt_path: Path, root: Path, out: Path, scenes, pad: int) -> dict:
         dsm = g.read(1).astype(np.float32)
         tr, crs, gnd = g.transform, g.crs, g.nodata
     dsm[(dsm == gnd) | (dsm < -1000)] = np.nan
+    # lidar spikes (birds, multipath: Explorer has a 366 m pixel) -> NoData
+    med = ndimage.median_filter(fill_nan(dsm), size=7)
+    spikes = np.abs(dsm - med) > 25.0
+    dsm[spikes] = np.nan
     valid = np.isfinite(dsm)
     gsd = abs(tr.a)
     H, W = dsm.shape
@@ -177,7 +181,7 @@ def prep_site(gt_path: Path, root: Path, out: Path, scenes, pad: int) -> dict:
     write(dem, np.pad(filled, pad, mode="edge"), big_tr, crs, None, "float32")
 
     info: dict = {"site": name, "shape": [H, W], "gsd_m": gsd, "crs": str(crs),
-                  "gt_valid_frac": float(valid.mean()),
+                  "gt_valid_frac": float(valid.mean()), "gt_spikes_removed": int(spikes.sum()),
                   "ndsm_p50_p95_max_m": [float(np.nanpercentile(ndsm, q)) for q in (50, 95, 100)]}
     for sid in scenes:
         pan_p, ms_p = find(root, "PAN", sid), find(root, "MSI", sid)
