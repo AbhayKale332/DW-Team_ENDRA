@@ -368,7 +368,7 @@ class Config:
     # (ExG > coarse_veg_exg) with label < 1 m out of those samples, so "a tree
     # is flat ground" is not taught.  ExG = 2g - r - b on chromaticities.
     coarse_mask_veg: bool = False
-    coarse_veg_exg: float = 0.05
+    coarse_veg_exg: float = 0.10
 
     # ----- eval / io -------------------------------------------------
     eval_every: int = 2

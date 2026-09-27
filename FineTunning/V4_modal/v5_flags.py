@@ -117,7 +117,7 @@ V5 = {
     "coarse_label_m": "2.0",
     "w_coarse": "1.0",
     "coarse_mask_veg": "false",          # provisional until the audit says trees sit at ~0 m
-    "coarse_veg_exg": "0.05",
+    "coarse_veg_exg": "0.10",           # the audit fallback; 0.05 masks 38 % of DFC23 ground
     # Step 1: the Cartosat look.  MERGED = 0.6 m luminance + 1.6 m colour
     # (1.6/0.6 = 2.67, bracketed); 10 % grayscale for PAN-only uploads.
     "aug_pansharp_p": "0.5",

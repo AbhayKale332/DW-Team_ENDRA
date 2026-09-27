@@ -7,6 +7,7 @@ __pycache__/
 #Hidden Folders
 Research-Paper/
 cartosat_2S_Sample/
+best.onyx/
 
 # C extensions
 *.so

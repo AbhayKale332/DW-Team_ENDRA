@@ -106,6 +106,49 @@ def test_veg_mask_lets_a_coarse_sample_keep_its_trees():
     assert abs(float(on["coarse"]) - float(flat["coarse"])) < 1e-6
 
 
+def test_veg_mask_keeps_the_ground_around_a_tree():
+    """One flagged pixel per 4x4 block used to void the block: lifted ground went unpaid."""
+    cfg = Config()
+    cfg.coarse_label_sources, cfg.coarse_mask_veg = "dfc23", True
+    B, S = 1, 32
+    tgt = torch.zeros(B, 1, S, S)                      # all ground
+    veg = torch.zeros(B, 1, S, S, dtype=torch.bool)
+    veg[..., ::4, ::4] = True                          # a green pixel in every block
+    batch = {"target": tgt, "valid": torch.ones(B, 1, S, S, dtype=torch.bool),
+             "cls": torch.full((B, S, S), 7), "gsd_m": torch.full((B,), 0.5),
+             "src": ["dfc23_g050"], "veg": veg}
+    torch.manual_seed(0)
+    _, st = compute_losses(_out(tgt + 3.0, B, S), batch, cfg, StratumBalancer(0.0))
+    assert float(st["coarse"]) > 1.0                   # 3 m of lifted ground is an error
+    assert abs(float(st["veg_drop"]) - 1 / 16) < 1e-6
+
+
+def test_veg_masked_eval_skips_zeroed_trees_only():
+    from eval.metrics import evaluate
+
+    S = 16
+    tgt = torch.zeros(1, 1, S, S)
+    tgt[..., 8:, :] = 10.0                             # a building
+    veg = torch.zeros(1, 1, S, S, dtype=torch.bool)
+    veg[..., :4, :] = True                             # canopy the label put at 0 m
+    pred = tgt.clone()
+    pred[..., :4, :] = 8.0                             # the model predicts the canopy
+
+    class _Net(torch.nn.Module):
+        def forward(self, x):
+            return {"fused": pred.expand(x.shape[0], -1, -1, -1)}
+
+    batch = {"image": torch.zeros(1, 3, S, S), "target": tgt,
+             "valid": torch.ones(1, 1, S, S, dtype=torch.bool),
+             "cls": torch.zeros(1, S, S, dtype=torch.long), "veg": veg}
+    cfg = Config()
+    plain = evaluate(_Net(), [batch], cfg, torch.device("cpu"))
+    masked = evaluate(_Net(), [batch], cfg, torch.device("cpu"), mask_veg=True)
+    assert plain["global"]["rmse_m"] > 1.0
+    assert masked["global"]["rmse_m"] < 1e-6
+    assert masked["global"]["n"] == S * S - 4 * S
+
+
 def test_pansharpen_sim_blurs_colour_not_luminance():
     from dwdata.gpu_aug import sensor_augment
 

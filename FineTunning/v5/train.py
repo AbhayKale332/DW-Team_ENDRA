@@ -927,6 +927,8 @@ def main() -> None:
                        if "con" in st else "")
                 if cfg.coarse_label_sources and "coarse" in st:
                     con += f" crs={st['coarse']:.2f}"
+                    if cfg.coarse_mask_veg and st["coarse"] > 0:
+                        con += f" veg={st['veg_drop']:.0%}"
                 # Names the tensor that went non-finite instead of leaving the
                 # reader to infer it from which loss terms survived.  Costs one
                 # 5-element D2H copy, and only on a step that is already syncing.
@@ -1051,6 +1053,15 @@ def main() -> None:
                             rec[f"val_{_src}_pooled{_k}"] = mp
                             print(f"  eval e{epoch}  [{_src} @{_k}x pooled] "
                                   f"{format_line(mp)}")
+                            # The labels put trees at 0 m, so once the mask
+                            # lets the model predict canopy the lines above
+                            # charge it for every tree.  This one does not.
+                            if cfg.coarse_mask_veg:
+                                mv = evaluate(core, _dl, cfg, device, use_tta=False,
+                                              gpu_prep=gpu_prep, mask_veg=True)
+                                rec[f"val_{_src}_vegmasked"] = mv
+                                print(f"  eval e{epoch}  [{_src} veg-masked] "
+                                      f"{format_line(mv)}")
                     if m["global"]["rmse_m"] < best:
                         best = m["global"]["rmse_m"]
                         _save(out_dir / "best.pt", core, spec, cfg, epoch, m, ema)

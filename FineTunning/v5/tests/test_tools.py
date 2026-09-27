@@ -77,6 +77,7 @@ def test_audit_finds_coarse_labels_flat_trees_and_pins_classes(tmp_path):
     assert rep["flags"]["coarse_label_m"] == str(round(4 * 0.33, 2))   # in metres
     veg = rep["vegetation"]
     assert veg["coarse_mask_veg"] is True
+    assert veg["ground_mask_ok"] == {"dfc23_g050": True}      # tau takes trees, not ground
     assert veg["green_pixel_heights"]["dfc23_g050"]["median_m"] < 1.0
     assert veg["calibration"]["f1"] > 0.8
     assert rep["classes"]["pinning_ok"] is True, rep["classes"]["checks"]
@@ -84,6 +85,57 @@ def test_audit_finds_coarse_labels_flat_trees_and_pins_classes(tmp_path):
     assert all(v["shared_stems"] == 0 and v["shared_content"] == 0
                for v in rep["overlaps"].values())
     assert (tmp_path / "audit" / "audit.md").read_text().startswith("# Label audit")
+
+
+class _ListStore:
+    def __init__(self, tiles):
+        self.tiles = tiles
+
+    def __len__(self):
+        return len(self.tiles)
+
+    def get(self, i):
+        return self.tiles[i]
+
+
+def _grey_city(rng, tile=64, tree_rgb=(40, 150, 40)):
+    """Mostly near-grey ground and roofs (ExG ~ 0 +- noise) plus a few crowns."""
+    grey = rng.normal(128, 25, (tile, tile, 1)) + rng.normal(0, 4, (tile, tile, 3))
+    rgb = np.clip(grey, 0, 255).astype(np.uint8)
+    cls = np.full((tile, tile), CLASS_NAMES.index("ground"), np.uint8)
+    h = np.full((tile, tile), 0.3, np.float32)
+    for _ in range(3):
+        y, x = rng.integers(0, tile - 10, 2)
+        rgb[y:y + 8, x:x + 8] = tree_rgb
+        cls[y:y + 8, x:x + 8] = CLASS_NAMES.index("tree")
+        h[y:y + 8, x:x + 8] = 8.0
+    rgb[0, 0], rgb[-1, -1] = 0, 255                    # pin the stretch
+    return rgb, h, cls, np.ones((tile, tile), bool)
+
+
+def test_exg_calibration_does_not_mask_grey_ground():
+    """resume-v2's audit returned the grid floor, -0.05, which flags grey surfaces."""
+    from tools.audit_labels import EXG_MAX_NONVEG_FPR, calibrate_exg, green_heights
+
+    rng = np.random.default_rng(0)
+    st = _ListStore([_grey_city(rng) for _ in range(6)])
+    cal = calibrate_exg(st, CLASS_NAMES.index("tree"), 6, CLASS_NAMES.index("low_veg"))
+    assert "fallback" not in cal, cal
+    assert cal["tau"] > 0.0 and cal["nonveg_fpr"] <= EXG_MAX_NONVEG_FPR
+    assert cal["f1"] > 0.9
+    # the ground under that tau stays in the loss; -0.05 takes several times more
+    ours = green_heights(st, cal["tau"], 6)["frac_low_masked"]
+    assert ours < 0.05
+    assert green_heights(st, -0.05, 6)["frac_low_masked"] > 3 * max(ours, 0.01)
+
+
+def test_exg_calibration_falls_back_when_trees_are_not_green():
+    from tools.audit_labels import EXG_FALLBACK_TAU, calibrate_exg
+
+    rng = np.random.default_rng(1)
+    st = _ListStore([_grey_city(rng, tree_rgb=(128, 128, 128)) for _ in range(4)])
+    cal = calibrate_exg(st, CLASS_NAMES.index("tree"), 4)
+    assert cal["tau"] == EXG_FALLBACK_TAU and cal.get("fallback")
 
 
 def test_audit_catches_a_retitled_duplicate_tile(tmp_path):

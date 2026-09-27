@@ -153,6 +153,8 @@ async function poll(job) {
         `<a href="/api/report/${s.id}">validation report</a> · ` +
         `<a href="/api/result/${s.id}/ndsm_m.tif">GeoTIFF</a>`;
       $('go').disabled = false;
+      // straight into the flythrough; Back returns here, links and all
+      location.assign(job.view_url);
       return;
     }
     if (s.stage === 'error') {

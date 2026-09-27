@@ -358,18 +358,34 @@ def coarse_pool_px(cfg, gsd_m: float) -> int:
     return int(max(1, getattr(cfg, "coarse_pool", 4)))
 
 
-def coarse_terms(pred, target, valid, cfg, w=None, gsd=None, k: int | None = None):
+# A block with a vegetation-masked part is still scored on the rest of it, as
+# long as the rest is at least this share of the block.
+COARSE_KEEP_MIN = 0.5
+
+
+def coarse_terms(pred, target, valid, cfg, w=None, gsd=None, k: int | None = None,
+                 keep=None):
     """`regression_terms` after k x k average pooling (default k = cfg.coarse_pool).
 
     A DFC23 / India label carries ~2 m of information per ~4 px; comparing the
     prediction's 4x4 block means to the label's leaves the network free to put
     real edges inside the block.  A pooled pixel counts only when every source
     pixel under it was valid, so NoData edges cannot drag a block mean down.
+
+    `keep` (the vegetation mask's complement) is not NoData: a block with masked
+    pixels is compared on the means of its kept pixels, prediction and label
+    alike, and dropped only when under `COARSE_KEEP_MIN` of it is kept.  Folding
+    it into `valid` made one flagged pixel void its whole block, so the ground
+    and roof edges around every tree left the loss with the tree.
     """
     k = int(max(1, k if k is not None else getattr(cfg, "coarse_pool", 4)))
     vf = valid.to(pred.dtype)
+    full = F.avg_pool2d(vf, k) > 0.999
+    if keep is not None:
+        vf = vf * keep.to(pred.dtype)
     n = F.avg_pool2d(vf, k)
-    full = n > 0.999
+    if keep is not None:
+        full = full & (n >= COARSE_KEEP_MIN)
     pp = F.avg_pool2d(pred * vf, k) / n.clamp_min(1e-6)
     tt = F.avg_pool2d(target * vf, k) / n.clamp_min(1e-6)
     wp = F.avg_pool2d(w, k) if w is not None else None
@@ -444,11 +460,17 @@ def compute_losses(out: dict, batch: dict, cfg, balancer: StratumBalancer):
     lb, _ = regression_terms(out["b"], tgt, val_f, cfg, w, gsd)
     l_reg = cfg.w_fused * lf + cfg.w_head_a * la + cfg.w_head_b * lb
     l_coarse = tgt.new_zeros(())
+    veg_drop = tgt.new_zeros(())
     if coarse is not None:
         val_c = val & coarse
+        keep = None
         veg = batch.get("veg")
         if getattr(cfg, "coarse_mask_veg", False) and veg is not None:
-            val_c = val_c & ~(veg.bool() & (tgt < 1.0))
+            keep = ~(veg.bool() & (tgt < 1.0))
+            # Share of the coarse samples' valid pixels the mask takes out,
+            # logged as `veg=`.  resume-v2 ran tau = -0.05 with no way to see
+            # how much of DFC23 / India that took.
+            veg_drop = 1.0 - (val_c & keep).sum().float() / val_c.sum().float().clamp_min(1.0)
         # One pool size per sample (see `coarse_pool_px`): samples are grouped
         # by k and each group's loss is weighted by its valid pixels.  Reading
         # the per-sample GSDs back is one small device sync, paid only on
@@ -468,18 +490,19 @@ def compute_losses(out: dict, batch: dict, cfg, balancer: StratumBalancer):
                 groups[kk] = m.to(tgt.device).view(-1, 1, 1, 1)
         l_coarse = tgt.new_zeros(())
         n_tot = tgt.new_zeros(())
+        kept = val_c if keep is None else val_c & keep
         for kk, sel in groups.items():
             vk = val_c & sel
-            nk = vk.sum().float()
-            cf, _ = coarse_terms(out["fused"], tgt, vk, cfg, w, gsd, k=kk)
-            ca, _ = coarse_terms(out["a"], tgt, vk, cfg, w, gsd, k=kk)
-            cb, _ = coarse_terms(out["b"], tgt, vk, cfg, w, gsd, k=kk)
+            nk = (kept & sel).sum().float()
+            cf, _ = coarse_terms(out["fused"], tgt, vk, cfg, w, gsd, k=kk, keep=keep)
+            ca, _ = coarse_terms(out["a"], tgt, vk, cfg, w, gsd, k=kk, keep=keep)
+            cb, _ = coarse_terms(out["b"], tgt, vk, cfg, w, gsd, k=kk, keep=keep)
             l_coarse = l_coarse + nk * (cfg.w_fused * cf + cfg.w_head_a * ca
                                         + cfg.w_head_b * cb)
             n_tot = n_tot + nk
         l_coarse = l_coarse / n_tot.clamp_min(1.0)
         n_f = val_f.sum().float()
-        n_c = val_c.sum().float()
+        n_c = kept.sum().float()
         frac_c = n_c / (n_f + n_c).clamp_min(1.0)
         l_reg = (1.0 - frac_c) * l_reg + frac_c * getattr(cfg, "w_coarse", 1.0) * l_coarse
 
@@ -507,6 +530,7 @@ def compute_losses(out: dict, batch: dict, cfg, balancer: StratumBalancer):
         "bin": l_bin.detach(), "bin_ent": -l_ent.detach(),
         "seg": l_seg.detach(),
         "coarse": l_coarse.detach(),
+        "veg_drop": veg_drop.detach(),
         "alpha": out["alpha"].detach().mean(),
         "nonfinite": nf,
     }

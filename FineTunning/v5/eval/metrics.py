@@ -240,13 +240,18 @@ def pool_pair(pred, target, valid, k: int):
 
 @torch.no_grad()
 def evaluate(model, loader, cfg, device, use_tta: bool = False,
-             gpu_prep=None, pool: int = 1) -> dict:
+             gpu_prep=None, pool: int = 1, mask_veg: bool = False) -> dict:
     """`gpu_prep` is the trainer's `GpuPreproc`, or None for the all-CPU path.
 
     The decorator matters: without it the eval pass builds an autograd graph for
     a (B, 1, 512, 512) prediction it immediately throws away.  `Evaluator.add`
     was already `no_grad`, but by then the forward had allocated — which is why
     eval peaked higher than training and forced the batch down for both.
+
+    `mask_veg` leaves out the pixels the training loss masks (ExG vegetation
+    labelled < 1 m, from the batch's `veg`).  DFC23 / India put every tree at
+    0 m, so on those sets a model that predicts canopy is charged for it; this
+    is the score that separates "predicts trees" from "lifts the ground".
     """
     from models.tta import tta_predict
 
@@ -262,6 +267,9 @@ def evaluate(model, loader, cfg, device, use_tta: bool = False,
         img = batch["image"].to(device, non_blocking=True)
         tgt = batch["target"].to(device, non_blocking=True)
         val = batch["valid"].to(device, non_blocking=True)
+        if mask_veg and "veg" in batch:
+            veg = batch["veg"].to(device, non_blocking=True).bool()
+            val = val & ~(veg & (tgt < 1.0))
         if use_tta:
             pred = tta_predict(model, img, tuple(cfg.tta_scales), "fused",
                                amp_dtype=amp_dt if use_amp else None)

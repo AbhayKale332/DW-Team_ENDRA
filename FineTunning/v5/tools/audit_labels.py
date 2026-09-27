@@ -261,59 +261,127 @@ def audit_resolution(root: Path, stores: dict, n_tiles: int, dfc23_raw: str) -> 
 # ---------------------------------------------------------------------
 # 2. vegetation in coarse labels
 # ---------------------------------------------------------------------
-def calibrate_exg(gamus: PackedStore, tree_id: int, n_tiles: int) -> dict:
-    """F1-optimal ExG threshold for the GAMUS tree class, plus tree heights."""
-    taus = np.round(np.arange(-0.05, 0.30, 0.01), 3)
+# Searched well below and above any sane split, so an optimum on the edge of the
+# grid means the search failed rather than that the edge is the answer.
+EXG_TAUS = np.round(np.arange(-0.10, 0.40, 0.01), 3)
+# Share of non-vegetation GAMUS pixels (ground, road, roof, water) that tau may
+# flag.  The mask drops every flagged pixel labelled < 1 m from the coarse loss,
+# so a false positive is a ground pixel the model never sees at 0 m.  A grey
+# surface has ExG ~ 0, so the old unconstrained F1 fell to the grid floor
+# (tau = -0.05) and masked nearly all DFC23 / India ground: flat_bias went from
+# +0.8 to +3.9 m on DFC23 val in the resume-v2 run.
+EXG_MAX_NONVEG_FPR = 0.05
+EXG_MIN_F1 = 0.5              # below this ExG does not find the trees at all
+# Measured on all 1773 DFC23 train tiles (2026-09-27): 0.05 still masks 38 % of
+# the < 1 m label (New Delhi 32 %) and flags 8 % of roofs green; 0.10 masks 29 %
+# (Delhi 23 %) and flags 3 % of roofs, and its overlays still cover the crowns.
+EXG_FALLBACK_TAU = 0.10
+# A tau that takes more than this share of a coarse store's < 1 m label is taking
+# its ground, not its trees (-0.05 took 75 %, Delhi 83 %).  Reported per store as
+# `ground_mask_ok`; kaggle_test stops on it rather than train nine hours on it.
+MAX_GROUND_MASKED = 0.45
+
+
+def calibrate_exg(gamus: PackedStore, tree_id: int, n_tiles: int,
+                  low_veg_id: int | None = None) -> dict:
+    """ExG threshold for the GAMUS tree class, plus tree heights.
+
+    The F1-optimal tau among those that flag at most `EXG_MAX_NONVEG_FPR` of the
+    non-vegetation pixels.  Low vegetation is left out of both sides: ExG cannot
+    tell grass from a crown, and grass is not what the mask is for.  With no
+    admissible tau, the best one on the grid's edge, or its F1 under
+    `EXG_MIN_F1`, tau falls back to `EXG_FALLBACK_TAU` and `fallback` says why.
+    """
+    taus = EXG_TAUS
     tp = np.zeros(len(taus))
     fp = np.zeros(len(taus))
     fn = np.zeros(len(taus))
+    n_neg = 0
     tree_h = []
     for i in _sample(len(gamus), n_tiles):
         rgb, h, cls, v = gamus.get(int(i))
         seg = seg_ids(cls, "gamus")
         ok = v.astype(bool) & (seg != SEG_IGNORE_INDEX)
+        if low_veg_id is not None:
+            ok &= seg != low_veg_id
         if not ok.any():
             continue
         e = exg(_stretched(rgb))[ok]
         t = seg[ok] == tree_id
         tree_h.append(h[ok][t])
+        n_neg += int(np.sum(~t))
         for j, tau in enumerate(taus):
             p = e > tau
             tp[j] += np.sum(p & t)
             fp[j] += np.sum(p & ~t)
             fn[j] += np.sum(~p & t)
     f1 = 2 * tp / np.maximum(2 * tp + fp + fn, 1)
-    j = int(np.argmax(f1))
+    fpr = fp / max(n_neg, 1)
+    admissible = fpr <= EXG_MAX_NONVEG_FPR
     th = np.concatenate(tree_h) if tree_h else np.zeros(0)
-    return {"tau": float(taus[j]), "f1": float(f1[j]),
-            "gamus_tree_median_m": float(np.median(th)) if th.size else None}
+    out = {"gamus_tree_median_m": float(np.median(th)) if th.size else None,
+           "max_nonveg_fpr": EXG_MAX_NONVEG_FPR}
+    if not admissible.any():
+        j, fallback = None, (f"no tau flags <= {EXG_MAX_NONVEG_FPR:.0%} of "
+                             f"non-vegetation pixels")
+    else:
+        j = int(np.argmax(np.where(admissible, f1, -1.0)))
+        fallback = (f"best tau {taus[j]} is on the grid edge"
+                    if j in (0, len(taus) - 1) else
+                    f"best F1 {f1[j]:.2f} < {EXG_MIN_F1}: ExG does not separate the trees"
+                    if f1[j] < EXG_MIN_F1 else None)
+    if fallback:
+        k = int(np.argmin(np.abs(taus - EXG_FALLBACK_TAU)))
+        out.update(tau=EXG_FALLBACK_TAU, f1=float(f1[k]), nonveg_fpr=float(fpr[k]),
+                   fallback=fallback)
+    else:
+        out.update(tau=float(taus[j]), f1=float(f1[j]), nonveg_fpr=float(fpr[j]))
+    return out
 
 
 def green_heights(store: PackedStore, tau: float, n_tiles: int) -> dict:
+    """Label heights under ExG > tau, and how much of the < 1 m label tau takes.
+
+    `frac_low_masked` is the share of a store's < 1 m pixels the coarse mask
+    would drop: the ground it would stop teaching.  Trees are a minority of any
+    city, so a large share means tau is flagging ground, not canopy.
+    """
     hs = []
+    n_low = n_low_green = 0
     for i in _sample(len(store), n_tiles):
         rgb, h, _, v = store.get(int(i))
-        m = v.astype(bool) & (exg(_stretched(rgb)) > tau)
-        hs.append(h[m])
+        v = v.astype(bool)
+        g = exg(_stretched(rgb)) > tau
+        low = v & (h < 1.0)
+        n_low += int(low.sum())
+        n_low_green += int((low & g).sum())
+        hs.append(h[v & g])
     a = np.concatenate(hs) if hs else np.zeros(0)
     if not a.size:
         return {"green_px": 0}
     return {"green_px": int(a.size), "median_m": float(np.median(a)),
-            "frac_below_1m": float(np.mean(a < 1.0))}
+            "frac_below_1m": float(np.mean(a < 1.0)),
+            "frac_low_masked": float(n_low_green / max(n_low, 1))}
 
 
 def audit_vegetation(stores: dict, n_tiles: int) -> dict:
     if "gamus" not in stores:
         return {"skipped": "no gamus store to calibrate tau on"}
     tree_id = CLASS_NAMES.index("tree")
-    cal = calibrate_exg(stores["gamus"], tree_id, n_tiles)
+    low_veg = CLASS_NAMES.index("low_veg") if "low_veg" in CLASS_NAMES else None
+    cal = calibrate_exg(stores["gamus"], tree_id, n_tiles, low_veg)
+    if cal.get("fallback"):
+        print(f"[audit] ExG calibration fell back to tau={cal['tau']}: {cal['fallback']}")
     per = {n: green_heights(st, cal["tau"], n_tiles) for n, st in stores.items()}
     tall = cal["gamus_tree_median_m"] or 0.0
     mask = {n: bool(p.get("median_m") is not None and p["median_m"] < 1.0 and tall >= 3.0)
             for n, p in per.items() if n.startswith(("dfc23", "india"))}
+    ground_ok = {n: bool(per[n].get("frac_low_masked", 0.0) <= MAX_GROUND_MASKED)
+                 for n in mask}
     return {"calibration": cal, "green_pixel_heights": per,
             "coarse_mask_veg": any(mask.values()) if mask else None,
-            "coarse_veg_exg": cal["tau"], "per_store_mask": mask}
+            "coarse_veg_exg": cal["tau"], "per_store_mask": mask,
+            "ground_mask_ok": ground_ok}
 
 
 # ---------------------------------------------------------------------
@@ -541,13 +609,16 @@ def to_markdown(rep: dict) -> str:
     if v and "calibration" in v:
         c = v["calibration"]
         L += ["## Vegetation", "",
-              f"ExG tau = {c['tau']} (F1 {c['f1']:.3f} on GAMUS trees; GAMUS tree "
-              f"median {c['gamus_tree_median_m']} m)", "",
-              "| store | green px | median label (m) | < 1 m |", "|---|---|---|---|"]
+              f"ExG tau = {c['tau']} (F1 {c['f1']:.3f} on GAMUS trees, "
+              f"{c.get('nonveg_fpr', float('nan')):.1%} of non-vegetation flagged; "
+              f"GAMUS tree median {c['gamus_tree_median_m']} m)"
+              + (f" — FALLBACK: {c['fallback']}" if c.get("fallback") else ""), "",
+              "| store | green px | median label (m) | < 1 m | < 1 m px masked |",
+              "|---|---|---|---|---|"]
         for n, s in v["green_pixel_heights"].items():
             if s.get("green_px"):
                 L.append(f"| {n} | {s['green_px']} | {s['median_m']:.2f} | "
-                         f"{s['frac_below_1m']:.1%} |")
+                         f"{s['frac_below_1m']:.1%} | {s['frac_low_masked']:.1%} |")
         L.append("")
     c = rep.get("classes")
     if c:
