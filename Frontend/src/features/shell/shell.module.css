@@ -1,0 +1,221 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Header: brand | menus ............ status | panel toggles | theme */
+.header {
+  height: var(--dw-header-h);
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 0 10px 0 16px;
+  background: var(--dw-surface);
+  border-bottom: 1px solid var(--dw-line);
+  z-index: 20;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: none;
+  user-select: none;
+}
+
+.wordmark {
+  font-size: 15.5px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  color: var(--dw-ink);
+}
+
+/* Vertical rule between header zones. */
+.divider {
+  flex: none;
+  width: 1px;
+  height: 20px;
+  background: var(--dw-line);
+  margin: 0 14px;
+}
+
+.tagline {
+  font-size: 11.5px;
+  color: var(--dw-dim);
+  white-space: nowrap;
+}
+
+.menubar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.menuButton {
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--dw-dim);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 4px;
+  cursor: pointer;
+  transition:
+    background-color 0.12s,
+    color 0.12s;
+}
+
+.menuButton:hover,
+.menuButton[data-expanded] {
+  background: var(--dw-hover);
+  color: var(--dw-ink);
+}
+
+.menuButton:focus-visible {
+  outline: 2px solid var(--mantine-color-dwBlue-5);
+  outline-offset: -2px;
+}
+
+.menuTarget {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* Menus read as words; the icon stands in only where the words no longer fit (see the narrow breakpoint). */
+.menuIcon {
+  display: none;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  flex: none;
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  position: relative;
+}
+
+.panel {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--dw-panel);
+  z-index: 10;
+}
+
+.panelLeft {
+  width: var(--dw-panel-w);
+  border-right: 1px solid var(--dw-line);
+}
+
+.panelRight {
+  width: var(--dw-inspector-w);
+  border-left: 1px solid var(--dw-line);
+}
+
+.panelHeader {
+  flex: none;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 7px 0 12.5px;
+  border-bottom: 1px solid var(--dw-line);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.statusbar {
+  height: var(--dw-status-h);
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0 7px;
+  background: var(--dw-surface);
+  border-top: 1px solid var(--dw-line);
+  font-family: var(--mantine-font-family-monospace);
+  font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+  color: var(--dw-dim);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.statusCell {
+  padding: 0 9px;
+  border-right: 1px solid var(--dw-line);
+  line-height: var(--dw-status-h);
+}
+
+.statusCell:last-child {
+  border-right: 0;
+}
+
+.statusGrow {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Tablet: panels float over the viewport as drawers. */
+@media (max-width: 72em) {
+  .panel {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    box-shadow: var(--mantine-shadow-lg);
+  }
+  .panelLeft {
+    left: 0;
+  }
+  .panelRight {
+    right: 0;
+  }
+}
+
+@media (max-width: 55.8em) {
+  .tagline,
+  .divider {
+    display: none;
+  }
+  .menuIcon {
+    display: inline;
+  }
+  .menuLabel {
+    display: none;
+  }
+  .brand {
+    margin-right: 6px;
+  }
+}
+
+@media (max-width: 43.2em) {
+  .panel {
+    top: auto;
+    left: 0 !important;
+    right: 0 !important;
+    width: auto;
+    max-height: 70%;
+    border: 0;
+    border-top: 1px solid var(--dw-line);
+  }
+  .wordmark {
+    font-size: 16px;
+  }
+  .statusbar .statusHideSm {
+    display: none;
+  }
+}

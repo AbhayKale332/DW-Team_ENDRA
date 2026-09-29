@@ -1,0 +1,405 @@
+.layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.layer > * {
+  pointer-events: auto;
+}
+
+.topLeft {
+  position: absolute;
+  top: 14.5px;
+  left: 14.5px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  align-items: flex-start;
+  z-index: 3;
+}
+
+.topRight {
+  position: absolute;
+  top: 14.5px;
+  right: 14.5px;
+  z-index: 3;
+}
+
+.topCenter {
+  position: absolute;
+  top: 14.5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(504px, calc(100% - 180px));
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  z-index: 4;
+}
+
+.bottomLeft {
+  position: absolute;
+  left: 14.5px;
+  bottom: 14.5px;
+  z-index: 3;
+}
+
+.bottomRight {
+  position: absolute;
+  right: 14.5px;
+  bottom: 14.5px;
+  display: flex;
+  align-items: flex-end;
+  gap: 9px;
+  z-index: 3;
+}
+
+.bottomCenter {
+  position: absolute;
+  bottom: 14.5px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+}
+
+.switcher {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 39.5px;
+  min-width: 191px;
+  padding: 0 11px 0 11px;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.switcher:hover {
+  background: var(--dw-surface);
+}
+
+.switcher:focus-visible {
+  outline: 2px solid var(--mantine-color-dwBlue-5);
+  outline-offset: 2px;
+}
+
+.navStack {
+  display: flex;
+  flex-direction: column;
+  width: 39.5px;
+  overflow: hidden;
+}
+
+.navBtn {
+  width: 39.5px;
+  height: 39.5px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--dw-ink);
+  cursor: pointer;
+}
+
+.navBtn + .navBtn {
+  border-top: 1px solid var(--dw-line);
+}
+
+.navBtn:hover {
+  background: var(--dw-hover);
+}
+
+.navBtn:focus-visible {
+  outline: 2px solid var(--mantine-color-dwBlue-5);
+  outline-offset: -2px;
+}
+
+.navBtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.compass {
+  width: 86.5px;
+  height: 86.5px;
+  border-radius: 50%;
+  display: block;
+  padding: 0;
+  cursor: pointer;
+}
+
+.compass:focus-visible {
+  outline: 2px solid var(--mantine-color-dwBlue-5);
+  outline-offset: 3px;
+}
+
+.colorbar {
+  display: flex;
+  gap: 7px;
+  padding: 9px 9px 9px 11px;
+  align-items: stretch;
+}
+
+.colorbarRamp {
+  width: 11px;
+  height: 135px;
+  border: 1px solid var(--dw-float-border);
+}
+
+.colorbarTicks {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dw-ink);
+}
+
+.colorbarTitle {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 10px;
+  color: var(--dw-dim);
+  text-align: center;
+}
+
+/* follows the pointer; must never take the hover away from the canvas under it */
+.layer > .hoverCard {
+  pointer-events: none;
+}
+
+.hoverCard {
+  position: absolute;
+  z-index: 5;
+  width: max-content;
+  max-width: 252px;
+  padding: 7px 9px;
+  font-size: 11px;
+  color: var(--dw-ink);
+}
+
+.hoverHead {
+  display: flex;
+  align-items: center;
+  gap: 5.5px;
+}
+
+.hoverTitle {
+  font-weight: 600;
+  flex: 1;
+}
+
+.hoverHeight {
+  font-family: var(--mantine-font-family-monospace);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  padding-left: 11px;
+}
+
+.hoverSub {
+  color: var(--dw-dim);
+  margin-top: 2px;
+}
+
+.hoverRows {
+  margin: 5.5px 0 0;
+  display: grid;
+  gap: 1px;
+}
+
+.hoverRows > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12.5px;
+}
+
+.hoverRows dt {
+  color: var(--dw-dim);
+}
+
+.hoverRows dd {
+  margin: 0;
+  font-family: var(--mantine-font-family-monospace);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.osmAttribution {
+  margin-top: 3.5px;
+  font-size: 9px;
+  color: var(--dw-dim);
+}
+
+.classLegend {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 7px 9px;
+  font-size: 10px;
+  color: var(--dw-ink);
+}
+
+.classLegendTitle {
+  color: var(--dw-dim);
+  margin-bottom: 2px;
+}
+
+.classLegendRow {
+  display: grid;
+  grid-template-columns: 9px 1fr auto;
+  align-items: center;
+  gap: 5.5px;
+}
+
+.classSwatch {
+  width: 9px;
+  height: 9px;
+  border: 1px solid var(--dw-float-border);
+}
+
+.classShare {
+  font-family: var(--mantine-font-family-monospace);
+  font-variant-numeric: tabular-nums;
+  color: var(--dw-dim);
+  padding-left: 7px;
+}
+
+.scalebar {
+  padding: 5.5px 9px;
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 10px;
+}
+
+.scalebarLine {
+  height: 5.5px;
+  border: 2px solid var(--dw-ink);
+  border-top: 0;
+  margin-top: 3px;
+}
+
+.empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 2;
+  padding: 14.5px;
+}
+
+.emptyCard {
+  width: min(468px, 100%);
+  padding: 25px 25px 21.5px;
+}
+
+.processing {
+  position: absolute;
+  top: 14.5px;
+  right: 68.5px;
+  width: min(324px, calc(100% - 90px));
+  padding: 14.5px;
+  z-index: 5;
+}
+
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  font-family: var(--mantine-font-family-monospace);
+  font-variant-numeric: tabular-nums;
+  color: #f4f7fb;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.7);
+}
+
+.hudBox {
+  position: absolute;
+  padding: 7px 11px;
+  background: rgb(8 12 18 / 0.55);
+  border: 1px solid rgb(255 255 255 / 0.18);
+  border-radius: 3px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.hudTape {
+  position: absolute;
+  top: 14.5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 288px;
+  height: 32.5px;
+  overflow: hidden;
+  background: rgb(8 12 18 / 0.55);
+  border: 1px solid rgb(255 255 255 / 0.18);
+  border-radius: 3px;
+}
+
+.hudCross {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 57.5px;
+  height: 57.5px;
+  transform: translate(-50%, -50%);
+}
+
+.modeBar {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5.5px 7px 5.5px 11px;
+  font-size: 11.5px;
+}
+
+.lockHint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 4;
+  background: rgb(8 12 18 / 0.28);
+  border: 0;
+  width: 100%;
+  cursor: pointer;
+  color: #fff;
+  font: inherit;
+}
+
+.lockHint:focus-visible {
+  outline: 3px solid var(--mantine-color-dwBlue-4);
+  outline-offset: -3px;
+}
+
+.miniMap {
+  position: absolute;
+  right: 14.5px;
+  bottom: 14.5px;
+  width: 162px;
+  height: 162px;
+  padding: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 43.2em) {
+  .compass {
+    width: 65px;
+    height: 65px;
+  }
+  .colorbarRamp {
+    height: 90px;
+  }
+  .topCenter {
+    top: 65px;
+    width: calc(100% - 29px);
+  }
+  .processing {
+    right: 14.5px;
+    left: 14.5px;
+    width: auto;
+    top: auto;
+    bottom: 14.5px;
+  }
+}

@@ -1,0 +1,116 @@
+/* Design tokens shared by the shell and viewport overlays. Mantine's own variables handle components. */
+:root {
+  --dw-header-h: 46px;
+  --dw-status-h: 24px;
+  --dw-panel-w: 288px;
+  --dw-inspector-w: 324px;
+  --dw-brand-gradient: linear-gradient(135deg, #2d6cdf 0%, #6a4cf0 100%);
+  --dw-radius-float: 3.5px;
+}
+
+:root[data-mantine-color-scheme='light'] {
+  --dw-bg: #eef1f5;
+  --dw-surface: #ffffff;
+  --dw-panel: #f7f8fa;
+  --dw-line: #dde2e8;
+  --dw-line-strong: #c7ced7;
+  --dw-ink: #151a20;
+  --dw-dim: #5b6572;
+  --dw-faint: #8a949e;
+  --dw-float-bg: rgb(255 255 255 / 0.94);
+  --dw-float-border: rgb(15 23 42 / 0.1);
+  --dw-float-shadow: 0 2px 9px rgb(15 23 42 / 0.14);
+  --dw-hover: #eef2f7;
+  --dw-viewport-bg: #cfd9e4;
+}
+
+:root[data-mantine-color-scheme='dark'] {
+  --dw-bg: #0b0e11;
+  --dw-surface: #12161b;
+  --dw-panel: #151a20;
+  --dw-line: #252c34;
+  --dw-line-strong: #323b45;
+  --dw-ink: #e8ecf1;
+  --dw-dim: #a2acb7;
+  --dw-faint: #7d8793;
+  --dw-float-bg: rgb(18 22 27 / 0.88);
+  --dw-float-border: rgb(255 255 255 / 0.12);
+  --dw-float-shadow: 0 2px 11px rgb(0 0 0 / 0.45);
+  --dw-hover: #1c232b;
+  --dw-viewport-bg: #0d1116;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  background: var(--dw-bg);
+  color: var(--dw-ink);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'cv11', 'ss01';
+}
+
+.dw-mono {
+  font-family: var(--mantine-font-family-monospace);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+}
+
+/* Icons take a px `size`; match the 90% UI scale (theme.scale) without touching every call site. */
+.tabler-icon {
+  zoom: 0.9;
+}
+
+.dw-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.dw-float {
+  background: var(--dw-float-bg);
+  border: 1px solid var(--dw-float-border);
+  box-shadow: var(--dw-float-shadow);
+  border-radius: var(--dw-radius-float);
+  backdrop-filter: blur(5.5px);
+  -webkit-backdrop-filter: blur(5.5px);
+  color: var(--dw-ink);
+}
+
+.dw-section-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dw-faint);
+}
+
+.dw-sr-only {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media print {
+  .dw-no-print {
+    display: none !important;
+  }
+}

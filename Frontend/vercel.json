@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    { "source": "/hf-space/:path*", "destination": "/api/hf-space?__path=:path*" },
+    { "source": "/overpass/:mirror", "destination": "/api/overpass?__mirror=:mirror" }
+  ],
+  "functions": { "api/hf-space.js": { "maxDuration": 300 }, "api/overpass.js": { "maxDuration": 60 } }
+}
