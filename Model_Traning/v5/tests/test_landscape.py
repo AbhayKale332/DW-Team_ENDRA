@@ -60,3 +60,10 @@ def test_mask_is_respected():
     v = np.ones_like(a, bool)
     v[:, 192:] = False                       # hide half the buildings
     assert descriptors(a, v)["frac_tall"] < descriptors(a)["frac_tall"]
+
+
+def test_no_urban_source_turns_smooth_tall_into_forest():
+    """NEON's CHM has no buildings: a closed canopy the roughness rule calls urban is forest."""
+    assert classify(_urban(), no_urban=True)[0] == "forested"
+    assert classify(_flat(), no_urban=True)[0] == "sparse"
+    assert classify(_forest(), no_urban=True)[0] == "forested"

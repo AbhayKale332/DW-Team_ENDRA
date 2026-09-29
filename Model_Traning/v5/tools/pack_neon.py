@@ -3,6 +3,7 @@
     export NEON_TOKEN=...            # data.neonscience.org -> My Account -> API token
     python tools/pack_neon.py plan    --work /tmp/neon
     python tools/pack_neon.py pack    --work /tmp/neon --data_root /tmp/neon/stores
+    python tools/pack_neon.py clean   --data_root /tmp/neon/stores
     python tools/pack_neon.py preview --data_root /tmp/neon/stores --out /tmp/neon/preview.png
     python tools/pack_neon.py kaggle  --work /tmp/neon --data_root /tmp/neon/stores
 
@@ -42,6 +43,15 @@ by 48 px) so the blocks stay on the 1 m grid.  1024 px, not 512, because a
 `achievable_gsd_range`) needs a 1024 px source at 0.5 m, as GAMUS has.  A tile is kept when
 >= `min_valid` of it has image and label; heights above `max_h` are invalid.
 Downloads are deleted once packed, so the peak disk is a few RGB files.
+
+**clean**  Per-site height cap: 1.5 x the median per-tile p99.9 of the
+site's train tiles + 10 m.  Above it, and 2 px around, the label is invalid.
+The EDA (`tools/eda_neon.py`) found > 60 m pixels that are not trees: a
+canyon wall at MOAB (desert scrub, 74 m), wire remnants at LAJA (113 m), the
+SERC flux tower, single-cell spikes at GUAN / CLBJ / JORN.  Only 0.01 % of
+pixels, but on a ~3 m RMSE, one 95 m miss per 10^4 pixels adds ~0.15 m.
+The cap keeps WREF's 80 m firs and TEAK / SOAP's 60-70 m pines.  The caps
+are stored in build_info.json; a second run reuses them, so it is idempotent.
 
 **kaggle**  `<split>.zip` with members at the zip root (Kaggle extracts it to
 `<split>/`), README.md, LICENSE.txt (NEON data: CC BY 4.0), build_info.json,
@@ -463,6 +473,78 @@ def pack(work: Path, data_root: Path, min_valid: float, max_h: float, workers: i
 
 
 # ---------------------------------------------------------------------
+# clean: per-site height cap
+# ---------------------------------------------------------------------
+CAP_K, CAP_ADD_M, CAP_DILATE_PX = 1.5, 10.0, 2
+
+
+def site_height_caps(p999_by_site: dict[str, list[float]]) -> dict[str, float]:
+    """site -> cap (m): CAP_K x median per-tile p99.9 + CAP_ADD_M."""
+    return {k: round(CAP_K * float(np.median(v)) + CAP_ADD_M, 1)
+            for k, v in sorted(p999_by_site.items()) if len(v)}
+
+
+def cap_mask(h: np.ndarray, v: np.ndarray, cap: float, dilate: int = CAP_DILATE_PX) -> np.ndarray:
+    """Valid pixels to drop: above `cap`, grown by `dilate` px (the ramp of a spike / cliff)."""
+    bad = v & (h > cap)
+    if bad.any() and dilate:
+        from scipy import ndimage
+
+        bad = ndimage.binary_dilation(bad, np.ones((3, 3), bool), iterations=dilate)
+    return bad & v
+
+
+def _shards(d: Path):
+    for sh in json.loads((d / "index.json").read_text())["shards"]:
+        yield sh["file"], sh["stems"]
+
+
+def clean(data_root: Path) -> None:
+    store = data_root / "neon"
+    # absent on a `run_kaggle.sh link`ed data root (only the splits are linked)
+    bi = store / "build_info.json"
+    info = json.loads(bi.read_text()) if bi.is_file() else {}
+    caps = info.get("height_caps")
+    if not caps:
+        p999 = {}
+        for f, stems in _shards(store / "train"):
+            hg = np.load(store / "train" / f"{f}_hgt.npy", mmap_mode="r")
+            va = np.load(store / "train" / f"{f}_val.npy", mmap_mode="r")
+            for j, stem in enumerate(stems):
+                hv = np.asarray(hg[j], np.float32)[va[j]]
+                if hv.size:
+                    p999.setdefault(stem.split("_", 1)[0], []).append(float(np.percentile(hv, 99.9)))
+        caps = site_height_caps(p999)
+    dropped = {}
+    for sp in ("train", "val", "test"):
+        d = store / sp
+        if not (d / "index.json").is_file():
+            continue
+        n_sp = {}
+        for f, stems in _shards(d):
+            hg = np.load(d / f"{f}_hgt.npy", mmap_mode="r")
+            va = np.load(d / f"{f}_val.npy", mmap_mode="r+")
+            for j, stem in enumerate(stems):
+                site = stem.split("_", 1)[0]
+                bad = cap_mask(np.asarray(hg[j], np.float32), np.asarray(va[j]), caps[site])
+                if bad.any():
+                    va[j] = np.asarray(va[j]) & ~bad
+                    n_sp[site] = n_sp.get(site, 0) + int(bad.sum())
+            va.flush()
+            del va
+        for c in d.glob("landscape_v1*.npy"):           # classes were cut from the old labels
+            c.unlink()
+        dropped[sp] = n_sp
+        print(f"[clean] neon/{sp}: {sum(n_sp.values())} px above the site cap dropped  {n_sp}", flush=True)
+    info["height_caps"] = caps
+    info["height_cap_rule"] = f"{CAP_K} x median per-tile p99.9 (train) + {CAP_ADD_M} m, dilated {CAP_DILATE_PX} px"
+    if any(dropped.values()) or "height_capped_px" not in info:   # a re-run drops nothing: keep the first count
+        info["height_capped_px"] = dropped
+    (store / "build_info.json").write_text(json.dumps(info, indent=1))
+    print(f"[clean] caps (m): {caps}")
+
+
+# ---------------------------------------------------------------------
 # preview / verify
 # ---------------------------------------------------------------------
 def _turbo(x: np.ndarray) -> np.ndarray:
@@ -603,6 +685,9 @@ to the store name `neon`; `lightning/final_flags.py` adds it to the run with
   means (DepthWizard: `coarse_label_m 1.0`), not per pixel.  Heights above
   {info['max_valid_height_m']:.0f} m and CHM no-data are marked invalid.  A tile is
   kept when >= {info['min_valid']:.0%} of it is valid.
+* **Per-site height cap.** {info.get('height_cap_rule', 'none')}; above it the
+  label is invalid (a canyon wall, wire remnants, a flux tower and single-cell
+  spikes, ~0.01 % of pixels).  Caps per site are in `build_info.json`.
 * **Objects the CHM gets wrong** have no label.  NEON's CHM leaves buildings
   out (a barn roof reads 0 m) and keeps wires (a power line reads ~15 m over
   bare ground).  Against DP3.30024.001 DSM - DTM: building = DSM - DTM - CHM
@@ -679,7 +764,7 @@ dataset or its uses.
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("stage", choices=["plan", "pack", "preview", "kaggle"])
+    ap.add_argument("stage", choices=["plan", "pack", "clean", "preview", "kaggle"])
     ap.add_argument("--work", type=Path, default=Path("/tmp/neon"))
     ap.add_argument("--data_root", type=Path, default=None)
     ap.add_argument("--sites", nargs="*", default=list(SITES))
@@ -698,6 +783,8 @@ def main() -> None:
         plan(work, a.sites, a.val_tiles, a.test_tiles, max(8, a.workers))
     elif a.stage == "pack":
         pack(work, data_root, a.min_valid, a.max_valid_height_m, a.workers)
+    elif a.stage == "clean":
+        clean(data_root)
     elif a.stage == "preview":
         preview(data_root, a.out or work / "preview.png")
     else:

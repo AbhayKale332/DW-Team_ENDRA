@@ -91,3 +91,23 @@ def test_pooled_scoring_forgives_sub_block_detail():
     v = torch.ones_like(t, dtype=torch.bool)
     pp, tt, vv = pool_pair(p, t, v, 4)
     assert vv.all() and torch.allclose(pp, tt)
+
+
+def test_evaluator_no_urban_follows_the_source():
+    from torch.utils.data import Subset
+
+    from eval.metrics import dataset_src
+
+    cfg = Config()
+    cfg.landscape_no_urban_sources = "neon"
+    assert Evaluator(cfg, "neon").no_urban and not Evaluator(cfg, "gamus").no_urban
+    assert not Evaluator(cfg).no_urban
+
+    class _Ds(torch.utils.data.Dataset):
+        src = "neon"
+
+        def __len__(self):
+            return 2
+
+    assert dataset_src(Subset(Subset(_Ds(), [0, 1]), [0])) == "neon"
+    assert dataset_src(None) == ""

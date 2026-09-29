@@ -112,6 +112,10 @@ def build(data_root: str | Path, sizing: dict | None = None,
         ds = f["datasets"].split(",")
         f["datasets"] = ",".join([ds[0], "neon"] + ds[1:])
         f["coarse_label_sources"] = "neon"
+        # NEON's CHM has no buildings; the roughness rule calls 1024 of its 1846
+        # train tiles (every closed-canopy site) "urban" — so without this the
+        # forest boost and select_on would skip exactly the forests (eda_neon.py)
+        f["landscape_no_urban_sources"] = "neon"
         f["select_on"] = "neon,mvs3dm"
         f["gallery_sources"] += ",neon"
         f["landscape_gallery_source"] = "neon"
@@ -154,7 +158,8 @@ def check(flags: dict) -> None:
         raise SystemExit(f"[flags] not v5 config fields: {bad}")
     cfg = parse_config(to_argv(flags))
     for k in ("batch_size", "grad_accum", "select_on", "landscape_sampler_boost",
-              "coarse_label_sources", "learning_rate", "encoder_lr"):
+              "coarse_label_sources", "landscape_no_urban_sources", "learning_rate",
+              "encoder_lr"):
         got, want = getattr(cfg, k), flags.get(k)
         if want is not None and str(got) != str(type(got)(want)):
             raise SystemExit(f"[flags] {k}: parsed {got!r}, wanted {want!r}")

@@ -33,6 +33,29 @@ Check each of these:
 - [ ] Registration dropped fewer than about 1/3 of the tiles at every site.
 - [ ] The Kaggle file names and sizes match the local zips; the agent's step (d) checks this.
 
+**Done 2026-09-29** (version 1: 1846 / 118 / 232 tiles). `tools/eda_neon.py`
+(`--store <root>/neon --out <dir>`) found two things the run has to handle.
+Both are in the code now:
+
+- **The landscape rule calls NEON's closed forests "urban".** It divides
+  roughness by mean height, and a 30 m canopy is smooth for its height. That put
+  1024 of 1846 train tiles in "urban", including every tile at HARV, BART, GRSM,
+  MLBS and TALL. NEON's CHM has no buildings, so `final_flags.py` sets
+  `landscape_no_urban_sources neon`, which maps urban to forested for NEON in the
+  sampler boost, the per-landscape metrics and `select_on`.
+- **About 0.01 % of pixels are spikes, not trees.** Examples: a 74 m canyon wall
+  at MOAB, 113 m wire remnants at LAJA, the SERC flux tower, and single-cell
+  spikes. `fetch` runs `pack_neon.py clean`, a per-site cap of 1.5 × the median
+  tile p99.9 + 10 m. That keeps WREF's 80 m firs and TEAK / SOAP's 60–70 m pines.
+
+It also confirmed the rest:
+- every 2 × 2 label block is one lidar cell on the even grid, and `cls` is all
+  unlabelled;
+- there is no split leakage (stems, km tiles or image hashes);
+- the image sits a consistent ~1 px (0.5 m) from the lidar. That is inside one
+  label cell and fits sunlit crown sides, not misregistration, so it is not
+  corrected.
+
 If any box fails, fix NEON first. The run also works **without** NEON, because
 `fetch` skips a missing `depthwizard-neon`, but then you lose the forest data.
 
@@ -109,6 +132,10 @@ tail -f /teamspace/studios/this_studio/dw_final/final.log
 - A line per dataset, then `store GSDs match the measured values`.
 - `/tmp/dwdata` shows `mvs3dm gamus us3d synrs3d_g05 synrs3d_g1 neon`, and **no**
   `dfc23` or `india_labeled` (the script refuses to go on if either appears).
+- `neon: per-site height cap`, then `[clean] neon/train: N px above the site cap
+  dropped` and the same for val and test. Measured on v1: train 81 583, val
+  16 423 and test 724 px (0.0045 % of the labels). About 80 k of those are MOAB
+  canyon walls (cap 19 m); the rest are mostly LAJA, GUAN, SRER, JORN and CLBJ.
 - `[ckpt] ... {'epoch': ..., 'encoder_included': True, 'bin_max_m': 120.0, ...}`.
   If `encoder_included` is `False`, it's the wrong file.
 
@@ -130,6 +157,8 @@ tail -f /teamspace/studios/this_studio/dw_final/final.log
 - `neon/train: ... seg=NO`.
 - `[data] <store>/train landscape: urban=… sparse=… forested=… (x% of draws)`.
   Forested and sparse should hold a bigger share of the draws than of the tiles.
+  For `neon/train`, expect `urban=0` and roughly `sparse≈430 forested≈1420`. A
+  large `urban` count means `landscape_no_urban_sources` did not reach the run.
 - Train lines carry `crs=` (the NEON coarse loss) and `wait=` values in the low
   single digits.
 

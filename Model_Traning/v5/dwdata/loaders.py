@@ -77,9 +77,12 @@ def _prime(store, spec, cfg, label: str, is_main: bool = True) -> None:
 
 
 LANDSCAPE_CACHE = "landscape_v1.npy"
+# `landscape_no_urban_sources` stores cache under their own name, so flipping the
+# flag can never reuse classes computed under the other rule.
+LANDSCAPE_CACHE_NO_URBAN = "landscape_v1_nourban.npy"
 
 
-def _tile_landscape(store, i: int, canonical_gsd_m: float) -> int:
+def _tile_landscape(store, i: int, canonical_gsd_m: float, no_urban: bool = False) -> int:
     """GT landscape class index (`config.LANDSCAPE_NAMES`) of one packed tile.
 
     The tile is block-averaged to the canonical GSD first: `classify`'s
@@ -99,7 +102,7 @@ def _tile_landscape(store, i: int, canonical_gsd_m: float) -> int:
         hgt = g.sum((1, 3)) / np.maximum(n, 1)
         val = n >= (k * k) / 2
     val = val & np.isfinite(hgt)
-    name, _ = classify(np.nan_to_num(hgt), val, store.gsd_m * k)
+    name, _ = classify(np.nan_to_num(hgt), val, store.gsd_m * k, no_urban=no_urban)
     return LANDSCAPE_NAMES.index(name)
 
 
@@ -112,8 +115,11 @@ def tile_landscapes(store, cfg, label: str = "", is_main: bool = True,
     mount still pays only once per output dir.
     """
     n = len(store)
-    fallback = Path(cfg.output_dir) / "landscape_cache" / f"{label.replace('/', '_') or 'store'}.npy"
-    for p in (store.dir / LANDSCAPE_CACHE, fallback):
+    no_urban = bool(cfg.no_urban(label)) if hasattr(cfg, "no_urban") else False
+    cache = LANDSCAPE_CACHE_NO_URBAN if no_urban else LANDSCAPE_CACHE
+    fallback = (Path(cfg.output_dir) / "landscape_cache"
+                / f"{label.replace('/', '_') or 'store'}{'_nourban' if no_urban else ''}.npy")
+    for p in (store.dir / cache, fallback):
         if p.is_file():
             try:
                 a = np.load(p)
@@ -127,10 +133,10 @@ def tile_landscapes(store, cfg, label: str = "", is_main: bool = True,
     t0 = time.time()
     with ThreadPoolExecutor(max_workers=max(1, int(workers))) as ex:
         out = np.array(list(ex.map(
-            lambda i: _tile_landscape(store, i, float(cfg.canonical_gsd_m)), range(n))),
+            lambda i: _tile_landscape(store, i, float(cfg.canonical_gsd_m), no_urban), range(n))),
             np.int8)
     if is_main:
-        for p in (store.dir / LANDSCAPE_CACHE, fallback):
+        for p in (store.dir / cache, fallback):
             try:
                 p.parent.mkdir(parents=True, exist_ok=True)
                 tmp = p.with_suffix(".tmp.npy")

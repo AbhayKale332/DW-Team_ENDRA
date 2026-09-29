@@ -223,7 +223,8 @@ def export_landscape_gallery(model, cfg, spec, device) -> dict | None:
                  & (hgt <= cfg.max_valid_height_m))
         if valid.mean() < 0.05:
             continue
-        c, desc = classify(np.where(valid, hgt, 0.0), valid, gsd)
+        c, desc = classify(np.where(valid, hgt, 0.0), valid, gsd,
+                           no_urban=cfg.no_urban(name) if hasattr(cfg, "no_urban") else False)
         counts[c] += 1
         if len(by_class[c]) < k:
             by_class[c].append((int(j), desc))

@@ -143,6 +143,13 @@ class Config:
     # store get drawn changes.  Classes are cached next to the shards as
     # `landscape_v1.npy`.  Empty -> uniform within a store (v1-v5 behaviour).
     landscape_sampler_boost: str = ""
+    # Sources whose labels hold no buildings (NEON's CHM: roofs masked out), so a
+    # tall tile the rule calls "urban" is canopy.  `classify` divides roughness by
+    # mean height, and a closed 30 m canopy is smooth for its height: on NEON
+    # 1024 of 1846 train tiles (every HARV / BART / GRSM / MLBS / TALL tile) came
+    # out "urban" (tools/eda_neon.py).  For these sources urban -> forested, in
+    # the sampler boost, the per-landscape metrics and `select_on`.
+    landscape_no_urban_sources: str = ""
     # v5: >= 0 draws the val tiles as a seeded random sample instead of the
     # sorted-stem prefix.  v4's prefix was 87.5 % urban against a 57.6 % urban
     # test set and best.pt was selected on it.  -1 keeps the v1-v4 prefix.
@@ -567,6 +574,12 @@ class Config:
                                      f"(expected one of {LANDSCAPE_NAMES})")
                 out[k] = float(v)
         return out
+
+    def no_urban(self, src: str) -> bool:
+        """True when `src` (or its base, e.g. `neon` for `neon/test`) has no buildings."""
+        names = [s.strip() for s in str(self.landscape_no_urban_sources or "").split(",") if s.strip()]
+        base = str(src or "").split("/", 1)[0]
+        return any(base == n or base.startswith(n + "_") for n in names)
 
     def select_sources(self) -> list[str]:
         return [s.strip() for s in str(self.select_on or "").split(",") if s.strip()]

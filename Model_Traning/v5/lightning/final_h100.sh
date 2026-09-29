@@ -113,6 +113,13 @@ do_fetch() {
       --optional "$OPTIONAL" $(printf -- '--dataset %s ' "${DATASETS[@]}")
   (cd "$V5" && bash run_kaggle.sh link)
   ls -la "$DATA_ROOT" | sed 's/^/[final]   /'
+  if [ -f "$DATA_ROOT/neon/train/index.json" ]; then
+    # per-site height cap (cliff / tower / wire spikes, tools/eda_neon.py).
+    # Caps land in $DATA_ROOT/neon/build_info.json, so a re-fetch reuses them;
+    # on a Kaggle version already capped it drops ~nothing.
+    log "neon: per-site height cap"
+    (cd "$V5" && "$PY" tools/pack_neon.py clean --data_root "$DATA_ROOT" --work "$DATA_ROOT/neon")
+  fi
   "$PY" - "$DATA_ROOT" "$V5" <<'EOF'
 import sys
 sys.path.insert(0, sys.argv[2])
