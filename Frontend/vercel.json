@@ -1,5 +1,5 @@
 {
   "rewrites": [
-    { "source": "/hf-space/:path*", "destination": "/api/hf-space/:path*" }
+    { "source": "/hf-space/:proxyPath*", "destination": "/api/hf-space-proxy" }
   ]
 }
