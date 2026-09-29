@@ -158,7 +158,7 @@ function Parameters() {
         onChange={(e) => setParams({ tta: e.currentTarget.checked })}
         disabled={running}
         label="Higher quality (test-time augmentation)"
-        description="Averages 8 flipped/rotated passes. Takes about 1-2 min"
+        description="Averages 8 flipped/rotated views of every tile, run together in one GPU batch. Slower than a normal run."
       />
     </Stack>
   );

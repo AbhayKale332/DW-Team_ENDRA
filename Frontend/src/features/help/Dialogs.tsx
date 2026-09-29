@@ -200,7 +200,7 @@ function DocsDrawer() {
       </p>
       <h3>Limitations</h3>
       <ul>
-        <li>Scenes larger than 1600 px (long side) are downsampled by the model; the drape keeps full resolution.</li>
+        <li>Scenes up to 8192 px (long side) are processed at full resolution as 512 px tiles; larger ones are downsampled first. The drape keeps full resolution.</li>
         <li>Cloud, water glint and deep shadow can produce spurious heights; check the flat-ground warning.</li>
       </ul>
     </Typography>
