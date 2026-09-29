@@ -222,11 +222,16 @@ def build_optimizer(cfg: Config, model: DepthWizardNet, with_encoder: bool):
         groups += model.encoder.llrd_param_groups(
             cfg.encoder_lr, cfg.llrd, cfg.weight_decay)
     groups = [g for g in groups if g["params"]]
-    opt = torch.optim.AdamW(groups, lr=cfg.learning_rate, betas=(0.9, 0.999))
+    # `fused` needs every parameter on the card; checked rather than assumed so
+    # a CPU test run with the knob on still builds an optimiser.
+    fused = bool(getattr(cfg, "opt_fused", False)) and all(
+        p.is_cuda for g in groups for p in g["params"])
+    opt = torch.optim.AdamW(groups, lr=cfg.learning_rate, betas=(0.9, 0.999),
+                            **({"fused": True} if fused else {}))
     base = [g["lr"] for g in opt.param_groups]
     n_tr = sum(p.numel() for g in groups for p in g["params"])
     print(f"[optim] {len(groups)} groups, {n_tr / 1e6:.1f}M trainable params, "
-          f"lr {min(base):.2e}..{max(base):.2e}")
+          f"lr {min(base):.2e}..{max(base):.2e}{'  (fused AdamW)' if fused else ''}")
     return opt, base
 
 
@@ -760,7 +765,34 @@ def main() -> None:
         n_ok = 0         # optimiser steps actually applied this epoch
         n_run = 0        # skips since the last applied step
 
-        for step, batch in enumerate(dl_tr):
+        # Time blocked in the loader's `next()`: the share of the window the
+        # card could have been busy but had no batch.  Printed as `wait=`.
+        w_acc = [0.0, 0.0]      # [log window, bench window]
+
+        def _timed(dl):
+            it = iter(dl)
+            while True:
+                tw = time.perf_counter()
+                try:
+                    b_ = next(it)
+                except StopIteration:
+                    return
+                w_acc[0] += time.perf_counter() - tw
+                w_acc[1] += time.perf_counter() - tw
+                yield b_
+
+        bench_warm = max(10, 2 * int(cfg.grad_accum)) if cfg.bench_steps > 0 else 0
+        if cfg.bench_steps > 0 and world_size > 1:
+            # the bench exit returns mid-epoch; other ranks would hang in the
+            # next all-reduce
+            raise SystemExit("bench_steps is a single-process probe; run without torchrun")
+        for step, batch in enumerate(_timed(dl_tr)):
+            if cfg.bench_steps > 0 and step == bench_warm:
+                if n_gpu:
+                    torch.cuda.synchronize()
+                    torch.cuda.reset_peak_memory_stats()
+                b_t0, b_n, w_acc[1] = time.time(), 0, 0.0
+                print(f"[bench] window start {time.time():.3f}", flush=True)
             progress = schedule_progress(cfg, epoch - 1 + step / n_steps,
                                          (time.time() - t0) / 60.0, sched_anchor)
             sc = lr_scale(progress, cfg.warmup_frac)
@@ -912,6 +944,11 @@ def main() -> None:
                               f"but is not learning.", flush=True)
                 opt.zero_grad(set_to_none=True)
             s_win += batch["target"].shape[0]
+            if cfg.bench_steps > 0 and step >= bench_warm:
+                b_n += batch["target"].shape[0]
+                if step + 1 >= bench_warm + cfg.bench_steps:
+                    _bench_report(core, cfg, device, amp_dt, n_gpu, b_t0, b_n, w_acc[1])
+                    return
             if step % 25 == 0:
                 # Only here do the remaining stats get pulled off the device.
                 # `nonfinite` is the one vector-valued entry — one flag per probed
@@ -921,6 +958,8 @@ def main() -> None:
                 el = (time.time() - t0) / 60
                 dt = max(1e-6, time.time() - t_win)
                 ips, t_win, s_win = s_win / dt, time.time(), 0
+                wait = min(1.0, w_acc[0] / dt)
+                w_acc[0] = 0.0
                 vram = (f" vram={torch.cuda.max_memory_allocated() / 1024 ** 3:.0f}G"
                         if n_gpu else "")
                 con = (f" con={st['con']:.3f}/{st['con_keep']:.0%}"
@@ -941,7 +980,7 @@ def main() -> None:
                       f"bin={st['bin']:.2f} ent={st['bin_ent']:.2f} "
                       f"seg={st['seg']:.2f} a={st['alpha']:.2f}{con}) "
                       f"lr={opt.param_groups[0]['lr']:.2e} "
-                      f"{ips:.1f} img/s{vram} {el:.0f}min{nfs}", flush=True)
+                      f"{ips:.1f} img/s wait={wait:.0%}{vram} {el:.0f}min{nfs}", flush=True)
             # Both caps.  Checked only on an accumulation boundary, for two
             # reasons: the all-reduce below is a device sync and this file
             # deliberately keeps those to one per *optimiser* step, and breaking
@@ -1062,8 +1101,16 @@ def main() -> None:
                                 rec[f"val_{_src}_vegmasked"] = mv
                                 print(f"  eval e{epoch}  [{_src} veg-masked] "
                                       f"{format_line(mv)}")
-                    if m["global"]["rmse_m"] < best:
-                        best = m["global"]["rmse_m"]
+                    score = m["global"]["rmse_m"]
+                    if cfg.select_sources():
+                        sel = selection_score(rec, full_ds.src, cfg.select_sources())
+                        if sel is not None:
+                            score = sel
+                            rec["select_score"] = sel
+                            print(f"  eval e{epoch}  select={sel:.3f} m  (forested+sparse "
+                                  f"RMSE, mean over {','.join(cfg.select_sources())})")
+                    if score < best:
+                        best = score
                         _save(out_dir / "best.pt", core, spec, cfg, epoch, m, ema)
                         print(f"  new best {best:.3f} m -> best.pt")
 
@@ -1284,6 +1331,85 @@ def main() -> None:
             print(f"[package] {build_zip(cfg.output_dir)}")
         except Exception as e:  # noqa: BLE001
             print(f"[package] failed: {e}  (artifacts still in {cfg.output_dir})")
+
+
+SELECT_LANDSCAPES = ("forested", "sparse")
+
+
+def selection_score(rec: dict, primary: str, sources: list[str]) -> float | None:
+    """`select_on`: mean over `sources` of each one's forested + sparse RMSE.
+
+    Per source, the forested and sparse `per_landscape` entries are pooled by
+    pixel count.  A coarse-label source is read at its pooled resolution when
+    that line exists (`val_<src>_pooled<k>`), so a sharp canopy is not charged
+    for detail the 1 m label lacks.  Sources are averaged, not pixel-pooled, so
+    one big val set cannot drown the other.  None when no source has any
+    forested or sparse tile.
+    """
+    per = []
+    for src in sources:
+        if src == primary:
+            m = rec.get("val")
+        else:
+            pooled = sorted(k for k in rec if k.startswith(f"val_{src}_pooled"))
+            m = rec.get(pooled[0]) if pooled else rec.get(f"val_{src}")
+        if not m:
+            continue
+        pl = m.get("per_landscape") or {}
+        sq = n = 0.0
+        for nm in SELECT_LANDSCAPES:
+            d = pl.get(nm)
+            if d and d.get("n") and d.get("rmse_m") is not None and math.isfinite(d["rmse_m"]):
+                sq += float(d["rmse_m"]) ** 2 * float(d["n"])
+                n += float(d["n"])
+        if n > 0:
+            per.append(math.sqrt(sq / n))
+    return float(sum(per) / len(per)) if per else None
+
+
+def _bench_report(core, cfg, device, amp_dt, n_gpu: int, t0: float, n_img: int,
+                  wait_s: float) -> dict:
+    """The `bench_steps` exit: one machine-readable line for tools/h100_sweep.py."""
+    import json
+
+    if n_gpu:
+        torch.cuda.synchronize()
+    dt = max(1e-6, time.time() - t0)
+    gib = 1024 ** 3
+    rep = {"batch_size": int(cfg.batch_size), "grad_accum": int(cfg.grad_accum),
+           "compile_model": bool(cfg.compile_model), "num_workers": int(cfg.num_workers),
+           "prefetch_factor": int(cfg.prefetch_factor),
+           "img_s": n_img / dt, "wait_frac": min(1.0, wait_s / dt), "seconds": dt,
+           "window_end": time.time()}
+    if n_gpu:
+        rep["peak_reserved_gb"] = torch.cuda.max_memory_reserved() / gib
+        rep["peak_alloc_gb"] = torch.cuda.max_memory_allocated() / gib
+        # Largest eval batch (a multiple of the train micro-batch) whose no-grad
+        # forward stays under the ceiling.  Probed after the train window, with
+        # the train step's own cache still held, which is what eval sees too.
+        best_mult = 1
+        core.eval()
+        s = int(cfg.tile_size)
+        for mult in (2, 3, 4, 6, 8):
+            try:
+                torch.cuda.reset_peak_memory_stats()
+                x = torch.randn(int(cfg.batch_size) * mult, 3, s, s, device=device)
+                if cfg.channels_last:
+                    x = x.contiguous(memory_format=torch.channels_last)
+                with torch.no_grad(), torch.autocast("cuda", dtype=amp_dt, enabled=bool(cfg.amp)):
+                    core(x)
+                torch.cuda.synchronize()
+                if torch.cuda.max_memory_reserved() / gib > cfg.bench_vram_ceiling_gb:
+                    break
+                best_mult = mult
+            except torch.cuda.OutOfMemoryError:
+                break
+            finally:
+                x = None
+                torch.cuda.empty_cache()
+        rep["eval_batch_mult"] = best_mult
+    print(f"[bench] {json.dumps(rep)}", flush=True)
+    return rep
 
 
 def _rng_state() -> dict:

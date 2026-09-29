@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "skills": {
+    "lightning-artifacts": {
+      "source": "Lightning-AI/skills",
+      "sourceType": "github",
+      "skillPath": "lightning-artifacts/SKILL.md",
+      "computedHash": "3a207b601c756d70364c3b246021d72011a3d5bff04042ca494e9b21d3b09dba"
+    },
+    "lightning-cost-estimation": {
+      "source": "Lightning-AI/skills",
+      "sourceType": "github",
+      "skillPath": "lightning-cost-estimation/SKILL.md",
+      "computedHash": "c466943b5058dfd178952d6bd7f82923c5867713f58488dd0b19e2334127a23e"
+    },
+    "lightning-deployments": {
+      "source": "Lightning-AI/skills",
+      "sourceType": "github",
+      "skillPath": "lightning-deployments/SKILL.md",
+      "computedHash": "496c346defd887713fe49a755239b27cd5f2ccd92634a8969ae9c97a19631427"
+    },
+    "lightning-jobs": {
+      "source": "Lightning-AI/skills",
+      "sourceType": "github",
+      "skillPath": "lightning-jobs/SKILL.md",
+      "computedHash": "38fdc9963577e36122da26a7e8b5407c9075ffc6b9de3ccf4cc8244d5b45b348"
+    },
+    "lightning-llm-gateway": {
+      "source": "Lightning-AI/skills",
+      "sourceType": "github",
+      "skillPath": "lightning-llm-gateway/SKILL.md",
+      "computedHash": "e7159ed04d03c3f8f70b164414a8180f57be6794a592ff7c3c464e1cc868cfdc"
+    },
+    "lightning-sandboxes": {
+      "source": "Lightning-AI/skills",
+      "sourceType": "github",
+      "skillPath": "lightning-sandboxes/SKILL.md",
+      "computedHash": "ac89115946eb1c340eec82a410e715c39dcf41616ebf25a2369d4d13b05ce234"
+    },
+    "lightning-studios": {
+      "source": "Lightning-AI/skills",
+      "sourceType": "github",
+      "skillPath": "lightning-studios/SKILL.md",
+      "computedHash": "f05b3c8deceaf97a97269d41915f0f29dcf7c1e598f65e4c05fe37354c210bc4"
+    }
+  }
+}

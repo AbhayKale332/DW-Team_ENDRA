@@ -138,7 +138,7 @@ PY
         # matched here is silently skipped and train.py then reports it as
         # "not prepared" — check this list first when a source goes missing.
         case "$c" in
-          gamus|geonrw|synrs3d|synrs3d_g*|dfc23|dfc23_g*|india_labeled|india_unlabeled|us3d|mvs3dm) name="$c" ;;
+          gamus|geonrw|synrs3d|synrs3d_g*|dfc23|dfc23_g*|india_labeled|india_unlabeled|us3d|mvs3dm|neon) name="$c" ;;
         esac
       done
       [ -n "$name" ] || continue

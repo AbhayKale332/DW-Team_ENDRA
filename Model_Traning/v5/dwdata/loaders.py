@@ -30,7 +30,7 @@ from .packed import PackedStore, store_exists
 # instead, which is a val number that means nothing.
 _VAL_SPLIT = {"gamus": "val", "geonrw": "test", "synrs3d": None,
               "india_labeled": "val", "india_unlabeled": None, "us3d": "val",
-              "mvs3dm": "val"}
+              "mvs3dm": "val", "neon": "val"}
 _VAL_SPLIT_PREFIX = (("synrs3d_", None), ("dfc23_", "val"))
 
 
@@ -74,6 +74,86 @@ def _prime(store, spec, cfg, label: str, is_main: bool = True) -> None:
     if ok and fresh:
         print(f"[data] {label}: stretch bounds computed for {len(store)} tiles "
               f"in {time.time() - t0:.0f}s (cached on disk from now on)")
+
+
+LANDSCAPE_CACHE = "landscape_v1.npy"
+
+
+def _tile_landscape(store, i: int, canonical_gsd_m: float) -> int:
+    """GT landscape class index (`config.LANDSCAPE_NAMES`) of one packed tile.
+
+    The tile is block-averaged to the canonical GSD first: `classify`'s
+    roughness is a per-pixel Laplacian, so it has to be measured at the scale
+    the eval (and the model) sees, not at GAMUS's native 0.25 m.
+    """
+    from config import LANDSCAPE_NAMES
+    from eval.landscape import classify
+
+    _, hgt, _, val = store.get(i)
+    k = max(1, int(round(canonical_gsd_m / max(store.gsd_m, 1e-6))))
+    if k > 1:
+        h, w = (hgt.shape[0] // k) * k, (hgt.shape[1] // k) * k
+        v = val[:h, :w].reshape(h // k, k, w // k, k)
+        g = np.where(val[:h, :w], hgt[:h, :w], 0.0).reshape(h // k, k, w // k, k)
+        n = v.sum((1, 3))
+        hgt = g.sum((1, 3)) / np.maximum(n, 1)
+        val = n >= (k * k) / 2
+    val = val & np.isfinite(hgt)
+    name, _ = classify(np.nan_to_num(hgt), val, store.gsd_m * k)
+    return LANDSCAPE_NAMES.index(name)
+
+
+def tile_landscapes(store, cfg, label: str = "", is_main: bool = True,
+                    workers: int = 8) -> np.ndarray:
+    """(n,) int8 landscape class per tile, cached as `landscape_v1.npy`.
+
+    Next to the shards when the store is writable (like the stretch bounds);
+    otherwise under `<output_dir>/landscape_cache/`, so a read-only Kaggle
+    mount still pays only once per output dir.
+    """
+    n = len(store)
+    fallback = Path(cfg.output_dir) / "landscape_cache" / f"{label.replace('/', '_') or 'store'}.npy"
+    for p in (store.dir / LANDSCAPE_CACHE, fallback):
+        if p.is_file():
+            try:
+                a = np.load(p)
+                if a.shape == (n,):
+                    return a.astype(np.int8)
+            except (OSError, ValueError):
+                pass
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    t0 = time.time()
+    with ThreadPoolExecutor(max_workers=max(1, int(workers))) as ex:
+        out = np.array(list(ex.map(
+            lambda i: _tile_landscape(store, i, float(cfg.canonical_gsd_m)), range(n))),
+            np.int8)
+    if is_main:
+        for p in (store.dir / LANDSCAPE_CACHE, fallback):
+            try:
+                p.parent.mkdir(parents=True, exist_ok=True)
+                tmp = p.with_suffix(".tmp.npy")
+                np.save(tmp, out)
+                tmp.replace(p)
+                break
+            except OSError:
+                continue
+        print(f"[data] {label}: landscape classes for {n} tiles in {time.time() - t0:.0f}s")
+    return out
+
+
+def landscape_tile_weights(classes: np.ndarray, boost: dict) -> np.ndarray:
+    """Per-tile weights, mean 1, from a class-index array and a {name: boost} map.
+
+    Mean 1 means the store's total draw probability is unchanged: the boost only
+    moves draws between the store's own tiles.
+    """
+    from config import LANDSCAPE_NAMES
+
+    lut = np.array([float(boost.get(nm, 1.0)) for nm in LANDSCAPE_NAMES], np.float64)
+    w = lut[np.asarray(classes, np.int64)]
+    return w / max(w.mean(), 1e-12)
 
 
 def build_unlabeled_loader(cfg, spec, rank: int = 0, world_size: int = 1,
@@ -198,9 +278,26 @@ def build_loaders(cfg, spec, rank: int = 0, world_size: int = 1,
     concat = ConcatDataset(train_sets)
     # Weight per sample so the *mix ratio* is what `sampler_weights` says,
     # independent of how many tiles each store happens to hold.
-    sample_w = np.concatenate([
-        np.full(len(ds), w / max(1, len(ds))) for ds, w in zip(train_sets, train_w)
-    ])
+    boost = cfg.landscape_boost_map() if hasattr(cfg, "landscape_boost_map") else {}
+    per_store = []
+    for ds, w in zip(train_sets, train_w):
+        tw = np.full(len(ds), w / max(1, len(ds)))
+        if boost:
+            from config import LANDSCAPE_NAMES
+
+            cls = tile_landscapes(ds.store, cfg, f"{ds.src}/train", is_main,
+                                  workers=max(4, int(getattr(cfg, "num_workers", 8)) or 8))
+            tw = tw * landscape_tile_weights(cls, boost)
+            if is_main:
+                cnt = np.bincount(cls.astype(np.int64), minlength=len(LANDSCAPE_NAMES))
+                share = tw.reshape(-1)
+                drawn = [share[cls == k].sum() / max(share.sum(), 1e-12)
+                         for k in range(len(LANDSCAPE_NAMES))]
+                print(f"[data] {ds.src}/train landscape: "
+                      + "  ".join(f"{nm}={c} ({100 * d:.0f}% of draws)"
+                                  for nm, c, d in zip(LANDSCAPE_NAMES, cnt, drawn)))
+        per_store.append(tw)
+    sample_w = np.concatenate(per_store)
     world_size = max(1, int(world_size))
     gen = torch.Generator()
     gen.manual_seed(int(cfg.seed) + 1000 * int(rank))

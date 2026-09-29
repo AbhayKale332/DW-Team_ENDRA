@@ -136,6 +136,13 @@ class Config:
     # An "epoch" is a fixed number of random crops, decoupled from tile count so
     # the LR schedule and the wall-clock budget stay predictable.
     crops_per_epoch: int = 12000
+    # Final run: per-tile sampling boost by GT landscape class
+    # (`eval/landscape.classify`: urban / sparse / hilly / forested), e.g.
+    # "forested:2,sparse:1.5".  Applied *within* each store and renormalised,
+    # so the store mix stays what `sampler_weights` says; only which tiles of a
+    # store get drawn changes.  Classes are cached next to the shards as
+    # `landscape_v1.npy`.  Empty -> uniform within a store (v1-v5 behaviour).
+    landscape_sampler_boost: str = ""
     # v5: >= 0 draws the val tiles as a seeded random sample instead of the
     # sorted-stem prefix.  v4's prefix was 87.5 % urban against a 57.6 % urban
     # test set and best.pt was selected on it.  -1 keeps the v1-v4 prefix.
@@ -308,6 +315,15 @@ class Config:
     grad_checkpoint_encoder: bool = False
     grad_checkpoint_decoder: bool = False
     compile_model: bool = False             # recompiles on unfreeze; opt-in
+    # torch.optim.AdamW(fused=True): one kernel per step instead of a foreach
+    # chain over ~300 tensors.  CUDA only; ignored on CPU.
+    opt_fused: bool = False
+    # Throughput probe (tools/h100_sweep.py).  > 0: run this many *timed*
+    # micro-steps after a warm-up, print one `[bench] {json}` line (img/s,
+    # data-wait share, peak reserved VRAM, the largest eval batch multiple that
+    # fits under `bench_vram_ceiling_gb`) and exit — no eval, no checkpoint.
+    bench_steps: int = 0
+    bench_vram_ceiling_gb: float = 72.0
     # Photometric jitter + encoder normalisation run on the GPU over the whole
     # batch instead of per crop in a DataLoader worker, and the worker hands
     # over uint8 HWC.  ~3x the loader throughput and 4x less H2D traffic; see
@@ -372,6 +388,12 @@ class Config:
 
     # ----- eval / io -------------------------------------------------
     eval_every: int = 2
+    # Final run: what best.pt is selected on.  Empty -> the primary val set's
+    # global RMSE (v1-v5).  Otherwise a comma list of val sources (the primary
+    # and/or aux val sets) whose forested + sparse tiles are pooled into one
+    # pixel-weighted RMSE — the canopy and rural maps are what this run is for,
+    # and a global RMSE is dominated by urban ground.
+    select_on: str = ""
     tta: bool = True
     # 0.5 m / 1.25 = 0.4 m effective, inside the trained 0.33-0.66 m jitter band.
     # Final-eval only; best.pt is still selected on plain no-TTA centre-crop.
@@ -480,6 +502,8 @@ class Config:
         # A floor above the initial scale would pin the scale there and defeat
         # the backoff the scaler exists to perform.
         assert 0.0 < self.amp_min_scale <= self.amp_init_scale
+        assert all(v > 0 for v in self.landscape_boost_map().values()), \
+            "landscape_sampler_boost values must be > 0"
         # A "held-out" split that the run trains or validates on is not held
         # out, and reporting it as a test number would be worse than reporting
         # nothing.  Caught here, at parse time, rather than three hours in.
@@ -531,6 +555,21 @@ class Config:
                 k, v = part.split(":")
                 out[k.strip()] = float(v)
         return out
+
+    def landscape_boost_map(self) -> dict[str, float]:
+        out: dict[str, float] = {}
+        for part in str(self.landscape_sampler_boost or "").split(","):
+            if ":" in part:
+                k, v = part.split(":")
+                k = k.strip()
+                if k not in LANDSCAPE_NAMES:
+                    raise ValueError(f"landscape_sampler_boost: unknown class {k!r} "
+                                     f"(expected one of {LANDSCAPE_NAMES})")
+                out[k] = float(v)
+        return out
+
+    def select_sources(self) -> list[str]:
+        return [s.strip() for s in str(self.select_on or "").split(",") if s.strip()]
 
     def sampler_weight(self, name: str, default: float = 1.0) -> float:
         """Weight for one store, falling back to its base source name.

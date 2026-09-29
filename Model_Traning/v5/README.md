@@ -1212,6 +1212,40 @@ is an absolute DSM that would poison the target silently.
 
 ---
 
+## 5b. The final run: one Lightning H100, trees first
+
+`lightning/final_h100.sh` fine-tunes resume-v4-1.6's `best.pt` (Kaggle run
+`v5_probe_v4init_mvs3dm`).
+
+**Why this run exists.** resume-v4-1.6 left three problems:
+- Trees are the worst class: GAMUS `tree` RMSE 4.19 m, delta1 0.43.
+- The map is over-smoothed: `grad_ratio` 0.23 on MVS3DM.
+- DFC23 and india_labeled label trees 0 m.
+
+**What it changes.** Every flag, with its reason, is in `lightning/final_flags.py`.
+- **Data:** DFC23 and india_labeled are gone.
+- **NEON:** forest and scrub LiDAR (`depthwizard-neon`, scored on 1 m blocks through the coarse-label path). It joins automatically once that Kaggle dataset exists.
+- **Sampling:** `landscape_sampler_boost` draws forested tiles 2x and sparse tiles 1.5x within each store.
+- **Checkpoint:** `select_on` picks `best.pt` on forested + sparse RMSE.
+- **Sharpness:** `w_grad` and `w_normal` go up.
+- **Batch sizing:** batch, `torch.compile`, workers and eval batch are measured on the card by `tools/h100_sweep.py`. The rule is the fastest config at <= 72 GB reserved. Each candidate is a real `train.py --bench_steps` process, and the sweep logs img/s, loader-wait share and GPU util.
+
+```bash
+export HF_TOKEN=hf_...
+export PREV_KERNEL=abhaydkale232/<notebook that ran v5_probe_v4init_mvs3dm>
+bash lightning/final_h100.sh all --background   # check fetch sweep smoke train test package
+tail -f /teamspace/studios/this_studio/dw_final/final.log
+```
+
+**Storage.**
+- `fetch` downloads the Kaggle stores file by file (resumable, splits filtered) into `/tmp/kin`, the local NVMe, and links them into `/tmp/dwdata`.
+- It downloads only `best.pt` + `metrics.json` of the previous run, not `last_full.pt`.
+- Outputs go to `/teamspace/studios/this_studio/dw_final/outputs/v5_final_forest`.
+
+**Outputs.**
+- `test` scores this run and the checkpoint it started from on neon/mvs3dm/gamus test. It writes `start_vs_final_<src>.md` and 16 qualitative strips each.
+- `package` zips everything with a GPU-utilisation summary.
+
 ## 6. Reading the results
 
 `metrics.json` carries `final_plain`, `final_tta` **and** `final_sliding_tta`.
