@@ -69,8 +69,10 @@ class MetricAccum:
 class Evaluator:
     """Accumulates every breakdown from (pred, target, valid, cls) batches."""
 
-    def __init__(self, cfg):
+    def __init__(self, cfg, src: str = ""):
         self.cfg = cfg
+        # NEON-like sources have no buildings: their "urban" tiles are canopy
+        self.no_urban = bool(cfg.no_urban(src)) if hasattr(cfg, "no_urban") else False
         self.g = MetricAccum()
         self.cls = {i: MetricAccum() for i in range(len(cfg.class_names))}
         self.cls_px = {i: 0 for i in range(len(cfg.class_names))}
@@ -113,7 +115,7 @@ class Evaluator:
             if not v_np[i].any():                       # host-side, free
                 continue
             g = float(g_np[i % len(g_np)]) if g_np is not None else float(gsd_m)
-            name, desc = classify(t_np[i], v_np[i], g)
+            name, desc = classify(t_np[i], v_np[i], g, no_urban=self.no_urban)
             vi = v[i].bool()
             self.land[name].update(p[i][vi], t[i][vi])
             self.land_tiles[name] += 1
@@ -238,6 +240,13 @@ def pool_pair(pred, target, valid, k: int):
     return pp, tt, n > 0.999
 
 
+def dataset_src(ds) -> str:
+    """The `src` of a TileDataset / FullTileDataset, through any Subset wrappers."""
+    while ds is not None and not hasattr(ds, "src") and hasattr(ds, "dataset"):
+        ds = ds.dataset
+    return str(getattr(ds, "src", "") or "")
+
+
 @torch.no_grad()
 def evaluate(model, loader, cfg, device, use_tta: bool = False,
              gpu_prep=None, pool: int = 1, mask_veg: bool = False) -> dict:
@@ -256,7 +265,7 @@ def evaluate(model, loader, cfg, device, use_tta: bool = False,
     from models.tta import tta_predict
 
     model.eval()
-    ev = Evaluator(cfg)
+    ev = Evaluator(cfg, dataset_src(getattr(loader, "dataset", None)))
     amp_dt = torch.bfloat16 if cfg.amp_dtype == "bf16" else torch.float16
     use_amp = cfg.amp and device.type == "cuda"
     for batch in loader:

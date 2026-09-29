@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from eval.metrics import Evaluator
+from eval.metrics import Evaluator, dataset_src
 from infer.engine import predict_scene
 
 
@@ -19,7 +19,7 @@ from infer.engine import predict_scene
 def sliding_eval(model, full_ds, cfg, spec, device, *, tta: bool = False,
                  max_tiles: int = 0, log_every: int = 25) -> dict:
     model.eval()
-    ev = Evaluator(cfg)
+    ev = Evaluator(cfg, dataset_src(full_ds))
     amp_dt = (torch.bfloat16 if cfg.amp_dtype == "bf16" else torch.float16) \
         if (cfg.amp and device.type == "cuda") else None
     n = min(len(full_ds), max_tiles) if max_tiles else len(full_ds)

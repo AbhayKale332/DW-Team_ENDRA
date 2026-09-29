@@ -141,7 +141,11 @@ def descriptors(gt: np.ndarray, valid: np.ndarray | None = None,
 def classify(gt: np.ndarray, valid: np.ndarray | None = None, gsd_m: float = 0.5,
              *, relief_m: float = 6.0, sparse_frac: float = 0.12,
              forest_rough: float = 0.22,
-             terrain: np.ndarray | None = None) -> tuple[str, dict]:
+             terrain: np.ndarray | None = None,
+             no_urban: bool = False) -> tuple[str, dict]:
+    """`no_urban`: the source's labels hold no buildings (NEON CHM), so what the
+    roughness rule calls urban is a closed canopy — see
+    `Config.landscape_no_urban_sources`."""
     d = descriptors(gt, valid, gsd_m, terrain)
     if d["n_valid"] == 0:
         return "sparse", d
@@ -152,6 +156,6 @@ def classify(gt: np.ndarray, valid: np.ndarray | None = None, gsd_m: float = 0.5
     elif d["roughness"] >= forest_rough:
         name = "forested"
     else:
-        name = "urban"
+        name = "forested" if no_urban else "urban"
     assert name in LANDSCAPE_NAMES
     return name, d

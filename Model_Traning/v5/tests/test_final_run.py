@@ -33,6 +33,7 @@ def test_flags_without_neon_parse_and_drop_dfc(tmp_path):
     assert f["coarse_label_sources"] == ""
     assert f["select_on"] == "mvs3dm"
     assert "neon" not in f["test_sources"]
+    assert "landscape_no_urban_sources" not in f
 
 
 def test_flags_with_neon(tmp_path):
@@ -42,6 +43,7 @@ def test_flags_with_neon(tmp_path):
     check(f)
     assert f["datasets"].split(",")[:2] == ["mvs3dm", "neon"]   # mvs3dm stays primary val
     assert f["coarse_label_sources"] == "neon"
+    assert f["landscape_no_urban_sources"] == "neon"
     assert f["select_on"] == "neon,mvs3dm"
     assert f["test_sources"].startswith("neon:test,")
     assert f["landscape_gallery_source"] == "neon"

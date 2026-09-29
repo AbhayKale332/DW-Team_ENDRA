@@ -108,3 +108,22 @@ def test_bad_boost_class_is_rejected():
     c.landscape_sampler_boost = "forest:2"
     with pytest.raises(ValueError):
         c.validate()
+
+
+def test_no_urban_source_classes_and_own_cache(tmp_path, lcfg):
+    from dwdata.loaders import LANDSCAPE_CACHE, LANDSCAPE_CACHE_NO_URBAN, tile_landscapes
+
+    lcfg.landscape_no_urban_sources = "neon"
+    st = _store(tmp_path, "neon", ["urban", "sparse", "forested"])
+    names = [LANDSCAPE_NAMES[i] for i in tile_landscapes(st, lcfg, "neon/train")]
+    assert names == ["forested", "sparse", "forested"]
+    assert (st.dir / LANDSCAPE_CACHE_NO_URBAN).is_file() and not (st.dir / LANDSCAPE_CACHE).exists()
+    g = _store(tmp_path, "gamus", ["urban"])                  # other stores keep urban
+    assert LANDSCAPE_NAMES[tile_landscapes(g, lcfg, "gamus/train")[0]] == "urban"
+
+
+def test_no_urban_matches_base_name():
+    c = Config()
+    c.landscape_no_urban_sources = " neon ,"
+    assert c.no_urban("neon") and c.no_urban("neon/test") and c.no_urban("neon_g05")
+    assert not c.no_urban("neonx") and not c.no_urban("gamus") and not c.no_urban("")
