@@ -31,6 +31,7 @@ The Space is private, so every request must carry a Hugging Face token. The toke
 - **How it is used:** the browser only talks to its own origin at `/hf-space/*`. The server forwards those requests to the Space and adds `Authorization: Bearer $HF_TOKEN`.
   - In development and `npm run preview`, the server is Vite's proxy (`vite.config.ts`).
   - In production, it is `server/serve.mjs` (Node ≥ 20, no dependencies). It serves `dist/` and proxies the same path.
+- **Vercel:** `vercel.json` routes `/hf-space/*` to a server function that uses the same server-only `HF_TOKEN`. Configure `HF_TOKEN` and, if needed, `VITE_SPACE_ID` or `HF_SPACE_URL` in the Vercel project settings, then redeploy. Do not use a `VITE_` prefix for the token. Vercel Functions cap request bodies at 4.5 MB and limit execution duration by plan; for larger images or longer inference, deploy with `npm run serve` on a Node host instead.
 - **After editing `.env`:** restart `npm run dev` (or `npm run serve`). The header status dot shows whether the model is reachable. **File → Settings → Test connection** re-checks it.
 
 | Variable | Purpose |
