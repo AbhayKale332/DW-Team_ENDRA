@@ -25,10 +25,10 @@ def test_cut_grid_covers_the_km_tile_on_even_offsets():
     assert all(o % 2 == 0 for o in OFFSETS) and OFFSETS[-1] + TILE == 2000
     rgb = np.full((2000, 2000, 3), 50, np.uint8)
     h = np.zeros((2000, 2000), np.float32)
-    h[:1000] = 200.0                               # above max_h -> invalid
+    h[:1200] = 200.0                               # above max_h -> invalid
     ok = np.ones((2000, 2000), bool)
     got = list(cut(rgb, ok, h, ok, min_valid=0.5, max_h=150.0))
-    assert len(got) == 8 and all(r >= 2 for r, *_ in got)
+    assert len(got) == 2 and all(r == 1 for r, *_ in got)
     assert all(v.shape == (TILE, TILE) and hh[v].max() <= 150 for *_, hh, v in got)
 
 
@@ -60,3 +60,19 @@ def test_object_mask_finds_dropped_buildings_and_kept_wires():
     chm[10:13, 10:13] = 8.0
     dsm[10:13, 10:13] = 100.0                      # crown the DSM missed: still a tree
     assert not object_mask(chm, dsm, dtm, -9999.0)[11, 11]
+
+
+def test_bounded_yields_every_result_and_errors():
+    from concurrent.futures import ThreadPoolExecutor
+
+    from tools.pack_neon import _bounded
+
+    def f(x):
+        if x == 3:
+            raise ValueError("bad")
+        return x * 2
+
+    with ThreadPoolExecutor(2) as ex:
+        got = list(_bounded(ex, f, list(range(10)), 3))
+    assert sorted(g for g in got if not isinstance(g, Exception)) == [0, 2, 4, 8, 10, 12, 14, 16, 18]
+    assert sum(isinstance(g, ValueError) for g in got) == 1

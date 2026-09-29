@@ -1,4 +1,4 @@
-"""NEON AOP (forest / savanna / scrub) -> packed store `neon/{train,val,test}` (0.5 m, 512 px).
+"""NEON AOP (forest / savanna / scrub) -> packed store `neon/{train,val,test}` (0.5 m, 1024 px).
 
     export NEON_TOKEN=...            # data.neonscience.org -> My Account -> API token
     python tools/pack_neon.py plan    --work /tmp/neon
@@ -36,8 +36,10 @@ open and bare ground in proportion.  Writes `<work>/plan.json`.
 (a pixel with any no-data source pixel is no-data), CHM 1000^2 -> 2000^2 by
 2 x 2 replication, so every 2 x 2 block of the label is exactly one lidar
 cell.  That is what `coarse_label_m 1.0` scores on (`models/losses.py`), and
-the 512 px tiles start on even pixels (0, 496, 992, 1488: a 4 x 4 grid that
-overlaps by 16 px) so the blocks stay on the 1 m grid.  A tile is kept when
+the 1024 px tiles start on even pixels (0, 976: a 2 x 2 grid that overlaps
+by 48 px) so the blocks stay on the 1 m grid.  1024 px, not 512, because a
+512 px training crop at up to 1.0 m GSD (`gsd_jitter_hi_m`, clamped by
+`achievable_gsd_range`) needs a 1024 px source at 0.5 m, as GAMUS has.  A tile is kept when
 >= `min_valid` of it has image and label; heights above `max_h` are invalid.
 Downloads are deleted once packed, so the peak disk is a few RGB files.
 
@@ -55,7 +57,7 @@ import os
 import re
 import sys
 import time
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -67,9 +69,9 @@ CHM_DP, RGB_DP, DEM_DP = "DP3.30015.001", "DP3.30010.001", "DP3.30024.001"
 DOI = {CHM_DP: "https://doi.org/10.48443/8qst-0w84", RGB_DP: "https://doi.org/10.48443/8vq2-s021",
        DEM_DP: "https://doi.org/10.48443/sxrt-ne87"}
 GSD = 0.5
-TILE = 512
+TILE = 1024
 KM_PX = 2000                                   # one 1 km NEON tile at 0.5 m
-OFFSETS = (0, 496, 992, 1488)                  # even: 2x2 label blocks stay on the 1 m grid
+OFFSETS = (0, 976)                             # even: 2x2 label blocks stay on the 1 m grid
 LEAF_ON = tuple(range(4, 11))                  # Apr-Oct, northern hemisphere
 ALL_YEAR = tuple(range(1, 13))
 
@@ -325,7 +327,7 @@ def label_2x(chm: np.ndarray, nodata, bad: np.ndarray | None = None
 
 def cut(rgb: np.ndarray, rgb_ok: np.ndarray, h: np.ndarray, h_ok: np.ndarray,
         min_valid: float, max_h: float):
-    """Yield (r, c, rgb, hgt, valid) of the 4 x 4 grid of 512 px tiles."""
+    """Yield (r, c, rgb, hgt, valid) of the 2 x 2 grid of 1024 px tiles."""
     for r, y in enumerate(OFFSETS):
         for c, x in enumerate(OFFSETS):
             sl = (slice(y, y + TILE), slice(x, x + TILE))
@@ -338,7 +340,7 @@ def cut(rgb: np.ndarray, rgb_ok: np.ndarray, h: np.ndarray, h_ok: np.ndarray,
 
 
 def pack_one(job: dict) -> dict:
-    """One 1 km tile -> its 512 px tiles (runs in a worker process)."""
+    """One 1 km tile -> its 1024 px tiles (runs in a worker process)."""
     import rasterio
 
     s = _session()
@@ -375,13 +377,38 @@ def pack_one(job: dict) -> dict:
             p.unlink(missing_ok=True)
 
 
+def _bounded(ex, fn, jobs: list, window: int):
+    """Results of `fn(job)` in completion order, at most `window` in flight.
+
+    Submitting everything up front kept every finished future — and its ~25 MB
+    of tiles — alive until the end: the first full run was OOM-killed at
+    370 / 562 km tiles on a 14 GB box.
+    """
+    from concurrent.futures import FIRST_COMPLETED, wait
+
+    it, live = iter(jobs), set()
+    while True:
+        for j in it:
+            live.add(ex.submit(fn, j))
+            if len(live) >= window:
+                break
+        if not live:
+            return
+        done, live = wait(live, return_when=FIRST_COMPLETED)
+        for f in done:
+            try:
+                yield f.result()
+            except Exception as e:  # noqa: BLE001
+                yield e
+
+
 def pack(work: Path, data_root: Path, min_valid: float, max_h: float, workers: int) -> None:
     from dwdata.packed import ShardWriter
 
     pl = json.loads((work / "plan.json").read_text())
     tmp = work / "dl"
     writers = {sp: ShardWriter(data_root / "neon" / sp, tile_px=TILE, gsd_m=GSD,
-                               shard_tiles=128, has_seg=False) for sp in ("train", "val", "test")}
+                               shard_tiles=48, has_seg=False) for sp in ("train", "val", "test")}
     jobs = []
     for site, si in pl["sites"].items():
         yr = si["month"][:4]
@@ -396,13 +423,10 @@ def pack(work: Path, data_root: Path, min_valid: float, max_h: float, workers: i
     per_site: dict = {}
     failed, t0 = [], time.time()
     with ProcessPoolExecutor(workers) as ex:
-        futs = [ex.submit(pack_one, j) for j in jobs]
-        for i, f in enumerate(as_completed(futs), 1):
-            try:
-                r = f.result()
-            except Exception as e:  # noqa: BLE001 — one bad download must not end the run
-                failed.append({"error": f"{type(e).__name__}: {e}"})
-                print(f"[pack] FAILED {e}", flush=True)
+        for i, r in enumerate(_bounded(ex, pack_one, jobs, 2 * workers), 1):
+            if isinstance(r, Exception):        # one bad download must not end the run
+                failed.append({"error": f"{type(r).__name__}: {r}"})
+                print(f"[pack] FAILED {r}", flush=True)
                 continue
             if "error" in r:
                 failed.append(r)
@@ -420,8 +444,13 @@ def pack(work: Path, data_root: Path, min_valid: float, max_h: float, workers: i
                 el = time.time() - t0
                 print(f"[pack] {i}/{len(jobs)} km tiles  {counts}  {el / 60:.0f} min, "
                       f"eta {el / i * (len(jobs) - i) / 60:.0f} min", flush=True)
+    from dwdata.packed import PackedStore
+
     for sp, w in writers.items():
         print(f"[pack] neon/{sp}: {w.finalise()['n']} tiles", flush=True)
+        # ship the loader's per-tile stretch table (config stretch_lo/hi_pct 2 / 98),
+        # so a read-only Kaggle mount never has to write it
+        PackedStore(data_root / "neon" / sp).prime_stretch_bounds(2.0, 98.0, workers=workers)
     for ps in per_site.values():
         ps["object_masked"] = round(float(np.mean(ps["object_masked"])), 5)
     info = {"gsd_m": GSD, "tile_px": TILE, "tile_offsets_px": OFFSETS, "min_valid": min_valid,
@@ -463,6 +492,14 @@ def preview(data_root: Path, out: Path, per_split: int = 6, vmax: float = 40.0) 
               f"p50 {np.percentile(h, 50):.1f} p95 {np.percentile(h, 95):.1f} max {h.max():.1f}, "
               f"> 2 m {(h > 2).mean():.1%}, (0, 2] {((h > 0) & (h <= 2)).mean():.1%}, "
               f"finite {np.isfinite(h).all()}", flush=True)
+        site_px: dict = {}
+        for i in range(n):
+            _, hh, _, vv = st.get(i)
+            e = site_px.setdefault(st.stems[i].split("_")[0], np.zeros(3))
+            e += (vv.sum(), (vv & (hh > 3)).sum(), vv.size)
+        for site, (nv, n3, nall) in sorted(site_px.items()):
+            print(f"[verify]   {sp:5} {site}: labelled {nv / nall:.0%}, > 3 m {n3 / max(nv, 1):.1%}",
+                  flush=True)
         for i in rng.choice(n, min(per_split, n), replace=False):
             rgb, hgt, _, val = st.get(int(i))
             col = _turbo(hgt / vmax)
@@ -485,7 +522,7 @@ def kaggle(work: Path, data_root: Path, slug: str) -> None:
     for sp in ("train", "val", "test"):
         d = store / sp
         zp = up / f"{sp}.zip"
-        files = sorted(p for p in d.iterdir() if p.is_file() and not p.name.startswith("stretch_"))
+        files = sorted(p for p in d.iterdir() if p.is_file())
         with zipfile.ZipFile(zp, "w", zipfile.ZIP_DEFLATED, compresslevel=1, allowZip64=True) as z:
             for p in files:
                 z.write(p, p.name)                      # flat: Kaggle extracts to <split>/<file>
@@ -518,26 +555,27 @@ DepthWizard store layout (`dwdata/packed.py`).
 | `val` | {c['val']} | per site, 2 x 2 km blocks held out by location |
 | `test` | {c['test']} | per site, other 2 x 2 km blocks held out by location — never trained or selected on |
 
-Each 1 km NEON tile gives up to 16 tiles of 512 px (a 4 x 4 grid at offsets
-0 / 496 / 992 / 1488 px, so neighbours overlap by 16 px); all 16 belong to the
-split of their 1 km tile.  Within a split, tiles are drawn stratified by canopy
+Each 1 km NEON tile gives up to 4 tiles of 1024 px (a 2 x 2 grid at offsets
+0 / 976 px, so neighbours overlap by 48 px); all 4 belong to the split of
+their 1 km tile.  Within a split, tiles are drawn stratified by canopy
 cover, so dense forest, open woodland and bare ground are all present.
 
 ## Files
 
 ```
-<split>/index.json          {{"tile_px": 512, "gsd_m": 0.5, "n": N, "has_seg": false,
-                              "shards": [{{"file": "shard_000", "n": 128, "stems": [...]}}, ...]}}
-<split>/shard_XXX_rgb.npy   (n, 512, 512, 3) uint8   R, G, B
-<split>/shard_XXX_hgt.npy   (n, 512, 512)    float16 metres above ground (trees included)
-<split>/shard_XXX_val.npy   (n, 512, 512)    bool    pixel has both image and label
-<split>/shard_XXX_cls.npy   (n, 512, 512)    uint8   all 255 (no classes)
+<split>/index.json          {{"tile_px": 1024, "gsd_m": 0.5, "n": N, "has_seg": false,
+                              "shards": [{{"file": "shard_000", "n": 48, "stems": [...]}}, ...]}}
+<split>/shard_XXX_rgb.npy   (n, 1024, 1024, 3) uint8   R, G, B
+<split>/shard_XXX_hgt.npy   (n, 1024, 1024)    float16 metres above ground (trees included)
+<split>/shard_XXX_val.npy   (n, 1024, 1024)    bool    pixel has both image and label
+<split>/shard_XXX_cls.npy   (n, 1024, 1024)    uint8   all 255 (no classes)
+<split>/stretch_bounds_2_98.npy  (n, 2, 3) float32  per-tile 2 / 98 % RGB bounds (loader cache)
 build_info.json             sites, flight months, 1 km tile list per split, tile counts
 ```
 
 Stems are `<SITE>_<year>_<easting>_<northing>_r<row>_c<col>`: the NEON 1 km
 tile's lower-left UTM corner (WGS84, the site's zone; `per_site.crs` in
-`build_info.json`) and the 512 px tile's position in the 4 x 4 grid.
+`build_info.json`) and the 1024 px tile's position in the 2 x 2 grid.
 
 ```python
 import json, numpy as np
@@ -621,7 +659,7 @@ International licence (CC BY 4.0): https://creativecommons.org/licenses/by/4.0/
 
 Changes made: the camera mosaic was resampled from 0.1 m to 0.5 m (5 x 5 block
 mean); the canopy height model was replicated from 1 m to 0.5 m; both were cut
-into 512 x 512 px tiles, with buildings and wires found from the lidar DSM / DTM
+into 1024 x 1024 px tiles, with buildings and wires found from the lidar DSM / DTM
 marked as unlabelled, and stored as NumPy arrays with a validity mask.
 
 Attribution: "This material uses data from the National Ecological Observatory
