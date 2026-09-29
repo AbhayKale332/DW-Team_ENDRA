@@ -34,7 +34,7 @@ export default function App() {
               Drop to open
             </Text>
             <Text size="sm" c="dimmed">
-              Image (PNG, JPG, GeoTIFF) · project (.dwproj) · result bundle (.zip / .npy)
+              PNG · JPG · GeoTIFF · .dwproj · .zip · .npy
             </Text>
           </div>
         </div>

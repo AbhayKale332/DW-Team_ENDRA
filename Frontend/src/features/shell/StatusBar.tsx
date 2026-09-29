@@ -31,7 +31,7 @@ export function StatusBar() {
         {cursor
           ? `x ${cursor.col.toFixed(0)}  y ${cursor.row.toFixed(0)}  ·  ${formatHeight(scene!, cursor.height)}  ·  slope ${cursor.slope.toFixed(1)}°${cursor.lonLat ? `  ·  ${formatLonLat(cursor.lonLat)}` : ''}${cursor.error !== null ? `  ·  Δref ${cursor.error >= 0 ? '+' : ''}${cursor.error.toFixed(2)} m` : ''}`
           : scene
-            ? 'Hover the terrain for height, slope and position'
+            ? '—'
             : 'No scene loaded'}
       </span>
       {scene && (

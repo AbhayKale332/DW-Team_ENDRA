@@ -3,7 +3,14 @@ import { DepthWizardError } from '../errors';
 import { parseNpy } from '@/lib/npy';
 import { classMapFromPng, fetchOptional } from '@/lib/classMap';
 import { fetchObjects } from '@/lib/objects';
+import { SAMPLES } from '@/lib/samples';
 import type { SceneMeta } from '@/domain/types';
+
+async function fetchOk(url: string, signal: AbortSignal) {
+  const r = await fetch(url, { signal });
+  if (!r.ok) throw new DepthWizardError('network', 'Sample unavailable', `Could not load ${url} (HTTP ${r.status})`);
+  return r;
+}
 
 const wait = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
@@ -21,7 +28,7 @@ export class MockProvider implements InferenceProvider {
   readonly label = 'Offline demo (sample result)';
   readonly capabilities = { absoluteDsm: false, uncertainty: false, serverValidation: false, cancel: true };
 
-  constructor(private readonly base = './samples/synthetic-city') {}
+  constructor(private readonly base = SAMPLES[0].base) {}
 
   async status(onChange?: (s: BackendStatus) => void): Promise<BackendStatus> {
     const s: BackendStatus = { state: 'running', message: 'Offline demo provider' };
@@ -42,8 +49,8 @@ export class MockProvider implements InferenceProvider {
     if (fail === 'quota') throw new DepthWizardError('quota', 'GPU quota used up', 'Your ZeroGPU quota for today is used up.');
     onProgress({ stage: 'fetching' });
     const [buf, meta, segBuf] = await Promise.all([
-      fetch(`${this.base}/ndsm_m.npy`, { signal }).then((r) => r.arrayBuffer()),
-      fetch(`${this.base}/meta.json`, { signal }).then((r) => r.json() as Promise<SceneMeta>),
+      fetchOk(`${this.base}/ndsm_m.npy`, signal).then((r) => r.arrayBuffer()),
+      fetchOk(`${this.base}/meta.json`, signal).then((r) => r.json() as Promise<SceneMeta>),
       fetchOptional(`${this.base}/seg.png`, { signal }),
     ]);
     const arr = parseNpy(buf);
@@ -70,7 +77,7 @@ export class MockProvider implements InferenceProvider {
   modelInfo(): ModelInfo {
     return {
       name: 'Offline demo provider',
-      summary: 'Returns the bundled synthetic sample instead of calling the model. For demonstrations without network access.',
+      summary: 'Returns the bundled sample result instead of calling the model.',
       endpoint: 'local',
       details: [['Output', 'Bundled sample nDSM (metres)']],
     };

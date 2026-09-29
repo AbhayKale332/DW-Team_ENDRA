@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Checkbox, FileButton, Group, List, SegmentedControl, Slider, Stack, Switch, Table, Text } from '@mantine/core';
-import { IconFileReport, IconInfoCircle, IconUpload, IconX } from '@tabler/icons-react';
+import { IconFileReport, IconInfoCircle, IconScale, IconUpload, IconX } from '@tabler/icons-react';
+import { EmptyPanel } from '@/components/panel';
 import { notifications } from '@mantine/notifications';
 import { useScene } from '@/store/scene';
 import { useView } from '@/store/view';
@@ -19,9 +20,9 @@ function ReferenceLoader() {
   const [kind, setKind] = useState<ReferenceKind>(scene.product === 'DSM' ? 'DSM' : 'nDSM');
   const [busy, setBusy] = useState(false);
   return (
-    <Stack gap="xs">
-      <Text size="xs" c="dimmed">
-        Compare the estimate with LiDAR, stereo or any reference height raster. GeoTIFFs are aligned by their georeferencing when the input was georeferenced.
+    <Stack gap="sm">
+      <Text size="sm" fw={500}>
+        Reference raster
       </Text>
       <SegmentedControl
         fullWidth
@@ -213,7 +214,7 @@ export function ValidationTab() {
   const swipe = useView((s) => s.swipe);
   const layerIsError = useView((s) => s.layer3d === 'error');
   const notes = useMemo(() => reference?.notes ?? [], [reference]);
-  if (!scene) return <Text size="sm" c="dimmed" p="md">Open a result to validate it.</Text>;
+  if (!scene) return <EmptyPanel icon={IconScale}>Open a result to validate it.</EmptyPanel>;
   return (
     <Stack gap="md" p="md">
       {!reference ? (
@@ -247,7 +248,7 @@ export function ValidationTab() {
               size="xs"
               checked={removeOffset}
               onChange={(e) => useScene.getState().set({ removeOffset: e.currentTarget.checked })}
-              label="Remove ground offset (absolute DSM reference vs height-above-ground estimate)"
+              label="Remove ground offset"
             />
           )}
           <Group gap="xs">

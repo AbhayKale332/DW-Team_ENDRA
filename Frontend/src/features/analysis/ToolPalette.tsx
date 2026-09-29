@@ -16,7 +16,7 @@ function ObjectKindToggle({ kind }: { kind: ObjectKind }) {
   const label = OBJECT_KIND_LABELS[kind];
   const Icon = OBJECT_KIND_ICONS[kind];
   return (
-    <Tooltip label={count === 0 ? `No ${label.toLowerCase()} detected in this result` : `3D ${label.toLowerCase()} (${count}): ${on ? 'on — click to show the raw mesh here' : 'off — click to show as 3D models'}`} position="bottom">
+    <Tooltip label={count === 0 ? `No ${label.toLowerCase()} detected` : `3D ${label.toLowerCase()} (${count}) · ${on ? 'on' : 'off'}`} position="bottom">
       {/* the wrapper keeps the tooltip working while the button is disabled */}
       <span>
         <ActionIcon
@@ -38,17 +38,12 @@ function ObjectKindToggle({ kind }: { kind: ObjectKind }) {
 type GeoLayer = 'osm' | 'basemap' | 'poi';
 
 /** A layer that needs a georeferenced scene, on/off. Disabled (with a reason) for images that are not. */
-function GeoToggle({ layer, label, icon: Icon, offHint, loading }: { layer: GeoLayer; label: string; icon: typeof IconMap2; offHint: string; loading?: boolean }) {
+function GeoToggle({ layer, label, icon: Icon, loading }: { layer: GeoLayer; label: string; icon: typeof IconMap2; loading?: boolean }) {
   const georef = useScene((s) => s.scene?.georef);
   const on = useView((s) => s[layer]);
   const geo = canGeolocate(georef);
   return (
-    <Tooltip
-      label={!geo ? `${label} needs a georeferenced image (e.g. a GeoTIFF)` : on ? `${label}: on — click to hide` : `${label}: off — ${offHint}`}
-      position="bottom"
-      multiline
-      w={260}
-    >
+    <Tooltip label={!geo ? `${label} · needs a georeferenced image` : `${label} · ${on ? 'on' : 'off'}`} position="bottom">
       <span>
         <ActionIcon
           size={34}
@@ -82,9 +77,9 @@ export function ToolPalette() {
           <Divider orientation="vertical" mx={3} my={4} />
         </>
       )}
-      <GeoToggle layer="basemap" label="Surrounding basemap" icon={IconWorld} offHint="shows map tiles around the processed area (display only)" />
-      <GeoToggle layer="poi" label="Facilities" icon={IconBuildingHospital} offHint="shows hospitals, fire stations, police, schools, shelters and stations from OpenStreetMap" loading={poiLoading} />
-      <GeoToggle layer="osm" label="OpenStreetMap overlay" icon={IconMap2} offHint="loads roads, buildings and water for this area from OpenStreetMap" loading={osmLoading} />
+      <GeoToggle layer="basemap" label="Surrounding basemap" icon={IconWorld} />
+      <GeoToggle layer="poi" label="Facilities (OpenStreetMap)" icon={IconBuildingHospital} loading={poiLoading} />
+      <GeoToggle layer="osm" label="OpenStreetMap overlay" icon={IconMap2} loading={osmLoading} />
     </Group>
   );
 }

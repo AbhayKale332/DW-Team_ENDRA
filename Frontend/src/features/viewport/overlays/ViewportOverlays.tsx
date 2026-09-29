@@ -33,6 +33,7 @@ export function ViewportOverlays() {
         <ViewSwitcher />
         {hasScene && orbit && <ToolPalette />}
         {hasScene && <ProductChip />}
+        <ScenarioOverlay />
       </div>
       <div className={classes.topCenter}>
         {!orbit && <ModeBar />}
@@ -41,7 +42,6 @@ export function ViewportOverlays() {
       <div className={classes.topRight}>
         <NavControls />
       </div>
-      <ScenarioOverlay />
       <ProcessingOverlay />
       {hasScene && (
         <>

@@ -1,46 +1,27 @@
-import { Alert, Anchor, List, Stack, Table, Text } from '@mantine/core';
-import { IconInfoCircle } from '@tabler/icons-react';
+import { Alert, Anchor, List, Stack, Text } from '@mantine/core';
+import { IconInfoCircle, IconPhoto } from '@tabler/icons-react';
+import { EmptyPanel, KeyValueRows, PanelSection } from '@/components/panel';
 import { useScene } from '@/store/scene';
 import { ElevationReference } from '@/features/anchoring/ElevationReference';
 import { lonLatAt, formatLonLat } from '@/lib/georef';
 import { summariseObjects } from '@/lib/objects';
-
-function Rows({ rows }: { rows: Array<[string, React.ReactNode]> }) {
-  return (
-    <Table withRowBorders={false} verticalSpacing={3} horizontalSpacing={0} fz="xs">
-      <Table.Tbody>
-        {rows.map(([k, v]) => (
-          <Table.Tr key={k}>
-            <Table.Td c="dimmed" w="42%" valign="top">
-              {k}
-            </Table.Td>
-            <Table.Td className="dw-mono" ta="right">
-              {v}
-            </Table.Td>
-          </Table.Tr>
-        ))}
-      </Table.Tbody>
-    </Table>
-  );
-}
 
 const metres = (v: number | null) => (v === null ? '–' : `${v.toFixed(1)} m`);
 
 /** Scene metadata, provenance, model status lines, notes and downloadable model artefacts. */
 export function InfoTab() {
   const scene = useScene((s) => s.scene);
-  if (!scene) return <Text size="sm" c="dimmed" p="md">No scene loaded.</Text>;
+  if (!scene) return <EmptyPanel icon={IconPhoto}>No scene loaded.</EmptyPanel>;
   const s = scene.stats;
   const g = scene.georef;
   const centre = g ? lonLatAt(g, (scene.heights.width - 1) / 2, (scene.heights.height - 1) / 2) : null;
   const notes = scene.warnings.filter((w) => w.level === 'info');
   const obj = scene.objects ? summariseObjects(scene.objects) : null;
   return (
-    <Stack gap="md" p="md">
+    <Stack gap="lg" p="md">
       <ElevationReference scene={scene} />
-      <div>
-        <span className="dw-section-title">{scene.product === 'DSM' ? 'Elevations' : 'Heights'}</span>
-        <Rows
+      <PanelSection title={scene.product === 'DSM' ? 'Elevations' : 'Heights'} gap={4}>
+        <KeyValueRows
           rows={[
             ['Minimum', `${s.min.toFixed(2)} m`],
             ['Maximum', `${s.max.toFixed(2)} m`],
@@ -50,10 +31,9 @@ export function InfoTab() {
             ['Below 1 m (above ground)', `${(s.fracBelow1m * 100).toFixed(1)} %`],
           ]}
         />
-      </div>
-      <div>
-        <span className="dw-section-title">Geometry</span>
-        <Rows
+      </PanelSection>
+      <PanelSection title="Geometry" gap={4}>
+        <KeyValueRows
           rows={[
             ['Height grid', `${scene.heights.width} × ${scene.heights.height} px`],
             ['Ground resolution', `${scene.gsd.toFixed(3)} m/px (${scene.gsdSource})`],
@@ -63,11 +43,10 @@ export function InfoTab() {
             ...(centre ? ([['Scene centre', formatLonLat(centre)]] as Array<[string, string]>) : []),
           ]}
         />
-      </div>
+      </PanelSection>
       {obj && (
-        <div>
-          <span className="dw-section-title">Detected objects</span>
-          <Rows
+        <PanelSection title="Detected objects" gap={4}>
+          <KeyValueRows
             rows={[
               ['Trees', obj.trees ? `${obj.trees} · mean ${metres(obj.treeMeanH)} · tallest ${metres(obj.treeMaxH)}` : '0'],
               ['Buildings', obj.buildings ? `${obj.buildings} · median ${metres(obj.buildingMedianH)} · tallest ${metres(obj.buildingMaxH)}` : '0'],
@@ -75,11 +54,11 @@ export function InfoTab() {
             ]}
           />
           {obj.truncated && (
-            <Text size="xs" c="dimmed" mt={4}>
-              The model capped the object count for this scene; the smallest objects were dropped.
+            <Text size="xs" c="dimmed">
+              Capped by the model: the smallest objects were dropped.
             </Text>
           )}
-        </div>
+        </PanelSection>
       )}
       {notes.length > 0 && (
         <Alert variant="light" color="gray" icon={<IconInfoCircle size={16} />} p="xs">
@@ -92,9 +71,8 @@ export function InfoTab() {
           </List>
         </Alert>
       )}
-      <div>
-        <span className="dw-section-title">Provenance</span>
-        <Rows
+      <PanelSection title="Provenance" gap={4}>
+        <KeyValueRows
           rows={[
             ['Source', scene.provenance.provider],
             ['Created', new Date(scene.provenance.createdAt).toLocaleString()],
@@ -102,23 +80,21 @@ export function InfoTab() {
             ...(scene.provenance.modelVersion ? ([['Model', scene.provenance.modelVersion]] as Array<[string, string]>) : []),
           ]}
         />
-      </div>
+      </PanelSection>
       {scene.statusLines.length > 0 && (
-        <div>
-          <span className="dw-section-title">Model report</span>
-          <Stack gap={2} mt={4}>
+        <PanelSection title="Model report" gap={4}>
+          <Stack gap={2}>
             {scene.statusLines.map((l) => (
               <Text key={l} size="xs" className="dw-mono">
                 {l.replace(/\*\*|`/g, '')}
               </Text>
             ))}
           </Stack>
-        </div>
+        </PanelSection>
       )}
       {scene.artefacts.length > 0 && (
-        <div>
-          <span className="dw-section-title">Model output files</span>
-          <List size="xs" mt={4} spacing={2}>
+        <PanelSection title="Model output files" gap={4}>
+          <List size="xs" spacing={2}>
             {scene.artefacts.map((a) => (
               <List.Item key={a.name}>
                 {a.url ? (
@@ -132,10 +108,7 @@ export function InfoTab() {
               </List.Item>
             ))}
           </List>
-          <Text size="xs" c="dimmed" mt={4}>
-            .npy = raw metres · .glb = textured mesh · meta.json = encoding and scene metadata · seg.png = class per pixel · objects.json = trees, buildings and water · .zip = everything incl. OBJ.
-          </Text>
-        </div>
+        </PanelSection>
       )}
     </Stack>
   );

@@ -26,7 +26,6 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: '3', label: 'Input image', group: 'View' },
   { keys: '[', label: 'Toggle project panel', group: 'View' },
   { keys: ']', label: 'Toggle inspector', group: 'View' },
-  { keys: 'Ctrl + K', label: 'Command palette', group: 'View' },
   { keys: 'R', label: 'Reset camera', group: 'Navigation' },
   { keys: 'N', label: 'Face north', group: 'Navigation' },
   { keys: '+ / −', label: 'Zoom in / out', group: 'Navigation' },

@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Alert, Button, FileButton, Group, List, Loader, SegmentedControl, Select, Slider, Stack, Switch, Table, Text } from '@mantine/core';
+import { Accordion, Alert, Button, FileButton, Group, List, Loader, SegmentedControl, Select, Slider, Stack, Switch, Text } from '@mantine/core';
 import { IconAlertTriangle, IconInfoCircle } from '@tabler/icons-react';
 import type { Scene, VerticalDatum } from '@/domain/types';
 import { ProductBadge } from '@/components/ProductBadge';
+import { InfoHint, KeyValueRows, PanelSection } from '@/components/panel';
 import { anchorBlocker, refuseScene, withHeightReference } from '@/lib/dem';
 import { productInfo } from '@/lib/product';
 import { PRODUCT_LABELS } from '@/lib/sceneBuilder';
@@ -28,25 +29,6 @@ export const ANCHOR_LIMITS = [
   'The DEM may have been acquired years apart from the image.',
 ];
 
-function Rows({ rows }: { rows: Array<[string, React.ReactNode]> }) {
-  return (
-    <Table withRowBorders={false} verticalSpacing={3} horizontalSpacing={0} fz="xs">
-      <Table.Tbody>
-        {rows.map(([k, v]) => (
-          <Table.Tr key={k}>
-            <Table.Td c="dimmed" w="42%" valign="top">
-              {k}
-            </Table.Td>
-            <Table.Td className="dw-mono" ta="right">
-              {v}
-            </Table.Td>
-          </Table.Tr>
-        ))}
-      </Table.Tbody>
-    </Table>
-  );
-}
-
 /** Product, DEM anchoring status and controls, and the anchoring report. */
 export function ElevationReference({ scene }: { scene: Scene }) {
   const anchor = useAnchor();
@@ -61,15 +43,8 @@ export function ElevationReference({ scene }: { scene: Scene }) {
   const share = shareDraft ?? a?.structureShare ?? 0;
 
   return (
-    <Stack gap="sm">
-      <Group justify="space-between">
-        <span className="dw-section-title">Product</span>
-        <ProductBadge scene={scene} full />
-      </Group>
+    <PanelSection title="Product" hint={info.summary} right={<ProductBadge scene={scene} full />}>
       <Text size="xs">{PRODUCT_LABELS[scene.product].long}.</Text>
-      <Text size="xs" c="dimmed">
-        {info.summary}
-      </Text>
 
       {a && (
         <>
@@ -84,7 +59,7 @@ export function ElevationReference({ scene }: { scene: Scene }) {
             ]}
             aria-label="Height reference"
           />
-          <Rows
+          <KeyValueRows
             rows={[
               ['DEM', a.source],
               ['Vertical datum', a.datum === 'unknown' ? 'not stated' : a.datum],
@@ -96,17 +71,20 @@ export function ElevationReference({ scene }: { scene: Scene }) {
           />
           <div>
             <Group justify="space-between">
-              <Text size="xs" fw={500}>
-                Structure already in the DEM
-              </Text>
+              <Group gap={4}>
+                <Text size="xs" fw={500}>
+                  Structure already in the DEM
+                </Text>
+                <InfoHint>
+                  0 %: the DEM is bare terrain and the model’s heights sit on top. 100 %: the DEM is a full surface model, so every 30 m cell is matched to it, which can dig the terrain under
+                  dense buildings. SRTM at 30 m is somewhere in between.
+                </InfoHint>
+              </Group>
               <Text size="xs" className="dw-mono">
                 {Math.round(share * 100)} %
               </Text>
             </Group>
-            <Slider size="sm" min={0} max={1} step={0.05} value={share} onChange={setShare} onChangeEnd={(v) => useScene.getState().updateScene(refuseScene(scene, v))} label={(v) => `${Math.round(v * 100)} %`} aria-label="Share of structure height already in the DEM" />
-            <Text size="xs" c="dimmed" mt={4} lh={1.5}>
-              0 %: the DEM is bare terrain and the model’s heights sit on top (smooth ground, nothing sinks). 100 %: the DEM is a full surface model, so every 30 m cell is matched to it, which digs the terrain under dense buildings when the DEM does not really see them. SRTM at 30 m is somewhere in between.
-            </Text>
+            <Slider size="sm" mt={6} min={0} max={1} step={0.05} value={share} onChange={setShare} onChangeEnd={(v) => useScene.getState().updateScene(refuseScene(scene, v))} label={(v) => `${Math.round(v * 100)} %`} aria-label="Share of structure height already in the DEM" />
           </div>
           {a.notes.map((n) => (
             <Text key={n} size="xs" c="dimmed">
@@ -152,18 +130,24 @@ export function ElevationReference({ scene }: { scene: Scene }) {
             </FileButton>
           </Group>
           <Select size="xs" label="Datum of a loaded DEM file" data={DATUMS} value={datum} onChange={(v) => v && setDatum(v as VerticalDatum)} allowDeselect={false} />
-          <Switch size="xs" label="Anchor georeferenced results automatically" description="Sends the scene’s bounding box to the elevation tile server." checked={auto} onChange={(e) => useSettings.getState().set({ autoAnchor: e.currentTarget.checked })} />
+          <Switch size="xs" label="Anchor georeferenced results automatically" checked={auto} onChange={(e) => useSettings.getState().set({ autoAnchor: e.currentTarget.checked })} />
         </Stack>
       )}
 
-      <div>
-        <span className="dw-section-title">Assumptions and limits</span>
-        <List size="xs" mt={4} spacing={3}>
-          {(scene.product === 'rDSM' ? ['Heights scale with the stated ground resolution; a wrong resolution rescales every height.', 'Without a coordinate system there is no way to look up terrain, so no absolute elevation is claimed.'] : ANCHOR_LIMITS).map((t) => (
-            <List.Item key={t}>{t}</List.Item>
-          ))}
-        </List>
-      </div>
-    </Stack>
+      <Accordion variant="default" chevronPosition="right" styles={{ control: { paddingInline: 0 }, content: { paddingInline: 0 }, label: { paddingBlock: 6 } }}>
+        <Accordion.Item value="limits" style={{ borderBottom: 0 }}>
+          <Accordion.Control>
+            <span className="dw-section-title">Assumptions and limits</span>
+          </Accordion.Control>
+          <Accordion.Panel>
+            <List size="xs" spacing={3}>
+              {(scene.product === 'rDSM' ? ['Heights scale with the stated ground resolution; a wrong resolution rescales every height.', 'Without a coordinate system there is no way to look up terrain, so no absolute elevation is claimed.'] : ANCHOR_LIMITS).map((t) => (
+                <List.Item key={t}>{t}</List.Item>
+              ))}
+            </List>
+          </Accordion.Panel>
+        </Accordion.Item>
+      </Accordion>
+    </PanelSection>
   );
 }

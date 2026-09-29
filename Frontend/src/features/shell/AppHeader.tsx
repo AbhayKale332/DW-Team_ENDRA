@@ -1,5 +1,5 @@
-import { ActionIcon, Button, Menu, Switch, Tooltip, useComputedColorScheme, useMantineColorScheme } from '@mantine/core';
-import { IconAntenna, IconChevronDown, IconDroplet, IconLayoutSidebar, IconLayoutSidebarRight, IconMoon, IconSun } from '@tabler/icons-react';
+import { ActionIcon, Button, Menu, Switch, Tooltip } from '@mantine/core';
+import { IconAntenna, IconChevronDown, IconDroplet, IconLayoutSidebar, IconLayoutSidebarRight } from '@tabler/icons-react';
 import { useUi } from '@/store/ui';
 import { useScene } from '@/store/scene';
 import { useUseCases, type UseCase } from '@/store/usecases';
@@ -34,7 +34,6 @@ function ScenariosMenu() {
         </Button>
       </Menu.Target>
       <Menu.Dropdown>
-        <Menu.Label>What can this surface model do?</Menu.Label>
         <Menu.Item leftSection={<IconAntenna size={16} />} onClick={() => show('telecom')} color={open && active === 'telecom' ? 'dwBlue' : undefined}>
           Telecom tower coverage
         </Menu.Item>
@@ -57,7 +56,7 @@ function RawToggle() {
   const hasScene = useScene((s) => !!s.scene);
   const raw = useView((s) => s.raw);
   return (
-    <Tooltip label={raw ? 'Showing raw model output. Switch off to restore 3D objects' : 'Raw model output: turn off 3D objects and post-processing'} multiline maw={240}>
+    <Tooltip label="Raw model output, without 3D objects or post-processing" multiline maw={240}>
       {/* the wrapper keeps the tooltip working while the switch is disabled */}
       <div style={{ display: 'flex', alignItems: 'center', paddingInline: 6 }}>
         <Switch
@@ -76,12 +75,10 @@ function RawToggle() {
   );
 }
 
+/** Header in three groups: brand + menus · scenario controls · model status + panel toggles. Theme lives in View → Theme. */
 export function AppHeader() {
-  const { setColorScheme } = useMantineColorScheme();
-  const scheme = useComputedColorScheme('light');
   const projectOpen = useUi((s) => s.projectOpen);
   const inspectorOpen = useUi((s) => s.inspectorOpen);
-  const nextScheme = scheme === 'dark' ? 'light' : 'dark';
   return (
     <header className={classes.header}>
       <div className={classes.brand}>
@@ -90,6 +87,7 @@ export function AppHeader() {
       </div>
       <span className={classes.divider} aria-hidden />
       <MenuBar />
+      <span className={classes.divider} aria-hidden />
       <ScenariosMenu />
       <RawToggle />
       <div className={`${classes.headerActions} dw-no-print`}>
@@ -101,11 +99,6 @@ export function AppHeader() {
         <HeaderToggle label="Inspector (])" pressed={inspectorOpen} onClick={() => useUi.getState().set({ inspectorOpen: !inspectorOpen })}>
           <IconLayoutSidebarRight size={18} stroke={1.6} />
         </HeaderToggle>
-        <Tooltip label={`${nextScheme === 'dark' ? 'Dark' : 'Light'} theme`}>
-          <ActionIcon size="lg" onClick={() => setColorScheme(nextScheme)} aria-label={`Switch to ${nextScheme} theme`}>
-            {scheme === 'dark' ? <IconSun size={18} stroke={1.6} /> : <IconMoon size={18} stroke={1.6} />}
-          </ActionIcon>
-        </Tooltip>
       </div>
     </header>
   );

@@ -1,4 +1,4 @@
-// Overpass (OpenStreetMap) relay shared by the Vercel function, server/serve.mjs and the Vite dev server.
+// Overpass (OpenStreetMap) relay shared by server/serve.mjs and the Vite dev server.
 // Since 2026 overpass-api.de answers 406 to any browser User-Agent (Mozilla/…) and to any request carrying a
 // Referer; a browser can change neither. So the app asks /overpass/<mirror> on its own server, which forwards
 // with an app User-Agent and no Referer/Origin/cookies.

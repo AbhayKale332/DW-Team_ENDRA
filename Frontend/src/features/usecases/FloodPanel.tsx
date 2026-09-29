@@ -3,13 +3,13 @@ import { Alert, Badge, Button, Group, Slider, SegmentedControl, Stack, Switch, T
 import { IconCrosshair, IconLock, IconPlayerPause, IconPlayerPlay } from '@tabler/icons-react';
 import { anchorBlocker } from '@/lib/dem';
 import { buildingDepth, floodStats, STOREY_M, TIER_COLORS, TIER_LABELS, TIER_LIMITS, WEIGHTS, type Tier } from '@/lib/usecases/flood';
+import { area } from '@/lib/format';
+import { KeyValueRows, PanelSection } from '@/components/panel';
 import { runAnchoring } from '@/features/anchoring/runAnchoring';
 import { useAnchor } from '@/store/anchor';
 import { useScene } from '@/store/scene';
 import { useUseCases, type FloodSourceKind } from '@/store/usecases';
 import { runFlood } from './actions';
-
-const area = (m2: number) => (m2 >= 1e6 ? `${(m2 / 1e6).toFixed(2)} km²` : m2 >= 1e4 ? `${(m2 / 1e4).toFixed(2)} ha` : `${m2.toFixed(0)} m²`);
 
 /** Use case 2: flood vulnerability and emergency prioritisation, from DEM-anchored terrain and the model's buildings. */
 export function FloodPanel() {
@@ -58,9 +58,7 @@ export function FloodPanel() {
       <Alert color="orange" variant="light" icon={<IconLock size={16} />} title="Needs terrain elevation" p="sm">
         <Stack gap={8}>
           <Text size="xs" lh={1.5}>
-            {scene.product === 'rDSM'
-              ? 'This is a relative surface model (rDSM). It has no coordinate system and no terrain, so there is no elevation to flood. Nothing is invented: open a georeferenced GeoTIFF to use this analysis.'
-              : 'The model predicts height above ground, which is flat by construction. Flood depth needs real terrain, which comes from the DEM the scene is anchored to.'}
+            {scene.product === 'rDSM' ? 'Open a georeferenced GeoTIFF: a relative model has no terrain to flood.' : 'Anchor the scene to a DEM to get real terrain.'}
           </Text>
           {blocker ? (
             scene.product !== 'rDSM' && (
@@ -83,16 +81,12 @@ export function FloodPanel() {
     );
   }
 
-  return (
-    <Stack gap="md">
-      <Text size="xs" c="dimmed" lh={1.5}>
-        Water rises from a source and floods the connected lower ground first. Buildings are ranked by how early the water reaches them, how many people they likely hold and whether they house critical facilities.
-      </Text>
+  const method = `Water rises from the source and floods connected lower ground first. Indicative screening on a ${scene.anchoring ? `${scene.anchoring.cellM.toFixed(0)} m` : '~30 m'} DEM (${scene.anchoring?.source ?? 'DEM'}): no rainfall, drainage, defences or flow speed. A finer DEM (Info tab → Load DEM file) sharpens it.`;
+  const scoring = `Score 0–100 = ${WEIGHTS.urgency * 100} % urgency (how early it floods) + ${WEIGHTS.occupancy * 100} % occupancy (footprint × storeys of ${STOREY_M} m) + ${WEIGHTS.critical * 100} % critical facility (★, from OpenStreetMap Facilities). Critical ≥ ${TIER_LIMITS.critical}, High ≥ ${TIER_LIMITS.high}. Click a row to outline the building in 3D.`;
 
-      <Stack gap={6}>
-        <Text size="sm" fw={500}>
-          Where the water comes from
-        </Text>
+  return (
+    <Stack gap="lg">
+      <PanelSection title="Water source" hint={method}>
         <SegmentedControl
           size="xs"
           fullWidth
@@ -122,65 +116,50 @@ export function FloodPanel() {
             Computing flood levels…
           </Text>
         )}
-      </Stack>
+      </PanelSection>
 
       {flood && stats && (
         <>
-          <Stack gap={6}>
-            <Group justify="space-between">
-              <Text size="sm" fw={500}>
-                Water level
-              </Text>
+          <PanelSection
+            title="Water level"
+            right={
               <Text size="xs" className="dw-mono">
                 +{rise.toFixed(1)} m · {(flood.baseLevel + rise).toFixed(1)} m a.s.l.
               </Text>
-            </Group>
+            }
+          >
             <Group gap={8} wrap="nowrap">
-              <Button size="compact-sm" variant="default" aria-label={u.playing ? 'Pause' : 'Play rising water'} onClick={() => u.set({ playing: !u.playing, rise: !u.playing && rise >= flood.maxRise - 0.05 ? 0 : rise })}>
+              <Button size="compact-sm" variant="filled" aria-label={u.playing ? 'Pause' : 'Play rising water'} onClick={() => u.set({ playing: !u.playing, rise: !u.playing && rise >= flood.maxRise - 0.05 ? 0 : rise })}>
                 {u.playing ? <IconPlayerPause size={14} /> : <IconPlayerPlay size={14} />}
               </Button>
               <Slider style={{ flex: 1 }} min={0} max={flood.maxRise} step={0.1} value={rise} onChange={(v) => u.set({ rise: v, playing: false })} label={(v) => `+${v.toFixed(1)} m`} aria-label="Water level rise" />
             </Group>
-            <Text size="xs" c="dimmed">
-              Rise above the source’s normal level ({flood.baseLevel.toFixed(1)} m a.s.l.). Terrain spans {flood.minGround.toFixed(1)}–{flood.maxGround.toFixed(1)} m.
-            </Text>
+            <KeyValueRows
+              rows={[
+                ['Source level', `${flood.baseLevel.toFixed(1)} m a.s.l.`],
+                ['Terrain', `${flood.minGround.toFixed(1)}–${flood.maxGround.toFixed(1)} m`],
+                ['Flooded', `${area(stats.areaM2)} · ${(stats.share * 100).toFixed(1)} %`],
+                ['Depth mean / max', `${stats.meanDepthM.toFixed(1)} / ${stats.maxDepthM.toFixed(1)} m`],
+              ]}
+            />
             <Switch size="xs" label="Show water on the terrain" checked={u.floodOverlay} onChange={(e) => u.set({ floodOverlay: e.currentTarget.checked })} />
             <Switch size="xs" label="Shade dry ground by how soon it floods" checked={u.vulnerability} onChange={(e) => u.set({ vulnerability: e.currentTarget.checked })} />
-          </Stack>
-
-          <Group gap="lg">
-            <div>
-              <Text size="xs" c="dimmed">
-                Flooded
-              </Text>
-              <Text size="sm" fw={600} className="dw-mono">
-                {area(stats.areaM2)} · {(stats.share * 100).toFixed(1)} %
-              </Text>
-            </div>
-            <div>
-              <Text size="xs" c="dimmed">
-                Depth mean / max
-              </Text>
-              <Text size="sm" fw={600} className="dw-mono">
-                {stats.meanDepthM.toFixed(1)} / {stats.maxDepthM.toFixed(1)} m
-              </Text>
-            </div>
-          </Group>
+          </PanelSection>
 
           {!scene.objects?.buildings.length ? (
-            <Text size="xs" c="dimmed" lh={1.5}>
-              Building ranking needs the detected buildings (objects.json) from the model; this result has none. The water and vulnerability layers still work.
+            <Text size="xs" c="dimmed">
+              No detected buildings to rank.
             </Text>
           ) : (
-            <Stack gap={8}>
-              <Group justify="space-between">
-                <Text size="sm" fw={500}>
-                  Emergency priority
-                </Text>
+            <PanelSection
+              title="Emergency priority"
+              hint={scoring}
+              right={
                 <Text size="xs" c="dimmed">
-                  {wetNow} of {ranked.length} at-risk buildings under water now
+                  {wetNow} / {ranked.length} under water
                 </Text>
-              </Group>
+              }
+            >
               <Group gap={6}>
                 {(['critical', 'high', 'watch'] as Tier[]).map((t) => (
                   <Badge key={t} size="sm" variant="light" style={{ background: `${TIER_COLORS[t]}22`, color: TIER_COLORS[t] }}>
@@ -216,7 +195,7 @@ export function FloodPanel() {
                           +{r.rise.toFixed(1)} m
                         </Table.Td>
                         <Table.Td ta="right" className="dw-mono">
-                          {depth > 0 ? `${depth.toFixed(1)} m deep` : 'dry'}
+                          {depth > 0 ? `${depth.toFixed(1)} m` : 'dry'}
                         </Table.Td>
                       </Table.Tr>
                     );
@@ -225,20 +204,13 @@ export function FloodPanel() {
               </Table>
               {ranked.length > 10 && (
                 <Text size="xs" c="dimmed">
-                  Top 10 of {ranked.length} buildings the water reaches. Click a row to outline it in 3D.
+                  Top 10 of {ranked.length}
                 </Text>
               )}
-              <Text size="xs" c="dimmed" lh={1.5}>
-                Score (0–100) = {WEIGHTS.urgency * 100} % urgency (how early it floods) + {WEIGHTS.occupancy * 100} % occupancy proxy (footprint × storeys, {STOREY_M} m each) + {WEIGHTS.critical * 100} % critical facility (★, from OpenStreetMap when the Facilities layer has loaded). Critical ≥ {TIER_LIMITS.critical}, High ≥ {TIER_LIMITS.high}.
-              </Text>
-            </Stack>
+            </PanelSection>
           )}
         </>
       )}
-
-      <Text size="xs" c="dimmed" lh={1.5}>
-        Indicative screening on a {scene.anchoring ? `${scene.anchoring.cellM.toFixed(0)} m` : '~30 m'} DEM ({scene.anchoring?.source ?? 'DEM'}): connected-ground bathtub, no rainfall, drainage, defences or flow speed. A higher-resolution DEM (Info tab → Load DEM file) sharpens it.
-      </Text>
     </Stack>
   );
 }

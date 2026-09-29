@@ -22,15 +22,12 @@ export function EmptyState() {
               <Title order={2} fz={20}>
                 {hasInput ? 'Ready to estimate heights' : 'DepthWizard'}
               </Title>
-              {/* <Text size="sm" c="dimmed">
-                Optical satellite or aerial RGB → surface model → interactive 3D flythrough
-              </Text> */}
             </div>
           </Group>
           <Text size="sm">
             {hasInput
-              ? 'Check the resolution in the Project panel, then run the model. Your 3D terrain will appear here.'
-              : 'Open a PNG, JPG or GeoTIFF image'}
+              ? 'Check the resolution in the Project panel, then run the model.'
+              : 'Open a PNG, JPG or GeoTIFF image.'}
           </Text>
           <Group gap="sm">
             {!hasInput && (
@@ -47,20 +44,12 @@ export function EmptyState() {
               <Menu.Dropdown>
                 {SAMPLES.map((s) => (
                   <Menu.Item key={s.id} onClick={() => void openSample(s.id)}>
-                    <Text size="sm" fw={500}>
-                      {s.name}
-                    </Text>
-                    <Text size="xs" c="dimmed">
-                      {s.description}
-                    </Text>
+                    {s.name}
                   </Menu.Item>
                 ))}
               </Menu.Dropdown>
             </Menu>
           </Group>
-          <Text size="xs" c="dimmed">
-            Tip: drop a file anywhere in the window. Samples are precomputed and work offline.
-          </Text>
         </Stack>
       </div>
     </div>

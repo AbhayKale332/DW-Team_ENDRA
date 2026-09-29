@@ -10,54 +10,72 @@
 
 .topLeft {
   position: absolute;
-  top: 14.5px;
-  left: 14.5px;
+  top: var(--dw-edge);
+  left: var(--dw-edge);
+  /* stops above the compass so a tall scenario card scrolls instead of covering it */
+  bottom: calc(2 * var(--dw-edge) + 88px);
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
   align-items: flex-start;
-  z-index: 3;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.topLeft > * {
+  pointer-events: auto;
+}
+
+/* Scenario card: last in the top-left column, shrinks and scrolls within the space left. */
+.scenarioCard {
+  width: 356px;
+  max-width: calc(100vw - 2 * var(--dw-edge));
+  min-height: 0;
+  flex: 0 1 auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .topRight {
   position: absolute;
-  top: 14.5px;
-  right: 14.5px;
+  top: var(--dw-edge);
+  right: var(--dw-edge);
   z-index: 3;
 }
 
 .topCenter {
   position: absolute;
-  top: 14.5px;
+  top: var(--dw-edge);
   left: 50%;
   transform: translateX(-50%);
   width: min(504px, calc(100% - 180px));
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
   z-index: 4;
 }
 
 .bottomLeft {
   position: absolute;
-  left: 14.5px;
-  bottom: 14.5px;
+  left: var(--dw-edge);
+  bottom: var(--dw-edge);
   z-index: 3;
 }
 
 .bottomRight {
   position: absolute;
-  right: 14.5px;
-  bottom: 14.5px;
+  right: var(--dw-edge);
+  bottom: var(--dw-edge);
   display: flex;
   align-items: flex-end;
-  gap: 9px;
+  gap: 8px;
   z-index: 3;
 }
 
 .bottomCenter {
   position: absolute;
-  bottom: 14.5px;
+  bottom: var(--dw-edge);
   left: 50%;
   transform: translateX(-50%);
   z-index: 3;
@@ -66,10 +84,10 @@
 .switcher {
   display: flex;
   align-items: center;
-  gap: 9px;
-  height: 39.5px;
-  min-width: 191px;
-  padding: 0 11px 0 11px;
+  gap: 8px;
+  height: 40px;
+  min-width: 192px;
+  padding: 0 12px 0 12px;
   font-size: 13.5px;
   font-weight: 500;
   cursor: pointer;
@@ -87,13 +105,13 @@
 .navStack {
   display: flex;
   flex-direction: column;
-  width: 39.5px;
+  width: 40px;
   overflow: hidden;
 }
 
 .navBtn {
-  width: 39.5px;
-  height: 39.5px;
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
   background: transparent;
@@ -121,8 +139,8 @@
 }
 
 .compass {
-  width: 86.5px;
-  height: 86.5px;
+  width: 88px;
+  height: 88px;
   border-radius: 50%;
   display: block;
   padding: 0;
@@ -136,14 +154,14 @@
 
 .colorbar {
   display: flex;
-  gap: 7px;
-  padding: 9px 9px 9px 11px;
+  gap: 8px;
+  padding: 8px 8px 8px 12px;
   align-items: stretch;
 }
 
 .colorbarRamp {
-  width: 11px;
-  height: 135px;
+  width: 12px;
+  height: 136px;
   border: 1px solid var(--dw-float-border);
 }
 
@@ -152,7 +170,7 @@
   flex-direction: column;
   justify-content: space-between;
   font-family: var(--mantine-font-family-monospace);
-  font-size: 10px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   color: var(--dw-ink);
 }
@@ -160,7 +178,7 @@
 .colorbarTitle {
   writing-mode: vertical-rl;
   transform: rotate(180deg);
-  font-size: 10px;
+  font-size: 11px;
   color: var(--dw-dim);
   text-align: center;
 }
@@ -175,7 +193,7 @@
   z-index: 5;
   width: max-content;
   max-width: 252px;
-  padding: 7px 9px;
+  padding: 8px 8px;
   font-size: 11px;
   color: var(--dw-ink);
 }
@@ -183,7 +201,7 @@
 .hoverHead {
   display: flex;
   align-items: center;
-  gap: 5.5px;
+  gap: 6px;
 }
 
 .hoverTitle {
@@ -195,7 +213,7 @@
   font-family: var(--mantine-font-family-monospace);
   font-variant-numeric: tabular-nums;
   font-weight: 600;
-  padding-left: 11px;
+  padding-left: 12px;
 }
 
 .hoverSub {
@@ -204,7 +222,7 @@
 }
 
 .hoverRows {
-  margin: 5.5px 0 0;
+  margin: 6px 0 0;
   display: grid;
   gap: 1px;
 }
@@ -212,7 +230,7 @@
 .hoverRows > div {
   display: flex;
   justify-content: space-between;
-  gap: 12.5px;
+  gap: 12px;
 }
 
 .hoverRows dt {
@@ -227,8 +245,8 @@
 }
 
 .osmAttribution {
-  margin-top: 3.5px;
-  font-size: 9px;
+  margin-top: 4px;
+  font-size: 11px;
   color: var(--dw-dim);
 }
 
@@ -236,8 +254,8 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
-  padding: 7px 9px;
-  font-size: 10px;
+  padding: 8px 8px;
+  font-size: 11px;
   color: var(--dw-ink);
 }
 
@@ -248,14 +266,14 @@
 
 .classLegendRow {
   display: grid;
-  grid-template-columns: 9px 1fr auto;
+  grid-template-columns: 8px 1fr auto;
   align-items: center;
-  gap: 5.5px;
+  gap: 6px;
 }
 
 .classSwatch {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   border: 1px solid var(--dw-float-border);
 }
 
@@ -263,17 +281,17 @@
   font-family: var(--mantine-font-family-monospace);
   font-variant-numeric: tabular-nums;
   color: var(--dw-dim);
-  padding-left: 7px;
+  padding-left: 8px;
 }
 
 .scalebar {
-  padding: 5.5px 9px;
+  padding: 6px 8px;
   font-family: var(--mantine-font-family-monospace);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .scalebarLine {
-  height: 5.5px;
+  height: 6px;
   border: 2px solid var(--dw-ink);
   border-top: 0;
   margin-top: 3px;
@@ -285,20 +303,20 @@
   display: grid;
   place-items: center;
   z-index: 2;
-  padding: 14.5px;
+  padding: var(--dw-edge);
 }
 
 .emptyCard {
   width: min(468px, 100%);
-  padding: 25px 25px 21.5px;
+  padding: 24px 24px 20px;
 }
 
 .processing {
   position: absolute;
-  top: 14.5px;
-  right: 68.5px;
+  top: var(--dw-edge);
+  right: 72px;
   width: min(324px, calc(100% - 90px));
-  padding: 14.5px;
+  padding: var(--dw-edge);
   z-index: 5;
 }
 
@@ -315,33 +333,33 @@
 
 .hudBox {
   position: absolute;
-  padding: 7px 11px;
+  padding: 8px 12px;
   background: rgb(8 12 18 / 0.55);
   border: 1px solid rgb(255 255 255 / 0.18);
-  border-radius: 3px;
+  border-radius: var(--dw-radius-float);
   font-size: 11px;
   line-height: 1.5;
 }
 
 .hudTape {
   position: absolute;
-  top: 14.5px;
+  top: var(--dw-edge);
   left: 50%;
   transform: translateX(-50%);
   width: 288px;
-  height: 32.5px;
+  height: 32px;
   overflow: hidden;
   background: rgb(8 12 18 / 0.55);
   border: 1px solid rgb(255 255 255 / 0.18);
-  border-radius: 3px;
+  border-radius: var(--dw-radius-float);
 }
 
 .hudCross {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 57.5px;
-  height: 57.5px;
+  width: 56px;
+  height: 56px;
   transform: translate(-50%, -50%);
 }
 
@@ -349,8 +367,8 @@
   align-self: center;
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 5.5px 7px 5.5px 11px;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
   font-size: 11.5px;
 }
 
@@ -375,31 +393,31 @@
 
 .miniMap {
   position: absolute;
-  right: 14.5px;
-  bottom: 14.5px;
-  width: 162px;
-  height: 162px;
+  right: var(--dw-edge);
+  bottom: var(--dw-edge);
+  width: 160px;
+  height: 160px;
   padding: 0;
   overflow: hidden;
 }
 
 @media (max-width: 43.2em) {
   .compass {
-    width: 65px;
-    height: 65px;
+    width: 64px;
+    height: 64px;
   }
   .colorbarRamp {
     height: 90px;
   }
   .topCenter {
-    top: 65px;
-    width: calc(100% - 29px);
+    top: 64px;
+    width: calc(100% - 2 * var(--dw-edge));
   }
   .processing {
-    right: 14.5px;
-    left: 14.5px;
+    right: var(--dw-edge);
+    left: var(--dw-edge);
     width: auto;
     top: auto;
-    bottom: 14.5px;
+    bottom: var(--dw-edge);
   }
 }

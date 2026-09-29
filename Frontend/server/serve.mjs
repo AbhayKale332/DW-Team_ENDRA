@@ -1,15 +1,18 @@
 // Production server: serves the built app (dist/) and proxies /hf-space/* to the private
 // Hugging Face Space, injecting HF_TOKEN from the environment. The token never reaches the browser.
-// Also relays /overpass/<mirror> (OpenStreetMap overlay) — see server/overpass.mjs.
-// No dependencies — Node ≥ 20.   Usage:  node server/serve.mjs   (PORT, HF_TOKEN, HF_SPACE_URL / VITE_SPACE_ID)
+// Only the Gradio endpoints the app uses are proxied, runs are rate-limited per client, and uploads are capped,
+// so the proxy cannot be used as an open door to the Space. Also relays /overpass/<mirror> — see server/overpass.mjs.
+// No dependencies — Node ≥ 20.   Usage:  node server/serve.mjs   (see .env.example for the variables)
 import { createServer } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { readFile, stat } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
-import { extname, join, normalize, resolve } from 'node:path';
+import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { brotliCompressSync, constants as zlib, gzipSync } from 'node:zlib';
 import { spaceUrlFromId } from './space.mjs';
 import { relayOverpass } from './overpass.mjs';
+import { createRateLimiter, isAllowedSpaceRequest, pickForwardHeaders, MAX_UPLOAD_BYTES } from './guard.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 // Minimal .env loader (KEY=VALUE lines) so the same .env works in dev and production.
@@ -25,6 +28,13 @@ const PORT = Number(process.env.PORT || 8080);
 const TOKEN = process.env.HF_TOKEN;
 const SPACE = new URL(process.env.HF_SPACE_URL || spaceUrlFromId(process.env.VITE_SPACE_ID || 'akashch1512/SingleViewHeigthEstimation'));
 const DIST = join(root, 'dist');
+// Behind a reverse proxy / PaaS router the client address is in X-Forwarded-For; only trust it when told to.
+const TRUST_PROXY = /^(1|true|yes)$/i.test(process.env.TRUST_PROXY || '');
+// GPU runs (predict calls) per client and window; uploads get twice the allowance so a retry does not trip it.
+const RUNS = Number(process.env.RATE_LIMIT_RUNS || 10);
+const WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MIN || 10) * 60_000;
+const runLimiter = createRateLimiter({ max: RUNS, windowMs: WINDOW_MS });
+const uploadLimiter = createRateLimiter({ max: RUNS * 2, windowMs: WINDOW_MS });
 if (!TOKEN) console.warn('[depthwizard] HF_TOKEN is not set — the private Space will reject requests.');
 
 const TYPES = {
@@ -35,18 +45,62 @@ const TYPES = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
+  '.tif': 'image/tiff',
   '.woff2': 'font/woff2',
   '.woff': 'font/woff',
   '.npy': 'application/octet-stream',
-  '.map': 'application/json',
 };
+const COMPRESSIBLE = new Set(['.html', '.js', '.css', '.json', '.svg', '.npy']);
+
+// Hosts the browser talks to directly: basemap tiles, DEM tiles and the direct Overpass fallbacks.
+const EXTERNAL = 'https://server.arcgisonline.com https://tile.openstreetmap.org https://s3.amazonaws.com https://overpass.kumi.systems https://overpass.private.coffee';
+const SECURITY_HEADERS = {
+  'x-content-type-options': 'nosniff',
+  'x-frame-options': 'DENY',
+  'referrer-policy': 'no-referrer',
+  ...(process.env.CSP === 'off'
+    ? {}
+    : {
+        'content-security-policy': [
+          "default-src 'self'",
+          "script-src 'self'",
+          "style-src 'self' 'unsafe-inline'",
+          `img-src 'self' data: blob: ${EXTERNAL}`,
+          `connect-src 'self' data: blob: ${EXTERNAL}`,
+          "worker-src 'self' blob:",
+          "font-src 'self' data:",
+          "object-src 'none'",
+          "base-uri 'self'",
+          "frame-ancestors 'none'",
+        ].join('; '),
+      }),
+};
+
+function clientIp(req) {
+  const fwd = TRUST_PROXY ? String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() : '';
+  return fwd || req.socket.remoteAddress || 'unknown';
+}
+
+function deny(res, status, message) {
+  res.writeHead(status, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }).end(message);
+}
 
 function proxy(req, res) {
   const path = req.url.replace(/^\/hf-space/, '') || '/';
-  const headers = { ...req.headers, host: SPACE.host };
-  delete headers.cookie; // never forward app cookies to a third party
-  delete headers.origin;
-  delete headers.referer;
+  if (!isAllowedSpaceRequest(req.method, path)) return deny(res, 404, 'Not found');
+
+  // A model run is an upload followed by a predict call; each has its own per-client allowance.
+  if (req.method === 'POST') {
+    if (Number(req.headers['content-length'] || 0) > MAX_UPLOAD_BYTES) return deny(res, 413, 'Upload too large');
+    const wait = (path.startsWith('/gradio_api/upload') ? uploadLimiter : runLimiter).hit(clientIp(req));
+    if (wait > 0) {
+      res.setHeader('retry-after', String(Math.ceil(wait / 1000)));
+      return deny(res, 429, 'Too many model runs from this address. Try again later.');
+    }
+  }
+
+  const headers = pickForwardHeaders(req.headers);
+  headers.host = SPACE.host;
   if (TOKEN) headers.authorization = `Bearer ${TOKEN}`;
   const up = httpsRequest({ protocol: SPACE.protocol, hostname: SPACE.hostname, port: SPACE.port || 443, path, method: req.method, headers }, (r) => {
     const out = { ...r.headers };
@@ -57,6 +111,17 @@ function proxy(req, res) {
   up.on('error', (e) => {
     if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain' });
     res.end(`Upstream error: ${e.message}`);
+  });
+
+  // Enforce the cap on the actual bytes too (chunked uploads have no content-length).
+  let size = 0;
+  req.on('data', (c) => {
+    size += c.length;
+    if (size > MAX_UPLOAD_BYTES) {
+      up.destroy();
+      if (!res.headersSent) deny(res, 413, 'Upload too large');
+      req.destroy();
+    }
   });
   req.pipe(up);
 }
@@ -74,29 +139,50 @@ async function overpass(req, res) {
   res.writeHead(r.status, { 'content-type': r.contentType, 'cache-control': 'no-store' }).end(r.body);
 }
 
+// dist/ does not change while the server runs, so each compressed variant is built once.
+const compressed = new Map();
+function encodeFor(file, body, acceptEncoding) {
+  if (!COMPRESSIBLE.has(extname(file)) || body.length < 1024) return null;
+  const enc = /\bbr\b/.test(acceptEncoding) ? 'br' : /\bgzip\b/.test(acceptEncoding) ? 'gzip' : null;
+  if (!enc) return null;
+  const key = `${enc}:${file}`;
+  if (!compressed.has(key)) {
+    const out = enc === 'br' ? brotliCompressSync(body, { params: { [zlib.BROTLI_PARAM_QUALITY]: 9 } }) : gzipSync(body, { level: 9 });
+    compressed.set(key, out);
+  }
+  return { enc, body: compressed.get(key) };
+}
+
 async function serveStatic(req, res) {
   const url = new URL(req.url, 'http://x');
-  let file = normalize(join(DIST, decodeURIComponent(url.pathname)));
-  if (!file.startsWith(DIST)) {
-    res.writeHead(403).end();
-    return;
+  let file;
+  try {
+    file = normalize(join(DIST, decodeURIComponent(url.pathname)));
+  } catch {
+    return deny(res, 400, 'Bad request');
   }
+  if (file !== DIST && !file.startsWith(DIST + sep)) return deny(res, 403, 'Forbidden');
+  // Source maps are built (hidden) for debugging but not published.
+  if (extname(file) === '.map') return deny(res, 404, 'Not found');
   try {
     if ((await stat(file)).isDirectory()) file = join(file, 'index.html');
   } catch {
     file = join(DIST, 'index.html'); // single-page app fallback
   }
   try {
-    const body = await readFile(file);
+    const raw = await readFile(file);
     const hashed = /[.-][A-Za-z0-9_-]{8,}\.(js|css|woff2?)$/.test(file);
+    const packed = encodeFor(file, raw, String(req.headers['accept-encoding'] || ''));
     res.writeHead(200, {
+      ...SECURITY_HEADERS,
       'content-type': TYPES[extname(file)] || 'application/octet-stream',
       'cache-control': hashed ? 'public, max-age=31536000, immutable' : 'no-cache',
-      'x-content-type-options': 'nosniff',
+      vary: 'accept-encoding',
+      ...(packed ? { 'content-encoding': packed.enc } : {}),
     });
-    res.end(body);
+    res.end(req.method === 'HEAD' ? undefined : packed ? packed.body : raw);
   } catch {
-    res.writeHead(404).end('Not found');
+    deny(res, 404, 'Not found');
   }
 }
 

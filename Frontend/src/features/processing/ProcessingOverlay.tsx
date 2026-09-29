@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Group, Loader, Stack, Text, ThemeIcon } from '@mantine/core';
+import { Button, Group, Loader, Stack, Text, ThemeIcon } from '@mantine/core';
 import { IconAlertTriangle, IconCheck, IconCircle, IconKey, IconRefresh, IconSparkles, IconX } from '@tabler/icons-react';
 import { useScene } from '@/store/scene';
 import { useUi } from '@/store/ui';
@@ -120,13 +120,10 @@ export function ProcessingOverlay() {
           })}
         </Stack>
         {hasPrevious && current !== 'building' && (
-          <Alert variant="light" color="gray" p={8} fz="xs">
-            The scene below is the previous result — it is replaced when this run finishes.
-          </Alert>
+          <Text size="xs" c="dimmed">
+            Showing the previous result.
+          </Text>
         )}
-        <Text size="xs" c="dimmed">
-          Typical time {tta ? '1–2 min with TTA' : '15–45 s'}; a sleeping model adds about a minute.
-        </Text>
         {current !== 'building' && (
           <Button size="xs" variant="default" leftSection={<IconX size={14} />} onClick={cancelPrediction}>
             Cancel run

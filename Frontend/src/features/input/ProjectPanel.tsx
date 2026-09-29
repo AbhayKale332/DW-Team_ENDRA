@@ -1,7 +1,8 @@
-import { ActionIcon, Alert, Badge, Button, Divider, Group, NumberInput, ScrollArea, SegmentedControl, Stack, Switch, Text, Tooltip } from '@mantine/core';
+import { ActionIcon, Badge, Button, Divider, Group, Input, NumberInput, ScrollArea, SegmentedControl, Stack, Switch, Text, Tooltip } from '@mantine/core';
 import { Dropzone } from '@mantine/dropzone';
-import { IconAlertTriangle, IconChevronLeft, IconPhotoUp, IconPlayerPlay, IconRefresh, IconWorld, IconX } from '@tabler/icons-react';
+import { IconChevronLeft, IconInfoCircle, IconPhotoUp, IconPlayerPlay, IconWorld, IconX } from '@tabler/icons-react';
 import { ProductBadge } from '@/components/ProductBadge';
+import { KeyValueRows, PanelSection } from '@/components/panel';
 import { useScene } from '@/store/scene';
 import { useUi } from '@/store/ui';
 import { effectiveModelGrid, MODEL_MAX_SIDE } from '@/lib/input';
@@ -15,19 +16,6 @@ const PRESETS = [
   { value: '0.6', label: '0.6' },
   { value: '1', label: '1.0' },
 ];
-
-function Row({ k, v }: { k: string; v: React.ReactNode }) {
-  return (
-    <Group justify="space-between" gap="xs" wrap="nowrap">
-      <Text size="xs" c="dimmed">
-        {k}
-      </Text>
-      <Text size="xs" className="dw-mono" ta="right" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        {v}
-      </Text>
-    </Group>
-  );
-}
 
 function InputCard() {
   const input = useScene((s) => s.input);
@@ -76,23 +64,23 @@ function InputCard() {
       <Text size="sm" fw={600} truncate="end" title={input.name}>
         {input.name}
       </Text>
-      <Stack gap={2}>
-        <Row k="Size" v={`${input.width} × ${input.height} px`} />
-        <Row k="Bands / depth" v={`${input.bands} × ${input.bitsPerSample}-bit`} />
-        <Row
-          k="Georeferenced"
-          v={
+      <KeyValueRows
+        rows={[
+          ['Size', `${input.width} × ${input.height} px`],
+          ['Bands / depth', `${input.bands} × ${input.bitsPerSample}-bit`],
+          [
+            'Georeferenced',
             input.georef ? (
               <Badge size="xs" color="teal" leftSection={<IconWorld size={10} />}>
                 {input.georef.epsg ? `EPSG:${input.georef.epsg}` : 'yes'}
               </Badge>
             ) : (
               'no'
-            )
-          }
-        />
-        {input.fileGsd && <Row k="GSD from file" v={`${input.fileGsd.toFixed(3)} m/px`} />}
-      </Stack>
+            ),
+          ],
+          ...(input.fileGsd ? ([['GSD from file', `${input.fileGsd.toFixed(3)} m/px`]] as Array<[string, string]>) : []),
+        ]}
+      />
     </Stack>
   );
 }
@@ -108,13 +96,7 @@ function Parameters() {
 
   return (
     <Stack gap="sm">
-      <div>
-        <Text size="sm" fw={500} id="gsd-label">
-          Resolution (m / pixel)
-        </Text>
-        <Text size="xs" c="dimmed" mb={6}>
-          Heights scale with this value.
-        </Text>
+      <Input.Wrapper label="Resolution (m / pixel)" labelProps={{ id: 'gsd-label', mb: 6 }}>
         <SegmentedControl
           fullWidth
           aria-labelledby="gsd-label"
@@ -130,8 +112,7 @@ function Parameters() {
         {mode === 'custom' && (
           <NumberInput
             mt={6}
-            label="Custom resolution"
-            description="Metres per pixel of the image you opened"
+            aria-label="Custom resolution"
             min={0.05}
             max={30}
             step={0.05}
@@ -145,20 +126,21 @@ function Parameters() {
         <Text size="xs" mt={6} c={source === 'assumed' ? 'dwOrange.7' : 'dimmed'}>
           {source === 'geotiff' && `Using ${gsd?.toFixed(3)} m/px from the GeoTIFF.`}
           {source === 'user' && `Using ${gsd?.toFixed(3)} m/px as declared.`}
-          {source === 'assumed' && 'No resolution known — the model will assume 0.5 m/px. Declare it if you know it.'}
+          {source === 'assumed' && 'Unknown — assuming 0.5 m/px.'}
         </Text>
         {eff?.resampled && (
-          <Alert mt={8} p={8} color="gray" variant="light" icon={<IconAlertTriangle size={14} />} fz="xs">
-            The long side exceeds {MODEL_MAX_SIDE} px, so the model works at {eff.width} × {eff.height} px (≈{eff.gsd.toFixed(2)} m/px). The 3D drape still uses your full-resolution image.
-          </Alert>
+          <Tooltip label={`The long side exceeds ${MODEL_MAX_SIDE} px; the 3D drape still uses the full-resolution image.`} multiline maw={260}>
+            <Text size="xs" c="dimmed" mt={4}>
+              Processed at {eff.width} × {eff.height} px (≈{eff.gsd.toFixed(2)} m/px)
+            </Text>
+          </Tooltip>
         )}
-      </div>
+      </Input.Wrapper>
       <Switch
         checked={params.tta}
         onChange={(e) => setParams({ tta: e.currentTarget.checked })}
         disabled={running}
-        label="Higher quality (test-time augmentation)"
-        description="Averages 8 flipped/rotated views of every tile, run together in one GPU batch. Slower than a normal run."
+        label="Higher quality (TTA, slower)"
       />
     </Stack>
   );
@@ -169,7 +151,7 @@ function RunControls() {
   const running = useScene((s) => s.run.status === 'running');
   return (
     <Group gap="xs" grow>
-      <Button leftSection={<IconPlayerPlay size={16} />} disabled={!input || running} loading={running} onClick={() => void runPrediction()} aria-describedby="run-hint">
+      <Button leftSection={<IconPlayerPlay size={16} />} disabled={!input || running} loading={running} onClick={() => void runPrediction()}>
         Estimate heights
       </Button>
       {running && (
@@ -186,25 +168,23 @@ function CurrentResult() {
   if (!scene) return null;
   const st = scene.stats;
   return (
-    <Stack gap={6}>
-      <Group justify="space-between">
-        <span className="dw-section-title">Current result</span>
-        <ProductBadge scene={scene} />
-      </Group>
+    <PanelSection title="Current result" right={<ProductBadge scene={scene} />} gap={6}>
       <Text size="sm" fw={600} truncate="end">
         {scene.name}
       </Text>
-      <Stack gap={2}>
-        <Row k={scene.product === 'DSM' ? 'Elevation range' : 'Height range'} v={`${st.min.toFixed(2)} – ${st.max.toFixed(2)} m`} />
-        <Row k="Mean / median" v={`${st.mean.toFixed(2)} / ${st.median.toFixed(2)} m`} />
-        <Row k="Below 1 m (above ground)" v={`${(st.fracBelow1m * 100).toFixed(1)} %`} />
-        <Row k="Grid" v={`${scene.heights.width} × ${scene.heights.height} @ ${scene.gsd.toFixed(3)} m`} />
-        <Row k="Source" v={scene.provenance.provider} />
-      </Stack>
-      <Button size="xs" variant="default" leftSection={<IconRefresh size={14} />} onClick={() => useUi.getState().openInspector('info')}>
+      <KeyValueRows
+        rows={[
+          [scene.product === 'DSM' ? 'Elevation range' : 'Height range', `${st.min.toFixed(2)} – ${st.max.toFixed(2)} m`],
+          ['Mean / median', `${st.mean.toFixed(2)} / ${st.median.toFixed(2)} m`],
+          ['Below 1 m', `${(st.fracBelow1m * 100).toFixed(1)} %`],
+          ['Grid', `${scene.heights.width} × ${scene.heights.height} @ ${scene.gsd.toFixed(3)} m`],
+          ['Source', scene.provenance.provider],
+        ]}
+      />
+      <Button size="xs" variant="default" leftSection={<IconInfoCircle size={14} />} onClick={() => useUi.getState().openInspector('info')}>
         Details in inspector
       </Button>
-    </Stack>
+    </PanelSection>
   );
 }
 
@@ -223,17 +203,15 @@ export function ProjectPanel() {
         </Tooltip>
       </div>
       <ScrollArea style={{ flex: 1 }} type="auto">
-        <Stack p="md" gap="md">
-          <span className="dw-section-title">Input image</span>
-          <InputCard />
+        <Stack p="md" gap="lg">
+          <PanelSection title="Input image">
+            <InputCard />
+          </PanelSection>
           <Divider />
-          <span className="dw-section-title">Model parameters</span>
-          <Parameters />
-          <RunControls />
-          {/* <Text size="xs" c="dimmed" id="run-hint">
-            Runs on the DepthWizard model (Hugging Face Space). Output: height above ground in metres.
-          </Text> */}
-          {/* <Divider /> */}
+          <PanelSection title="Model parameters">
+            <Parameters />
+            <RunControls />
+          </PanelSection>
           <CurrentResult />
         </Stack>
       </ScrollArea>

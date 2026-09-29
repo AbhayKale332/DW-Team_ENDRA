@@ -1,5 +1,5 @@
 import { ActionIcon, ScrollArea, Tabs, Tooltip } from '@mantine/core';
-import { IconChevronRight } from '@tabler/icons-react';
+import { IconChevronRight, IconInfoCircle, IconScale, IconStack2 } from '@tabler/icons-react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { useUi, type InspectorTab } from '@/store/ui';
 import { LayersTab } from './LayersTab';
@@ -9,7 +9,7 @@ import classes from '@/features/shell/shell.module.css';
 
 function PanelError({ error }: { error: unknown }) {
   return (
-    <div style={{ padding: 14.5, fontSize: 11 }} role="alert">
+    <div style={{ padding: 'var(--dw-gap-4)', fontSize: 12 }} role="alert">
       This panel failed to render: {String((error as Error)?.message ?? error)}
     </div>
   );
@@ -25,9 +25,15 @@ export function InspectorPanel() {
       <Tabs value={tab} onChange={(t) => t && useUi.getState().set({ inspectorTab: t as InspectorTab })} style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
         <div className={classes.panelHeader} style={{ paddingLeft: 4 }}>
           <Tabs.List style={{ flexWrap: 'nowrap', borderBottom: 0 }}>
-            <Tabs.Tab value="layers">Layers</Tabs.Tab>
-            <Tabs.Tab value="validation">Validation</Tabs.Tab>
-            <Tabs.Tab value="info">Info</Tabs.Tab>
+            <Tabs.Tab value="layers" leftSection={<IconStack2 size={14} />}>
+              Layers
+            </Tabs.Tab>
+            <Tabs.Tab value="validation" leftSection={<IconScale size={14} />}>
+              Validation
+            </Tabs.Tab>
+            <Tabs.Tab value="info" leftSection={<IconInfoCircle size={14} />}>
+              Info
+            </Tabs.Tab>
           </Tabs.List>
           <Tooltip label="Hide inspector (])">
             <ActionIcon onClick={() => useUi.getState().set({ inspectorOpen: false })} aria-label="Hide inspector">

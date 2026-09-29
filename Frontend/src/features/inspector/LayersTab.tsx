@@ -1,4 +1,5 @@
-import { Badge, Checkbox, Divider, Group, RangeSlider, SegmentedControl, Select, Slider, Stack, Switch, Text, type SelectProps } from '@mantine/core';
+import { Checkbox, Group, RangeSlider, SegmentedControl, Select, Slider, Stack, Switch, Text, type SelectProps } from '@mantine/core';
+import { PanelSection } from '@/components/panel';
 import { useScene } from '@/store/scene';
 import { LAYER_LABELS, OBJECT_KIND_LABELS, OBJECT_KINDS, toggleObjectKind, useView, type DrapeLayer, type RangeMode } from '@/store/view';
 import { useSettings, type Quality } from '@/store/settings';
@@ -30,10 +31,9 @@ function Field({ label, value, children }: { label: string; value?: string; chil
 /** A titled group of options; sections sit further apart than the options inside them. */
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <Stack gap="lg" component="section" aria-label={title}>
-      <Divider label={<span className="dw-section-title">{title}</span>} labelPosition="left" />
+    <PanelSection title={title} gap="lg">
       {children}
-    </Stack>
+    </PanelSection>
   );
 }
 
@@ -58,8 +58,8 @@ function SurroundingsSection() {
   return (
     <Section title="Surroundings">
       {!geo && (
-        <Text size="xs" c="dimmed" lh={1.5}>
-          Needs a georeferenced image (e.g. a GeoTIFF) with a known coordinate system.
+        <Text size="xs" c="dimmed">
+          Needs a georeferenced image.
         </Text>
       )}
       <Field label="Basemap">
@@ -74,9 +74,6 @@ function SurroundingsSection() {
             data={(Object.keys(BASEMAPS) as BasemapId[]).map((id) => ({ value: id, label: BASEMAPS[id].label }))}
             aria-label="Basemap"
           />
-          <Text size="xs" c="dimmed" lh={1.5}>
-            Map tiles two scene widths beyond every edge, for context only; they are not processed.
-          </Text>
         </Stack>
       </Field>
       <Field label="Facilities">
@@ -113,10 +110,6 @@ export function LayersTab() {
     label: LAYER_LABELS[l],
     disabled: ((l === 'reference' || l === 'error') && !hasRef) || (l === 'classes' && !hasClasses),
   }));
-  const layerHints = [
-    !hasRef && 'Load a reference in the Validation tab to enable reference and error layers.',
-    scene && !hasClasses && 'Object classes need a result from a model that publishes a class map (seg.png).',
-  ].filter(Boolean);
   const st = scene?.stats;
 
   return (
@@ -141,7 +134,6 @@ export function LayersTab() {
           <Select
             {...SELECT_PROPS}
             label="Drape layer"
-            description={layerHints.length ? layerHints.join(' ') : undefined}
             data={layerOptions}
             value={layer}
             onChange={(l) => l && v.set(is3d ? { layer3d: l as DrapeLayer } : { layer2d: l as DrapeLayer })}
@@ -200,20 +192,6 @@ export function LayersTab() {
           <Field label="Relief shading" value={`${Math.round(v.hillshadeStrength * 100)} %`}>
             <Slider min={0} max={1} step={0.05} value={v.hillshadeStrength} onChange={(x) => v.set({ hillshadeStrength: x })} label={null} aria-label="Relief shading" />
           </Field>
-          {/* <Group align="flex-end" gap="sm" wrap="nowrap">
-            <Switch label="Contours" checked={v.contours} onChange={(e) => v.set({ contours: e.currentTarget.checked })} style={{ flex: 1 }} />
-            <NumberInput
-              w={110}
-              aria-label="Contour interval"
-              disabled={!v.contours}
-              min={0.5}
-              max={100}
-              step={0.5}
-              value={v.contourInterval}
-              onChange={(x) => typeof x === 'number' && x > 0 && v.set({ contourInterval: x })}
-              suffix=" m"
-            />
-          </Group> */}
         </Section>
       )}
 
@@ -237,14 +215,11 @@ export function LayersTab() {
                     />
                   );
                 })}
-                <Text size="xs" c="dimmed" lh={1.5}>
-                  Each class on is drawn as models over ground flattened under it; off shows the model&apos;s raw heights there.
-                </Text>
               </Stack>
             ) : (
               scene && (
-                <Text size="xs" c="dimmed" lh={1.5}>
-                  3D objects need a result from a model that publishes objects.json.
+                <Text size="xs" c="dimmed">
+                  None in this result.
                 </Text>
               )
             )}
@@ -262,20 +237,6 @@ export function LayersTab() {
               mb="lg"
             />
           </Field>
-          {/* <Group align="flex-end" gap="sm" wrap="nowrap">
-            <Switch label="Vertical walls on structures" checked={v.walls} onChange={(e) => v.set({ walls: e.currentTarget.checked })} style={{ flex: 1 }} />
-            <NumberInput
-              w={110}
-              aria-label="Wall threshold"
-              disabled={!v.walls}
-              min={0.5}
-              max={50}
-              step={0.5}
-              value={v.wallThreshold}
-              onChange={(x) => typeof x === 'number' && x > 0 && v.set({ wallThreshold: x })}
-              suffix=" m"
-            />
-          </Group> */}
           <Field label="Mesh detail" value={info ? `${(info.vertices / 1000).toFixed(0)}k vertices` : undefined}>
             <SegmentedControl
               fullWidth
@@ -314,14 +275,6 @@ export function LayersTab() {
         </Section>
       )}
       {scene && <SurroundingsSection />}
-      {st && (
-        <Text size="xs" c="dimmed" lh={1.5}>
-          <Badge size="xs" variant="outline" mr={6}>
-            tip
-          </Badge>
-          Heights span {st.min.toFixed(1)}–{st.max.toFixed(1)} m; the 2–98 % range ignores outliers.
-        </Text>
-      )}
     </Stack>
   );
 }

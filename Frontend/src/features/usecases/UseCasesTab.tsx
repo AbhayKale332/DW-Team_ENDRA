@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { ActionIcon, Group, ScrollArea, SegmentedControl, Stack, Text } from '@mantine/core';
-import { IconX } from '@tabler/icons-react';
+import { ActionIcon, Group, ScrollArea, SegmentedControl, Text } from '@mantine/core';
+import { IconAntenna, IconDroplet, IconX } from '@tabler/icons-react';
 import { useScene } from '@/store/scene';
 import { useUseCases, type UseCase } from '@/store/usecases';
 import { usePoi, loadPois } from '@/features/poi/poiStore';
@@ -9,10 +9,20 @@ import { canGeolocate } from '@/lib/osm';
 import { invalidateUseCases, refreshCoverage, rerankWithFacilities } from './actions';
 import { TelecomPanel } from './TelecomPanel';
 import { FloodPanel } from './FloodPanel';
+import classes from '@/features/viewport/overlays/overlays.module.css';
 
 const TITLES: Record<UseCase, string> = { telecom: 'Telecom tower coverage', flood: 'Flood response planning' };
 
-/** Scenarios: what the generated DSM is good for. A floating panel over the viewport, opened from the header. */
+function Tab({ icon: Icon, label }: { icon: typeof IconAntenna; label: string }) {
+  return (
+    <Group gap={6} justify="center" wrap="nowrap">
+      <Icon size={14} stroke={1.7} aria-hidden />
+      <span>{label}</span>
+    </Group>
+  );
+}
+
+/** Scenarios: what the generated DSM is good for. A card in the viewport's top-left column, opened from the header. */
 export function ScenarioOverlay() {
   const scene = useScene((s) => s.scene);
   const open = useUseCases((s) => s.open);
@@ -42,13 +52,8 @@ export function ScenarioOverlay() {
   if (!open || !scene) return null;
   const close = () => useUseCases.getState().set({ open: false, placing: false, pickingSource: false, playing: false });
   return (
-    <div
-      className="dw-float"
-      role="dialog"
-      aria-label="Scenarios"
-      style={{ position: 'absolute', top: 162, left: 14, zIndex: 4, width: 356, maxHeight: 'calc(100% - 232px)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
-    >
-      <Group justify="space-between" wrap="nowrap" px="sm" pt="xs" pb={6}>
+    <div className={`dw-float ${classes.scenarioCard}`} role="dialog" aria-label="Scenarios">
+      <Group justify="space-between" wrap="nowrap" px="sm" pt="sm" pb="xs" style={{ borderBottom: '1px solid var(--dw-line)' }}>
         <Text size="sm" fw={600}>
           {TITLES[active]}
         </Text>
@@ -56,23 +61,21 @@ export function ScenarioOverlay() {
           <IconX size={15} />
         </ActionIcon>
       </Group>
-      <Stack gap="sm" px="sm" pb="xs">
+      <div style={{ padding: 'var(--dw-gap-3) var(--dw-gap-3) 0' }}>
         <SegmentedControl
           size="xs"
           fullWidth
           value={active}
           onChange={(v) => useUseCases.getState().set({ active: v as UseCase, placing: false, pickingSource: false, playing: false })}
           data={[
-            { value: 'telecom', label: 'Telecom' },
-            { value: 'flood', label: 'Flood' },
+            { value: 'telecom', label: <Tab icon={IconAntenna} label="Telecom" /> },
+            { value: 'flood', label: <Tab icon={IconDroplet} label="Flood" /> },
           ]}
           aria-label="Scenario"
         />
-      </Stack>
-      <ScrollArea style={{ flex: 1 }} type="auto" offsetScrollbars>
-        <Stack px="sm" pb="sm">
-          {active === 'telecom' ? <TelecomPanel /> : <FloodPanel />}
-        </Stack>
+      </div>
+      <ScrollArea type="auto" offsetScrollbars style={{ flex: '1 1 auto', minHeight: 0 }}>
+        <div style={{ padding: 'var(--dw-gap-3)' }}>{active === 'telecom' ? <TelecomPanel /> : <FloodPanel />}</div>
       </ScrollArea>
     </div>
   );

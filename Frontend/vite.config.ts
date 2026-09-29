@@ -8,7 +8,7 @@ import { relayOverpass } from './server/overpass.mjs';
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8')) as { version: string };
 
-/** /overpass/<mirror> → OpenStreetMap Overpass mirror, as server/serve.mjs and api/overpass.js do in production. */
+/** /overpass/<mirror> → OpenStreetMap Overpass mirror, as server/serve.mjs does in production. */
 function overpassRelay(): Plugin {
   const handle: Connect.NextHandleFunction = (req, res, next) => {
     const m = /^\/overpass\/([^/?]+)/.exec(req.url ?? '');
@@ -56,7 +56,8 @@ export default defineConfig(({ mode }) => {
     worker: { format: 'es' },
     build: {
       target: 'es2022',
-      sourcemap: true,
+      // maps are built for debugging but not referenced from the bundle; server/serve.mjs does not publish them
+      sourcemap: 'hidden',
       chunkSizeWarningLimit: 1500,
       rollupOptions: {
         output: {
@@ -73,7 +74,7 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       environment: 'jsdom',
-      include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+      include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'server/**/*.test.mjs'],
     },
   };
 });

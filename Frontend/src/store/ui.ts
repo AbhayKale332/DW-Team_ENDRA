@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 export type InspectorTab = 'layers' | 'validation' | 'info';
-export type Dialog = 'shortcuts' | 'model' | 'about' | 'docs' | 'settings' | 'camera' | null;
+export type Dialog = 'shortcuts' | 'model' | 'about' | 'docs' | 'settings' | null;
 
 interface UiState {
   projectOpen: boolean;

@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Menu, Menubar, Text, useMantineColorScheme } from '@mantine/core';
 import {
+  IconBook,
   IconBox,
+  IconBrain,
   IconClock,
   IconCube,
   IconDeviceFloppy,
@@ -17,26 +19,21 @@ import {
   IconMap2,
   IconPlaneTilt,
   IconRoute,
-  IconScale,
   IconSettings,
   IconSparkles,
+  IconTable,
   IconTools,
   IconWalk,
-  IconBook,
-  IconBrain,
-  IconTable,
 } from '@tabler/icons-react';
 import { useScene } from '@/store/scene';
-import { useUseCases } from '@/store/usecases';
 import { useUi } from '@/store/ui';
-import { OBJECT_KIND_LABELS, OBJECT_KINDS, toggleAllObjects, toggleObjectKind, useView } from '@/store/view';
+import { useView } from '@/store/view';
 import { useSettings } from '@/store/settings';
 import { newProject, openSample } from '@/features/files/openFile';
 import { openRecent, saveProject } from '@/features/files/project';
 import { runExport, type ExportKind } from '@/features/files/exports';
 import { listRecent, type RecentEntry } from '@/lib/recent';
 import { SAMPLES } from '@/lib/samples';
-import { canGeolocate } from '@/lib/osm';
 import { setViewMode } from '@/features/viewport/overlays/ViewSwitcher';
 import { setCameraMode } from '@/features/viewport/overlays/NavigationHud';
 import { openAny } from './commands';
@@ -69,22 +66,13 @@ function ExportItem({ kind, label, disabled }: { kind: ExportKind; label: string
   );
 }
 
-/** Desktop-style application menu bar: File Â· View Â· Tools Â· Help (Data/UI.md). */
+/** Desktop-style application menu bar: File · View · Tools · Help (Data/UI.md). */
 export function MenuBar() {
   const hasScene = useScene((s) => !!s.scene);
   const hasServerMesh = useScene((s) => !!s.scene?.artefacts.some((a) => a.name === 'terrain.glb'));
-  const hasRef = useScene((s) => !!s.reference);
   const hasAnchor = useScene((s) => !!s.scene?.terrain);
   const mode = useView((s) => s.mode);
-  const objectKinds = useView((s) => s.objectKinds);
   const hoverInfo = useView((s) => s.hoverInfo);
-  const osmOn = useView((s) => s.osm);
-  const basemapOn = useView((s) => s.basemap);
-  const poiOn = useView((s) => s.poi);
-  const canOsm = useScene((s) => canGeolocate(s.scene?.georef));
-  const objects = useScene((s) => s.scene?.objects);
-  const hasObjects = !!objects;
-  const objectCounts = { buildings: objects?.buildings.length ?? 0, trees: objects?.trees.length ?? 0, water: objects?.water.length ?? 0 };
   const ui = useUi();
   const showStatusBar = useSettings((s) => s.showStatusBar);
   const { colorScheme, setColorScheme } = useMantineColorScheme();
@@ -101,14 +89,14 @@ export function MenuBar() {
             New Project
           </Menu.Item>
           <Menu.Item leftSection={<IconFolderOpen {...I} />} rightSection={<Shortcut k="Ctrl+O" />} onClick={() => void openAny()}>
-            Load / Open
+            Open…
           </Menu.Item>
           <Menu.Sub>
             <Menu.Sub.Target>
               <Menu.Sub.Item leftSection={<IconClock {...I} />}>Recent</Menu.Sub.Item>
             </Menu.Sub.Target>
             <Menu.Sub.Dropdown miw={240}>
-              {recent.length === 0 && <Menu.Item disabled>No recent projects</Menu.Item>}
+              {recent.length === 0 && <Menu.Item disabled>No Recent Projects</Menu.Item>}
               {recent.map((r) => (
                 <Menu.Item key={r.id} onClick={() => void openRecent(r.id)} leftSection={r.thumbnail ? <img src={r.thumbnail} alt="" width={36} height={24} style={{ objectFit: 'cover' }} /> : <IconFile {...I} />}>
                   <Text size="sm">{r.name}</Text>
@@ -121,7 +109,7 @@ export function MenuBar() {
           </Menu.Sub>
           <Menu.Sub>
             <Menu.Sub.Target>
-              <Menu.Sub.Item leftSection={<IconSparkles {...I} />}>Sample scenes</Menu.Sub.Item>
+              <Menu.Sub.Item leftSection={<IconSparkles {...I} />}>Sample Scenes</Menu.Sub.Item>
             </Menu.Sub.Target>
             <Menu.Sub.Dropdown miw={240}>
               {SAMPLES.map((s) => (
@@ -147,10 +135,10 @@ export function MenuBar() {
                   <Menu.Sub.Item leftSection={<IconCube {...I} />}>3D Object</Menu.Sub.Item>
                 </Menu.Sub.Target>
                 <Menu.Sub.Dropdown miw={260}>
-                  <ExportItem kind="glb" label="GLB ” glTF binary, textured" />
-                  <ExportItem kind="obj" label="OBJ ” with MTL + texture (.zip)" />
-                  <ExportItem kind="ply" label="PLY ” vertex-coloured mesh" />
-                  <ExportItem kind="stl" label="STL ” 3D printing" />
+                  <ExportItem kind="glb" label="GLB — glTF binary, textured" />
+                  <ExportItem kind="obj" label="OBJ — with MTL + texture (.zip)" />
+                  <ExportItem kind="ply" label="PLY — vertex-coloured mesh" />
+                  <ExportItem kind="stl" label="STL — 3D printing" />
                   {hasServerMesh && (
                     <>
                       <Menu.Divider />
@@ -170,20 +158,20 @@ export function MenuBar() {
               </Menu.Sub>
               <Menu.Sub>
                 <Menu.Sub.Target>
-                  <Menu.Sub.Item leftSection={<IconTable {...I} />}>Elevation data</Menu.Sub.Item>
+                  <Menu.Sub.Item leftSection={<IconTable {...I} />}>Elevation Data</Menu.Sub.Item>
                 </Menu.Sub.Target>
                 <Menu.Sub.Dropdown miw={260}>
                   <Menu.Item onClick={() => void runExport('geotiff')} rightSection={<Shortcut k="Ctrl+E" />}>
-                    GeoTIFF ” Float32 metres
+                    GeoTIFF — Float32 metres
                   </Menu.Item>
-                  <ExportItem kind="geotiff-ndsm" label="GeoTIFF: height above ground (nDSM)" disabled={!hasAnchor} />
-                  <ExportItem kind="geotiff-dtm" label="GeoTIFF: terrain elevation (DTM)" disabled={!hasAnchor} />
-                  <ExportItem kind="npy" label="NumPy .npy ” Float32 metres" />
-                  <ExportItem kind="png16" label="16-bit PNG ” encoded heights" />
+                  <ExportItem kind="geotiff-ndsm" label="GeoTIFF — height above ground (nDSM)" disabled={!hasAnchor} />
+                  <ExportItem kind="geotiff-dtm" label="GeoTIFF — terrain elevation (DTM)" disabled={!hasAnchor} />
+                  <ExportItem kind="npy" label="NumPy .npy — Float32 metres" />
+                  <ExportItem kind="png16" label="16-bit PNG — encoded heights" />
                 </Menu.Sub.Dropdown>
               </Menu.Sub>
               <Menu.Divider />
-              <ExportItem kind="screenshot" label="Viewport screenshot (PNG)" />
+              <ExportItem kind="screenshot" label="Viewport Screenshot (PNG)" />
             </Menu.Sub.Dropdown>
           </Menu.Sub>
           <Menu.Divider />
@@ -198,97 +186,59 @@ export function MenuBar() {
           <TargetLabel icon={IconEye} label="View" />
         </Menubar.Target>
         <Menubar.Dropdown>
-          <Menu.Label>Primary visualisation</Menu.Label>
+          <Menu.Label>Visualisation</Menu.Label>
           <Menu.RadioGroup value={mode} onChange={(v) => setViewMode(v as never)}>
-            <Menu.RadioItem value="image" rightSection={<Shortcut k="3" />} closeMenuOnClick>
-              Input Image
-            </Menu.RadioItem>
-            <Menu.RadioItem value="heightmap" rightSection={<Shortcut k="2" />} closeMenuOnClick>
-              Heatmap (Height Map)
-            </Menu.RadioItem>
             <Menu.RadioItem value="dsm3d" rightSection={<Shortcut k="1" />} closeMenuOnClick>
               3D Height Map (DSM)
+            </Menu.RadioItem>
+            <Menu.RadioItem value="heightmap" rightSection={<Shortcut k="2" />} closeMenuOnClick>
+              Height Map
+            </Menu.RadioItem>
+            <Menu.RadioItem value="image" rightSection={<Shortcut k="3" />} closeMenuOnClick>
+              Input Image
             </Menu.RadioItem>
           </Menu.RadioGroup>
           <Menu.Divider />
           <Menu.Label>Workspace</Menu.Label>
           <Menu.CheckboxItem checked={ui.projectOpen} onChange={() => ui.set({ projectOpen: !ui.projectOpen })} rightSection={<Shortcut k="[" />}>
-            Project panel
+            Project Panel
           </Menu.CheckboxItem>
           <Menu.CheckboxItem checked={ui.inspectorOpen} onChange={() => ui.set({ inspectorOpen: !ui.inspectorOpen })} rightSection={<Shortcut k="]" />}>
             Inspector
           </Menu.CheckboxItem>
           <Menu.CheckboxItem checked={showStatusBar} onChange={() => useSettings.getState().set({ showStatusBar: !showStatusBar })}>
-            Status bar
+            Status Bar
           </Menu.CheckboxItem>
           <Menu.Divider />
           <Menu.Label>Theme</Menu.Label>
           <Menu.RadioGroup value={colorScheme} onChange={(v) => setColorScheme(v as never)}>
-            <Menu.RadioItem value="light">
-              Light
-            </Menu.RadioItem>
-            <Menu.RadioItem value="dark">
-              Dark
-            </Menu.RadioItem>
-            <Menu.RadioItem value="auto">
-              System
-            </Menu.RadioItem>
+            <Menu.RadioItem value="light">Light</Menu.RadioItem>
+            <Menu.RadioItem value="dark">Dark</Menu.RadioItem>
+            <Menu.RadioItem value="auto">System</Menu.RadioItem>
           </Menu.RadioGroup>
         </Menubar.Dropdown>
       </Menubar.Menu>
 
-      <Menubar.Menu width={280}>
+      <Menubar.Menu width={260}>
         <Menubar.Target className={classes.menuButton}>
           <TargetLabel icon={IconTools} label="Tools" />
         </Menubar.Target>
         <Menubar.Dropdown>
           <Menu.Label>Navigation</Menu.Label>
-          {/* remove this camera control */}
-          {/* <Menu.Item leftSection={<IconCamera {...I} />} disabled={!hasScene} onClick={() => ui.set({ dialog: 'camera' })}>
-            Camera Control
-          </Menu.Item> */}
           <Menu.Item leftSection={<IconPlaneTilt {...I} />} rightSection={<Shortcut k="G" />} disabled={!hasScene} onClick={() => setCameraMode('flight')}>
             Flight Simulator
           </Menu.Item>
           <Menu.Item leftSection={<IconWalk {...I} />} rightSection={<Shortcut k="F" />} disabled={!hasScene} onClick={() => setCameraMode('walk')}>
-            First-person walk
+            First-Person Walk
           </Menu.Item>
           <Menu.Item leftSection={<IconRoute {...I} />} rightSection={<Shortcut k="T" />} disabled={!hasScene} onClick={() => setCameraMode('tour')}>
-            Drone tour
+            Drone Tour
           </Menu.Item>
           <Menu.Divider />
-          <Menu.Label>3D objects</Menu.Label>
-          {OBJECT_KINDS.map((k) => (
-            <Menu.CheckboxItem key={k} checked={objectCounts[k] > 0 && objectKinds[k]} disabled={!objectCounts[k]} onChange={() => toggleObjectKind(k)} closeMenuOnClick={false}>
-              {OBJECT_KIND_LABELS[k]}
-              {objectCounts[k] ? ` (${objectCounts[k]})` : ''}
-            </Menu.CheckboxItem>
-          ))}
-          <Menu.Item disabled={!hasObjects} onClick={toggleAllObjects} rightSection={<Shortcut k="O" />}>
-            All 3D objects on / off
-          </Menu.Item>
-          <Menu.Divider />
-          <Menu.Label>Overlays</Menu.Label>
+          <Menu.Label>Display</Menu.Label>
           <Menu.CheckboxItem checked={hoverInfo} disabled={!hasScene} onChange={() => useView.getState().set({ hoverInfo: !hoverInfo })} closeMenuOnClick={false}>
-            Hover details
+            Hover Details
           </Menu.CheckboxItem>
-          <Menu.CheckboxItem checked={osmOn && canOsm} disabled={!canOsm} onChange={() => useView.getState().set({ osm: !osmOn })} closeMenuOnClick={false}>
-            OpenStreetMap overlay{hasScene && !canOsm ? ' (needs a georeferenced image)' : ''}
-          </Menu.CheckboxItem>
-          <Menu.CheckboxItem checked={basemapOn && canOsm} disabled={!canOsm} onChange={() => useView.getState().set({ basemap: !basemapOn })} closeMenuOnClick={false}>
-            Surrounding basemap{hasScene && !canOsm ? ' (needs a georeferenced image)' : ''}
-          </Menu.CheckboxItem>
-          <Menu.CheckboxItem checked={poiOn && canOsm} disabled={!canOsm} onChange={() => useView.getState().set({ poi: !poiOn })} closeMenuOnClick={false}>
-            Facilities (OSM){hasScene && !canOsm ? ' (needs a georeferenced image)' : ''}
-          </Menu.CheckboxItem>
-          <Menu.Divider />
-          <Menu.Label>Analysis</Menu.Label>
-          <Menu.Item leftSection={<IconScale {...I} />} disabled={!hasScene} onClick={() => ui.openInspector('validation')}>
-            {hasRef ? 'Validation results' : 'Validate against reference'}
-          </Menu.Item>
-          <Menu.Item leftSection={<IconScale {...I} />} disabled={!hasScene} onClick={() => useUseCases.getState().set({ open: true })}>
-            Scenarios (telecom · flood)
-          </Menu.Item>
         </Menubar.Dropdown>
       </Menubar.Menu>
 

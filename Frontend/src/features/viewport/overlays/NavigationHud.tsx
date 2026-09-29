@@ -99,9 +99,6 @@ function PointerLockHint() {
     <button type="button" id="dw-lock-target" className={classes.lockHint} aria-label="Click to look around in first person">
       <span className="dw-float" style={{ padding: '14px 18px', color: 'var(--dw-ink)' }}>
         <Text fw={600}>Click to look around</Text>
-        <Text size="xs" c="dimmed">
-          Mouse to look · WASD to walk · Esc to release the mouse
-        </Text>
       </span>
     </button>
   );

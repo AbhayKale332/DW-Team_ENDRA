@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-RUN npx vite build
+RUN npm run build
 
 FROM node:22-alpine
 WORKDIR /app

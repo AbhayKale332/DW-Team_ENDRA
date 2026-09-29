@@ -5,7 +5,14 @@
   --dw-panel-w: 288px;
   --dw-inspector-w: 324px;
   --dw-brand-gradient: linear-gradient(135deg, #2d6cdf 0%, #6a4cf0 100%);
-  --dw-radius-float: 3.5px;
+  /* floating viewport cards are rounded like the mockups; docked panels and inputs stay sharp */
+  --dw-radius-float: 8px;
+  /* 4 px spacing scale; --dw-edge is the inset of everything floating over the viewport */
+  --dw-gap-1: 4px;
+  --dw-gap-2: 8px;
+  --dw-gap-3: 12px;
+  --dw-gap-4: 16px;
+  --dw-edge: 16px;
 }
 
 :root[data-mantine-color-scheme='light'] {
@@ -81,7 +88,7 @@ body {
 }
 
 .dw-section-title {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
