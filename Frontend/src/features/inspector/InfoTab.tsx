@@ -1,7 +1,7 @@
-import { Alert, Anchor, Badge, Group, List, Stack, Table, Text } from '@mantine/core';
+import { Alert, Anchor, List, Stack, Table, Text } from '@mantine/core';
 import { IconInfoCircle } from '@tabler/icons-react';
 import { useScene } from '@/store/scene';
-import { PRODUCT_LABELS } from '@/lib/sceneBuilder';
+import { ElevationReference } from '@/features/anchoring/ElevationReference';
 import { lonLatAt, formatLonLat } from '@/lib/georef';
 import { summariseObjects } from '@/lib/objects';
 
@@ -37,15 +37,9 @@ export function InfoTab() {
   const obj = scene.objects ? summariseObjects(scene.objects) : null;
   return (
     <Stack gap="md" p="md">
+      <ElevationReference scene={scene} />
       <div>
-        <Group justify="space-between" mb={4}>
-          <span className="dw-section-title">Product</span>
-          <Badge>{scene.product}</Badge>
-        </Group>
-        <Text size="xs">{PRODUCT_LABELS[scene.product].long}.</Text>
-      </div>
-      <div>
-        <span className="dw-section-title">Heights</span>
+        <span className="dw-section-title">{scene.product === 'DSM' ? 'Elevations' : 'Heights'}</span>
         <Rows
           rows={[
             ['Minimum', `${s.min.toFixed(2)} m`],
@@ -53,7 +47,7 @@ export function InfoTab() {
             ['Mean', `${s.mean.toFixed(2)} m`],
             ['Median', `${s.median.toFixed(2)} m`],
             ['2nd / 98th percentile', `${s.p2.toFixed(2)} / ${s.p98.toFixed(2)} m`],
-            ['Below 1 m', `${(s.fracBelow1m * 100).toFixed(1)} %`],
+            ['Below 1 m (above ground)', `${(s.fracBelow1m * 100).toFixed(1)} %`],
           ]}
         />
       </div>

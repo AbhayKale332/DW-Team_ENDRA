@@ -5,6 +5,7 @@ import { useCamera } from '@/store/camera';
 import { cssGradient } from '@/theme/colormaps';
 import { classColor, classLabel, classShares } from '@/theme/classes';
 import { formatDistance } from '@/lib/heights';
+import { productInfo } from '@/lib/product';
 import { displayRange } from '../terrainState';
 import classes from './overlays.module.css';
 
@@ -27,8 +28,9 @@ export function Colorbar() {
       return { title: 'Prediction − reference', ramp: cssGradient('diverging'), ticks: [`+${fmt(r, 'm')}`, '0 m', `−${fmt(r, 'm')}`] };
     }
     const [lo, hi] = displayRange(scene.stats, view.rangeMode, view.customRange);
-    const title = layer === 'reference' ? 'Reference height' : scene.product === 'DSM' ? 'Elevation' : 'Height above ground';
-    return { title, ramp: cssGradient(view.colormap), ticks: [fmt(hi, 'm'), fmt((lo + hi) / 2, 'm'), fmt(lo, 'm')] };
+    const title = layer === 'reference' ? 'Reference height' : productInfo(scene).axis;
+    const unit = scene.product === 'DSM' ? 'm a.s.l.' : scene.product === 'rDSM' ? 'm rel.' : 'm';
+    return { title, ramp: cssGradient(view.colormap), ticks: [fmt(hi, unit), fmt((lo + hi) / 2, unit), fmt(lo, unit)] };
   }, [scene, layer, view.slopeMax, view.colormap, view.rangeMode, view.customRange]);
 
   if (!spec) return null;

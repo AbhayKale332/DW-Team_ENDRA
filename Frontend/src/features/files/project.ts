@@ -78,7 +78,8 @@ export async function buildProjectBlob(): Promise<{ blob: Blob; name: string } |
   const files: Record<string, Uint8Array> = {
     'manifest.json': strToU8(JSON.stringify(manifest, null, 2)),
     [manifest.imageName]: new Uint8Array(await scene.image.arrayBuffer()),
-    'ndsm_m.npy': writeNpyF32(scene.heights.data, [scene.heights.height, scene.heights.width]),
+    // always the above-ground heights: an anchored scene re-anchors (from cached DEM tiles) when reopened
+    'ndsm_m.npy': writeNpyF32((scene.ndsm ?? scene.heights).data, [scene.heights.height, scene.heights.width]),
   };
   if (reference) files['reference_m.npy'] = writeNpyF32(reference.data, [scene.heights.height, scene.heights.width]);
   if (scene.classes) files['seg.png'] = new Uint8Array(await encodeGray8Png(scene.classes.data, scene.classes.width, scene.classes.height).arrayBuffer());
@@ -149,6 +150,7 @@ async function adoptProject(bytes: Uint8Array) {
     provenance: { ...manifest.provenance, source: 'project' },
   });
   useScene.getState().setScene(scene);
+  void import('@/features/anchoring/runAnchoring').then((m) => m.autoAnchor());
   if (manifest.reference && files['reference_m.npy']) {
     const ref = parseNpy(files['reference_m.npy'].slice().buffer);
     useScene.getState().setReference({ ...manifest.reference, data: ref.data });
@@ -214,6 +216,7 @@ export async function openResultBundle(input: File[]) {
     });
     useTool.getState().clear();
     useScene.getState().setScene(scene);
+    void import('@/features/anchoring/runAnchoring').then((m) => m.autoAnchor());
     const gtKey = ['gt_ndsm_m.npy', 'gt_dsm_m.npy'].find((k) => files[k]);
     if (gtKey) {
       const gt = parseNpy(files[gtKey].slice().buffer);

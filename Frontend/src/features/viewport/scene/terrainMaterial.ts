@@ -84,6 +84,20 @@ export interface TerrainUniforms {
   uCompare: THREE.IUniform<number>;
   uSwipe: THREE.IUniform<number>;
   uViewport: THREE.IUniform<THREE.Vector2>;
+  /** Use-case overlay: 0 none, 1 telecom coverage, 2 flood. */
+  uOvl: THREE.IUniform<number>;
+  uOvlTex: THREE.IUniform<THREE.Texture | null>;
+  /** Scene uv -> overlay texture uv (the analysis grid may overhang the scene by a partial cell). */
+  uOvlScale: THREE.IUniform<THREE.Vector2>;
+  uOvlOpacity: THREE.IUniform<number>;
+  /** Flood: water level above the source's normal level, metres. */
+  uWater: THREE.IUniform<number>;
+  uMaxRise: THREE.IUniform<number>;
+  uVuln: THREE.IUniform<number>;
+  /** Height above ground (nDSM), for tints on an absolute DSM: the ground stays photographic, only structures colour. */
+  uAgl: THREE.IUniform<THREE.Texture | null>;
+  uHasAgl: THREE.IUniform<number>;
+  uAglMax: THREE.IUniform<number>;
 }
 
 export function createUniforms(): TerrainUniforms {
@@ -111,6 +125,16 @@ export function createUniforms(): TerrainUniforms {
     uCompare: { value: 0 },
     uSwipe: { value: 0.5 },
     uViewport: { value: new THREE.Vector2(1, 1) },
+    uOvl: { value: 0 },
+    uOvlTex: { value: null },
+    uOvlScale: { value: new THREE.Vector2(1, 1) },
+    uOvlOpacity: { value: 0.6 },
+    uWater: { value: 0 },
+    uMaxRise: { value: 1 },
+    uVuln: { value: 1 },
+    uAgl: { value: null },
+    uHasAgl: { value: 0 },
+    uAglMax: { value: 1 },
   };
 }
 
@@ -148,6 +172,16 @@ const fragmentShader = /* glsl */ `
   uniform float uCompare;
   uniform float uSwipe;
   uniform vec2 uViewport;
+  uniform int uOvl;
+  uniform sampler2D uOvlTex;
+  uniform vec2 uOvlScale;
+  uniform float uOvlOpacity;
+  uniform float uWater;
+  uniform float uMaxRise;
+  uniform float uVuln;
+  uniform sampler2D uAgl;
+  uniform float uHasAgl;
+  uniform float uAglMax;
   varying vec2 vGrid;
   varying float vShade;
 
@@ -201,8 +235,43 @@ const fragmentShader = /* glsl */ `
       return mix(rgb, c, 0.7) * relief;
     }
     // 0: optical + height tint — ground stays photographic, raised structures take the colormap.
-    float a = uTint * smoothstep(0.02, 0.35, t);
-    return mix(rgb, cmap(uCmapRow, t), a) * mix(1.0, relief, 0.6);
+    // On an absolute DSM the elevation range is terrain-dominated: tint by height above ground instead.
+    float ta = uHasAgl > 0.5 ? clamp(texture2D(uAgl, g).r / max(uAglMax, 0.5), 0.0, 1.0) : t;
+    float a = uTint * smoothstep(0.02, 0.35, ta);
+    return mix(rgb, cmap(uCmapRow, ta), a) * mix(1.0, relief, 0.6);
+  }
+
+  // Use-case overlays, drawn over whatever layer is active. The texture lives on the analysis grid.
+  //   1 coverage (RGBA8): R = class 0..3 (/3), G = blocked flag (/255: 1 structures, 2 terrain), A = has data
+  //   2 flood (RGBA16F):  R = arrival rise (m above the source level), G = ground rise (m)
+  vec3 applyOverlay(vec3 color, vec2 g) {
+    if (uOvl == 0) return color;
+    vec2 q = g * uOvlScale;
+    if (q.x > 1.0 || q.y > 1.0) return color;
+    vec4 t = texture2D(uOvlTex, q);
+    if (uOvl == 1) {
+      if (t.a < 0.5) return color;
+      float cls = floor(t.r * 3.0 + 0.5);
+      float blk = floor(t.g * 255.0 + 0.5);
+      vec3 c = cls < 0.5 ? vec3(0.86, 0.15, 0.15) : cls < 1.5 ? vec3(0.96, 0.55, 0.10) : cls < 2.5 ? vec3(0.98, 0.85, 0.20) : vec3(0.20, 0.72, 0.35);
+      vec3 o = mix(color, c, uOvlOpacity);
+      // hatched = no line of sight to the serving tower
+      if (blk > 0.5) o = mix(o, vec3(0.05, 0.05, 0.12), 0.38 * step(0.5, fract((g.x + g.y) * 70.0)));
+      return o;
+    }
+    float arr = t.r;
+    float gr = t.g;
+    if (arr <= uWater) {
+      float depth = max(uWater - gr, 0.0);
+      vec3 wc = mix(vec3(0.55, 0.82, 0.96), vec3(0.04, 0.22, 0.62), clamp(depth / 4.0, 0.0, 1.0));
+      return mix(color, wc, clamp(0.55 + 0.3 * depth, 0.0, 0.88));
+    }
+    if (uVuln > 0.5 && arr < uMaxRise + 1.5) {
+      float s = clamp((arr - uWater) / max(uMaxRise, 0.1), 0.0, 1.0);
+      vec3 vc = mix(vec3(0.90, 0.14, 0.14), vec3(0.98, 0.86, 0.22), s);
+      return mix(color, vc, 0.5 * (1.0 - 0.6 * s) * uOvlOpacity);
+    }
+    return color;
   }
 
   void main() {
@@ -217,6 +286,7 @@ const fragmentShader = /* glsl */ `
       float line = 1.0 - clamp(d - 0.5, 0.0, 1.0);
       color = mix(color, vec3(0.08, 0.09, 0.11), line * 0.7);
     }
+    color = applyOverlay(color, vGrid);
     csm_DiffuseColor = vec4(color * vShade, 1.0);
   }
 `;

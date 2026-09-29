@@ -15,6 +15,8 @@ import { BasemapLayer } from '@/features/basemap/BasemapLayer';
 import { PoiLayer } from '@/features/poi/PoiLayer';
 import { Environment } from './scene/Environment';
 import { Markers } from './scene/Markers';
+import { TowerMarkers } from './scene/TowerMarkers';
+import { FloodBuildings } from './scene/FloodBuildings';
 import { PickLayer } from './scene/PickLayer';
 import { FpsReporter, ScreenshotProvider } from './scene/Helpers';
 import { OrbitRig } from './cameras/OrbitRig';
@@ -109,6 +111,8 @@ export function Viewport() {
               <OsmOverlay />
               <PoiLayer />
               <Markers />
+              <TowerMarkers />
+              <FloodBuildings />
               <Rig />
               <PickLayer />
               <FpsReporter />

@@ -39,6 +39,8 @@ interface SceneState {
   setInput: (input: PreparedInput | null) => void;
   setParams: (p: Partial<RunParams>) => void;
   setScene: (scene: Scene | null) => void;
+  /** Swap in a derived version of the current scene (same image and grid): keeps reference, validation and the image URL. */
+  updateScene: (scene: Scene) => void;
   setReference: (ref: ReferenceSurface | null) => void;
   setValidation: (v: ValidationResult | null) => void;
   setRun: (p: Partial<RunState>) => void;
@@ -79,6 +81,7 @@ export const useScene = create<SceneState>()((set, get) => ({
       dirty: false,
     });
   },
+  updateScene: (scene) => set({ scene }),
   setReference: (reference) => set({ reference, validation: null }),
   setValidation: (validation) => set({ validation }),
   setRun: (p) => set({ run: { ...get().run, ...p } }),

@@ -77,6 +77,8 @@ export async function runPrediction() {
     useTool.getState().clear();
     useScene.getState().setScene(scene);
     useScene.getState().set({ dirty: true });
+    // georeferenced results become an absolute DSM once a DEM is fetched (rDSM stays relative)
+    void import('@/features/anchoring/runAnchoring').then((m) => m.autoAnchor());
     // Result replaces the empty state: collapse the project panel so the viewport matches the product view.
     useUi.getState().set({ projectOpen: window.innerWidth >= 1440 });
     // 'done' is set once the mesh is built (see Terrain); keep the stepper on "Building 3D mesh".

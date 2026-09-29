@@ -64,6 +64,8 @@ interface ViewState {
   poiCategories: Record<PoiCategory, boolean>;
   compareSwipe: boolean;
   swipe: number;
+  /** Raw model output: 3D objects and post-processing are off (the previous object selection is restored on exit). */
+  raw: boolean;
   set: (p: Partial<Omit<ViewState, 'set' | 'reset'>>) => void;
   reset: () => void;
 }
@@ -97,6 +99,7 @@ const defaults = {
   poiCategories: { emergency: true, education: true, civic: true, transport: true } as Record<PoiCategory, boolean>,
   compareSwipe: false,
   swipe: 0.5,
+  raw: false,
 };
 
 export const useView = create<ViewState>()((set) => ({
@@ -142,4 +145,20 @@ export function activeLayer(s: Pick<ViewState, 'mode' | 'layer3d' | 'layer2d'>):
   if (s.mode === 'image') return 'optical';
   if (s.mode === 'heightmap') return s.layer2d;
   return s.layer3d;
+}
+
+let selectionBeforeRaw: ObjectKinds | null = null;
+
+/** Raw mode: show the model's height field as is. 3D object models (and the mesh flattening under them) and the
+ *  ambient-occlusion post effect go off; leaving restores the object selection that was on. */
+export function setRawOutput(on: boolean) {
+  const v = useView.getState();
+  if (on === v.raw) return;
+  if (on) {
+    selectionBeforeRaw = v.objectKinds;
+    v.set({ raw: true, objectKinds: { buildings: false, trees: false, water: false } });
+  } else {
+    v.set({ raw: false, objectKinds: selectionBeforeRaw ?? DEFAULT_OBJECT_KINDS });
+    selectionBeforeRaw = null;
+  }
 }

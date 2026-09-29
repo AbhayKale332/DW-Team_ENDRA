@@ -15,7 +15,7 @@ function PanelError({ error }: { error: unknown }) {
   );
 }
 
-/** Right dock: Layers · Validation · Info. */
+/** Right dock: Layers · Validation · Info */
 export function InspectorPanel() {
   const open = useUi((s) => s.inspectorOpen);
   const tab = useUi((s) => s.inspectorTab);

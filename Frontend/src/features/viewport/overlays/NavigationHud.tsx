@@ -143,7 +143,7 @@ function FlightHud() {
   const f = useCamera((s) => s.flight);
   const scene = useScene((s) => s.scene);
   if (mode !== 'flight' && mode !== 'walk') return null;
-  const datum = scene?.product === 'DSM' ? 'elev.' : 'above scene base';
+  const datum = scene?.product === 'DSM' ? 'elev.' : scene?.product === 'rDSM' ? 'rel. to scene base' : 'above scene base';
   return (
     <div className={classes.hud}>
       <HeadingTape heading={heading} />

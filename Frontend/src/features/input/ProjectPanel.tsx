@@ -1,12 +1,12 @@
 import { ActionIcon, Alert, Badge, Button, Divider, Group, NumberInput, ScrollArea, SegmentedControl, Stack, Switch, Text, Tooltip } from '@mantine/core';
 import { Dropzone } from '@mantine/dropzone';
 import { IconAlertTriangle, IconChevronLeft, IconPhotoUp, IconPlayerPlay, IconRefresh, IconWorld, IconX } from '@tabler/icons-react';
+import { ProductBadge } from '@/components/ProductBadge';
 import { useScene } from '@/store/scene';
 import { useUi } from '@/store/ui';
 import { effectiveModelGrid, MODEL_MAX_SIDE } from '@/lib/input';
 import { stageImage } from '@/features/files/openFile';
 import { cancelPrediction, resolveGsd, runPrediction } from '@/features/processing/runPrediction';
-import { PRODUCT_LABELS } from '@/lib/sceneBuilder';
 import classes from '@/features/shell/shell.module.css';
 
 const PRESETS = [
@@ -189,17 +189,15 @@ function CurrentResult() {
     <Stack gap={6}>
       <Group justify="space-between">
         <span className="dw-section-title">Current result</span>
-        <Tooltip label={PRODUCT_LABELS[scene.product].long} multiline maw={260}>
-          <Badge size="sm">{scene.product}</Badge>
-        </Tooltip>
+        <ProductBadge scene={scene} />
       </Group>
       <Text size="sm" fw={600} truncate="end">
         {scene.name}
       </Text>
       <Stack gap={2}>
-        <Row k="Height range" v={`${st.min.toFixed(2)} – ${st.max.toFixed(2)} m`} />
+        <Row k={scene.product === 'DSM' ? 'Elevation range' : 'Height range'} v={`${st.min.toFixed(2)} – ${st.max.toFixed(2)} m`} />
         <Row k="Mean / median" v={`${st.mean.toFixed(2)} / ${st.median.toFixed(2)} m`} />
-        <Row k="Below 1 m" v={`${(st.fracBelow1m * 100).toFixed(1)} %`} />
+        <Row k="Below 1 m (above ground)" v={`${(st.fracBelow1m * 100).toFixed(1)} %`} />
         <Row k="Grid" v={`${scene.heights.width} × ${scene.heights.height} @ ${scene.gsd.toFixed(3)} m`} />
         <Row k="Source" v={scene.provenance.provider} />
       </Stack>

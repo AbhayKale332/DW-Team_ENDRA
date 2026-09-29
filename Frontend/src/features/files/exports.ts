@@ -6,7 +6,7 @@ import { download, safeStem } from '@/lib/download';
 import { displayRange } from '@/features/viewport/terrainState';
 import { reportError } from './openFile';
 
-export type ExportKind = 'glb' | 'obj' | 'ply' | 'stl' | 'png' | 'jpg' | 'geotiff' | 'npy' | 'png16' | 'screenshot' | 'server-glb';
+export type ExportKind = 'glb' | 'obj' | 'ply' | 'stl' | 'png' | 'jpg' | 'geotiff' | 'geotiff-ndsm' | 'geotiff-dtm' | 'npy' | 'png16' | 'screenshot' | 'server-glb';
 
 export const EXPORT_LABELS: Record<ExportKind, string> = {
   glb: 'GLB (glTF binary, textured)',
@@ -15,7 +15,9 @@ export const EXPORT_LABELS: Record<ExportKind, string> = {
   stl: 'STL (3D printing)',
   png: 'Heatmap PNG',
   jpg: 'Heatmap JPG',
-  geotiff: 'GeoTIFF (Float32 heights)',
+  geotiff: 'GeoTIFF (Float32, current product)',
+  'geotiff-ndsm': 'GeoTIFF: height above ground (nDSM)',
+  'geotiff-dtm': 'GeoTIFF: terrain elevation (DTM)',
   npy: 'NumPy array (.npy, metres)',
   png16: '16-bit PNG (encoded heights)',
   screenshot: 'Viewport screenshot (PNG)',
@@ -81,10 +83,19 @@ export async function runExport(kind: ExportKind) {
         name = `${stem}_${scene.product.toLowerCase()}_m.tif`;
         break;
       }
+      case 'geotiff-ndsm':
+      case 'geotiff-dtm': {
+        const { exportGeoTiff } = await import('@/lib/exporters/raster');
+        const dtm = kind === 'geotiff-dtm';
+        if (dtm && !scene.terrain) throw new Error('Terrain (DTM) exists only for scenes anchored to a DEM.');
+        blob = exportGeoTiff(scene, dtm ? 'terrain' : 'ndsm');
+        name = `${stem}_${dtm ? 'dtm' : 'ndsm'}_m.tif`;
+        break;
+      }
       case 'npy': {
         const { exportNpy } = await import('@/lib/exporters/raster');
         blob = exportNpy(scene);
-        name = `${stem}_ndsm_m.npy`;
+        name = `${stem}_${scene.product.toLowerCase()}_m.npy`;
         break;
       }
       case 'png16': {

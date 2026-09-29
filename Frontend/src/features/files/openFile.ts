@@ -74,11 +74,14 @@ export async function openSample(id: string) {
   if (!def) return;
   const n = notifications.show({ loading: true, title: 'Loading sample', message: def.name, autoClose: false, withCloseButton: false });
   try {
-    const { scene, reference } = await loadSample(def);
+    const { scene, reference, demCache } = await loadSample(def);
     useTool.getState().clear();
     useCamera.getState().set({ mode: 'orbit' });
     useView.getState().set({ mode: 'dsm3d' });
     useScene.getState().setScene(scene);
+    const anchoring = await import('@/features/anchoring/runAnchoring');
+    if (demCache) anchoring.registerBundledDem(scene.id, demCache);
+    anchoring.autoAnchor();
     if (reference) useScene.getState().setReference(reference);
     useUi.getState().set({ projectOpen: false });
     notifications.update({ id: n, loading: false, title: 'Sample loaded', message: def.name, autoClose: 2500, withCloseButton: true, color: 'dwBlue' });

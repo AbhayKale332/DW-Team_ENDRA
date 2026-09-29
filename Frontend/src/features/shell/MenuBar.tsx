@@ -27,6 +27,7 @@ import {
   IconTable,
 } from '@tabler/icons-react';
 import { useScene } from '@/store/scene';
+import { useUseCases } from '@/store/usecases';
 import { useUi } from '@/store/ui';
 import { OBJECT_KIND_LABELS, OBJECT_KINDS, toggleAllObjects, toggleObjectKind, useView } from '@/store/view';
 import { useSettings } from '@/store/settings';
@@ -73,6 +74,7 @@ export function MenuBar() {
   const hasScene = useScene((s) => !!s.scene);
   const hasServerMesh = useScene((s) => !!s.scene?.artefacts.some((a) => a.name === 'terrain.glb'));
   const hasRef = useScene((s) => !!s.reference);
+  const hasAnchor = useScene((s) => !!s.scene?.terrain);
   const mode = useView((s) => s.mode);
   const objectKinds = useView((s) => s.objectKinds);
   const hoverInfo = useView((s) => s.hoverInfo);
@@ -174,6 +176,8 @@ export function MenuBar() {
                   <Menu.Item onClick={() => void runExport('geotiff')} rightSection={<Shortcut k="Ctrl+E" />}>
                     GeoTIFF ” Float32 metres
                   </Menu.Item>
+                  <ExportItem kind="geotiff-ndsm" label="GeoTIFF: height above ground (nDSM)" disabled={!hasAnchor} />
+                  <ExportItem kind="geotiff-dtm" label="GeoTIFF: terrain elevation (DTM)" disabled={!hasAnchor} />
                   <ExportItem kind="npy" label="NumPy .npy ” Float32 metres" />
                   <ExportItem kind="png16" label="16-bit PNG ” encoded heights" />
                 </Menu.Sub.Dropdown>
@@ -281,6 +285,9 @@ export function MenuBar() {
           <Menu.Label>Analysis</Menu.Label>
           <Menu.Item leftSection={<IconScale {...I} />} disabled={!hasScene} onClick={() => ui.openInspector('validation')}>
             {hasRef ? 'Validation results' : 'Validate against reference'}
+          </Menu.Item>
+          <Menu.Item leftSection={<IconScale {...I} />} disabled={!hasScene} onClick={() => useUseCases.getState().set({ open: true })}>
+            Scenarios (telecom · flood)
           </Menu.Item>
         </Menubar.Dropdown>
       </Menubar.Menu>

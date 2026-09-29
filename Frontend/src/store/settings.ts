@@ -12,6 +12,8 @@ interface SettingsState {
   quality: Quality;
   showStatusBar: boolean;
   postFx: boolean;
+  /** Fetch a DEM after a georeferenced result and rebuild it as an absolute DSM (sends the scene's bounding box to the tile server). */
+  autoAnchor: boolean;
   /** Tiles shown around georeferenced scenes. */
   basemapProvider: BasemapId;
   set: (p: Partial<Omit<SettingsState, 'set'>>) => void;
@@ -27,6 +29,7 @@ export const useSettings = create<SettingsState>()(
       quality: 'balanced',
       showStatusBar: true,
       postFx: true,
+      autoAnchor: true,
       basemapProvider: 'satellite',
       set: (p) => set(p),
     }),

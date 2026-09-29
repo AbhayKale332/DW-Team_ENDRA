@@ -146,6 +146,33 @@ export interface Provenance {
   modelVersion?: string;
 }
 
+/** Where an absolute DSM's elevations come from. Set only by DEM anchoring (lib/dem). */
+export type VerticalDatum = 'EGM96' | 'EGM2008' | 'ellipsoid' | 'unknown';
+
+export interface AnchoringInfo {
+  /** Human label of the DEM, e.g. "AWS Terrain Tiles (SRTM-based mosaic)". */
+  source: string;
+  sourceId: 'terrain-tiles' | 'local-file' | 'bundled-cache';
+  datum: VerticalDatum;
+  /** Anchor cell size in metres (the DEM's native resolution, ~30 m). */
+  cellM: number;
+  cellPx: number;
+  demMinM: number;
+  demMaxM: number;
+  /** RMS over cells of (mean of DSM in the cell) - DEM. Near 0 by construction; a sanity check, not an accuracy. */
+  cellMeanRmseM: number;
+  detailGain: number;
+  /** Share of cell-mean structure height assumed to be inside the DEM (0 = bare terrain, 1 = full surface model). */
+  structureShare: number;
+  /** Mean of (DSM cell mean - DEM cell), metres: how far the DSM sits above the DEM on average. */
+  meanOffsetM: number;
+  /** The sampled DEM cells (row-major, `cellPx` pixels each), kept so the share can change without a re-fetch. */
+  demCells?: { rows: number; cols: number; data: Float64Array };
+  fetchedAt: string;
+  tileZoom?: number;
+  notes: string[];
+}
+
 export interface Scene {
   id: string;
   name: string;
@@ -153,7 +180,13 @@ export interface Scene {
   image: Blob;
   imageWidth: number;
   imageHeight: number;
+  /** The primary product: absolute elevation when `product === 'DSM'`, else height above ground. */
   heights: HeightGrid;
+  /** Height above ground on the same grid; kept when `heights` was replaced by the absolute DSM. */
+  ndsm?: HeightGrid;
+  /** Bare-earth terrain elevation (absolute), only for DEM-anchored scenes. */
+  terrain?: HeightGrid;
+  anchoring?: AnchoringInfo;
   /** Object classes on the height grid; absent for older backends, samples and imported bundles. */
   classes?: ClassMap | null;
   /** Trees, buildings and water as 3D objects; absent for older backends, samples and imported bundles. */

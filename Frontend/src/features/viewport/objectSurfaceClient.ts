@@ -27,6 +27,9 @@ export function loadObjectSurface(scene: Scene, kinds: ObjectKinds): Promise<Flo
         classes: scene.classes ? { ...scene.classes, data: scene.classes.data.slice() } : null,
         objects: scene.objects,
         gsd: scene.gsd,
+        product: scene.product,
+        ndsm: scene.ndsm ? { ...scene.ndsm, data: scene.ndsm.data.slice() } : undefined,
+        terrain: scene.terrain ? { ...scene.terrain, data: scene.terrain.data.slice() } : undefined,
       },
       k,
     )

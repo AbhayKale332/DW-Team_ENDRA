@@ -6,6 +6,8 @@ import { useTool } from '@/store/tool';
 import { useCamera } from '@/store/camera';
 import { pickHeightfield } from '@/lib/pick';
 import { currentFrame } from '../terrainState';
+import { useUseCases } from '@/store/usecases';
+import { addTower, runFlood } from '@/features/usecases/actions';
 
 /** Converts pointer clicks/hover on the canvas into grid coordinates via height-field ray marching. */
 export function PickLayer() {
@@ -42,9 +44,17 @@ export function PickLayer() {
       const quick = performance.now() - down.t < 450;
       down = null;
       const { tool } = useTool.getState();
-      if (tool === 'none' || moved > 5 || !quick || useCamera.getState().mode !== 'orbit') return;
+      const uc = useUseCases.getState();
+      const armed = uc.placing || uc.pickingSource; // a use-case placement is waiting for a click
+      if ((tool === 'none' && !armed) || moved > 5 || !quick || useCamera.getState().mode !== 'orbit') return;
       const p = pick(e.clientX, e.clientY);
-      if (p) useTool.getState().addPoint(p);
+      if (!p) return;
+      if (uc.placing) return void addTower(p.col, p.row);
+      if (uc.pickingSource) {
+        uc.set({ floodPoint: p, floodSource: 'point', pickingSource: false });
+        return void runFlood();
+      }
+      useTool.getState().addPoint(p);
     };
     const onMove = (e: PointerEvent) => {
       const now = performance.now();

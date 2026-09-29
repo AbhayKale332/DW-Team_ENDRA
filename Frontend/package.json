@@ -15,7 +15,8 @@
     "test:watch": "vitest",
     "e2e": "playwright test",
     "serve": "node server/serve.mjs",
-    "make-sample": "node scripts/make-sample.mjs"
+    "make-sample": "node scripts/make-sample.mjs",
+    "cache-dem": "node scripts/cache-dem.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",

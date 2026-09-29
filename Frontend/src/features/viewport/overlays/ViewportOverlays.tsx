@@ -2,6 +2,8 @@ import { useScene } from '@/store/scene';
 import { canGeolocate } from '@/lib/osm';
 import { useCamera } from '@/store/camera';
 import { ProcessingOverlay } from '@/features/processing/ProcessingOverlay';
+import { ScenarioOverlay } from '@/features/usecases/UseCasesTab';
+import { ProductChip } from '@/features/anchoring/ProductChip';
 import { ToolPalette } from '@/features/analysis/ToolPalette';
 import { ViewSwitcher } from './ViewSwitcher';
 import { NavControls } from './NavControls';
@@ -30,6 +32,7 @@ export function ViewportOverlays() {
       <div className={classes.topLeft}>
         <ViewSwitcher />
         {hasScene && orbit && <ToolPalette />}
+        {hasScene && <ProductChip />}
       </div>
       <div className={classes.topCenter}>
         {!orbit && <ModeBar />}
@@ -38,6 +41,7 @@ export function ViewportOverlays() {
       <div className={classes.topRight}>
         <NavControls />
       </div>
+      <ScenarioOverlay />
       <ProcessingOverlay />
       {hasScene && (
         <>

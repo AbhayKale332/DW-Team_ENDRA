@@ -13,6 +13,8 @@ import { loadObjectSurface } from '../objectSurfaceClient';
 import { loadImageTexture } from './imageTexture';
 import { FLAT_SCALE, displayRange, sceneBase, useTerrainInfo } from '../terrainState';
 import { useBasemapShown } from '@/features/basemap/basemapState';
+import { computeStats } from '@/lib/heights';
+import { useAnalysisOverlay } from './useAnalysisOverlay';
 
 // Regular-grid vertex budgets (wall cells add vertices on top in built-up / forested scenes).
 const BUDGET: Record<Quality, number> = { fast: 150_000, balanced: 450_000, full: 1_800_000 };
@@ -53,6 +55,9 @@ export function Terrain() {
   const [geo, setGeo] = useState<{ terrain: THREE.BufferGeometry; skirt: THREE.BufferGeometry } | null>(null);
   const group = useRef<THREE.Group>(null);
 
+  // Use-case overlays (telecom coverage, flood water) drawn by the same shader.
+  useAnalysisOverlay(uniforms, invalidate);
+
   // LUT atlas — once.
   useEffect(() => {
     const t = createLutAtlas();
@@ -85,6 +90,26 @@ export function Terrain() {
       uniforms.uRgb.value = null;
     };
   }, [scene, uniforms, gl, invalidate]);
+
+  // Height above ground for the tint layer of an absolute DSM.
+  useEffect(() => {
+    const nd = scene?.product === 'DSM' ? scene.ndsm : null;
+    if (!scene || !nd) {
+      uniforms.uHasAgl.value = 0;
+      invalidate();
+      return;
+    }
+    const t = createHeightTexture(nd.data, nd.width, nd.height, 0);
+    uniforms.uAgl.value = t;
+    uniforms.uAglMax.value = Math.max(computeStats(nd.data).p98, 3);
+    uniforms.uHasAgl.value = 1;
+    invalidate();
+    return () => {
+      t.dispose();
+      uniforms.uAgl.value = null;
+      uniforms.uHasAgl.value = 0;
+    };
+  }, [scene, uniforms, invalidate]);
 
   // Reference texture (resampled to the prediction grid if needed).
   useEffect(() => {

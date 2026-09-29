@@ -21,7 +21,9 @@ export interface ObjectLayer {
 export function objectFrame(scene: Scene, surface: Float32Array): ObjectFrame {
   const { width, height } = scene.heights;
   const ground = { data: surface, width, height };
-  return { width, height, gsd: scene.gsd, base: scene.stats.min, groundAt: (c, r) => sampleBilinear(ground, c, r) };
+  // the raw height above ground: the nDSM of an anchored scene, else the heights themselves
+  const agl = scene.ndsm ?? scene.heights;
+  return { width, height, gsd: scene.gsd, base: scene.stats.min, roofOnGround: scene.product === 'DSM', groundAt: (c, r) => sampleBilinear(ground, c, r), aglAt: (c, r) => sampleBilinear(agl, c, r) };
 }
 
 function toGeometry(a: MeshArrays) {
