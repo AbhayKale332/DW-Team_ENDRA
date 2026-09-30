@@ -54,7 +54,7 @@ docker run -e HF_TOKEN=hf_xxx -p 8080:8080 depthwizard-frontend
 </TabItem>
 <TabItem label="Self-host the model">
 
-The FastAPI service in `Model_Traning/v5` runs the same inference engine, on PyTorch or ONNX Runtime.
+The FastAPI service in `Model_Traning/v5` runs the same inference engine, on PyTorch or ONNX Runtime. Download the weights from **[DepthWizard v5 on Kaggle Models](https://www.kaggle.com/models/abhaydkale232/depthwizard-v5)** first, and put the checkpoint where the commands below expect it (or change the paths).
 
 ```bash title="Model_Traning/v5/"
 pip install -r requirements.txt

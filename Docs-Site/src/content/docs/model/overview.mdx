@@ -55,6 +55,10 @@ Here *g* is a small conv block (258 → 64 → 1 channels). Head B's bin distrib
 - **Joint segmentation.** Head C costs little and supplies the **ground mask** that the georeferencing step uses to fit a bare-earth DTM ([Absolute DSM](/geo/absolute-dsm/)).
 - **Detail branch (v5).** Transformer features at 1/16 resolution give over-smoothed maps: a gradient ratio of 0.23 against LiDAR, where 1.0 would be perfectly sharp. A shallow RGB stem at full and half resolution adds edges back, and a learned convex 2× upsampler replaces bilinear upsampling. Both are zero-initialised, so v4 checkpoints load unchanged.
 
+## Weights
+
+The trained v5 weights are published on Kaggle: **[kaggle.com/models/abhaydkale232/depthwizard-v5](https://www.kaggle.com/models/abhaydkale232/depthwizard-v5)**. Load them with the [CLI or FastAPI service](/model/inference/#command-line). PyTorch checkpoints embed their preprocessing recipe (ONNX exports keep it in the sidecar `depthwizard.onnx.json`), so no extra configuration is needed.
+
 ## Pages in this section
 
 - [Encoder](/model/encoder/): DINOv3 SAT-493M, freezing and layer-wise LR decay.
