@@ -9,7 +9,7 @@ Scenarios turn a height model into a decision aid. Open them from **Scenarios �
 
 ## Flood response
 
-Water rises from a source and floods the **connected lower ground first**. Buildings are then ranked by how soon the water reaches them, how many people they are likely to hold, and whether they house critical facilities.
+Water rises from a source and flows out over the terrain, filling the **connected lower ground first**. The flow is simulated with the shallow-water equations (the local inertial scheme used by LISFLOOD-FP, with Manning friction), so the water advances as a front, runs downhill and pools in hollows before it settles at the chosen level. In 3D the water is drawn at its real height: buildings lower than the water are submerged, and taller ones stand out of it with a visible waterline. Buildings are ranked by how soon the water reaches them, how many people they are likely to hold, and whether they house critical facilities.
 
 <Steps>
 
@@ -18,7 +18,7 @@ Water rises from a source and floods the **connected lower ground first**. Build
    - **Water bodies**: rivers, lakes and ponds detected in the scene;
    - **Chosen point**: click a location on the terrain;
    - **Whole scene**: a uniform rise everywhere.
-3. Drag **Water level rise**, or press **Play** to animate it. The panel reports the flooded area and water depth.
+3. Drag **Water level rise**, or press **Play** to animate it. The water follows as a time-lapse (about 8 simulated minutes per second). The panel reports the flooded area and water depth as the water moves, and marks buildings under their roofline as *submerged*.
 4. Optionally enable **Show water on the terrain** and **Shade dry ground by how soon it floods**.
 5. Review the **priority table**: each building's tier and score, with ★ marking critical facilities.
 
@@ -35,7 +35,7 @@ Buildings are grouped into **Critical**, **High** and lower tiers. The exact wei
 ```mermaid
 flowchart TB
   A[Anchored DSM] --> B[Pick flood source] --> C[Raise water level · connected fill]
-  C --> D[Flooded area & depth]
+  C --> S[Shallow-water flow simulation] --> D[Flooded area & depth]
   C --> E[Flood time per building]
   E --> F[Score = urgency + occupancy + facility] --> G[Priority table]
 ```
@@ -54,4 +54,4 @@ Place transmitter towers on the surface and check where the signal reaches, taki
 
 </Steps>
 
-<Aside type="caution">Both scenarios are **planning aids**, not engineering models. Flooding is a static fill over the predicted surface, with no flow dynamics or drainage. Coverage is a line-of-sight and path-loss estimate. Their accuracy is bounded by the height model's accuracy ([Error analysis](/results/error-analysis/)).</Aside>
+<Aside type="caution">Both scenarios are **planning aids**, not engineering models. Flooding is a shallow-water simulation over the DEM terrain, on a grid of at most 256 cells a side, with closed scene edges and no rainfall, drainage or flood defences. Coverage is a line-of-sight and path-loss estimate. Their accuracy is bounded by the height model's accuracy ([Error analysis](/results/error-analysis/)).</Aside>

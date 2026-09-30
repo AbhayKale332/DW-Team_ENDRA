@@ -1,9 +1,11 @@
 import { wrap, type Remote } from 'comlink';
 import type { TerrainWorkerApi } from './terrain.worker';
 import type { AnalysisWorkerApi } from './analysis.worker';
+import type { FloodSimWorkerApi } from './floodSim.worker';
 
 let terrain: Remote<TerrainWorkerApi> | null = null;
 let analysis: Remote<AnalysisWorkerApi> | null = null;
+let floodSim: Remote<FloodSimWorkerApi> | null = null;
 
 /** Lazily-created singleton terrain worker. */
 export function terrainWorker(): Remote<TerrainWorkerApi> {
@@ -21,4 +23,13 @@ export function analysisWorker(): Remote<AnalysisWorkerApi> {
     analysis = wrap<AnalysisWorkerApi>(w);
   }
   return analysis;
+}
+
+/** Lazily-created singleton worker stepping the flood hydraulics. */
+export function floodSimWorker(): Remote<FloodSimWorkerApi> {
+  if (!floodSim) {
+    const w = new Worker(new URL('./floodSim.worker.ts', import.meta.url), { type: 'module', name: 'flood-sim' });
+    floodSim = wrap<FloodSimWorkerApi>(w);
+  }
+  return floodSim;
 }

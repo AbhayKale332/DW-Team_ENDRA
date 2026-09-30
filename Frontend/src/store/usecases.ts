@@ -35,6 +35,8 @@ interface UseCaseState {
   /** Water level above the source's normal level, metres. */
   rise: number;
   playing: boolean;
+  /** Bumped to start the simulated water again from rest (replaying the rise from the start). */
+  floodEpoch: number;
   floodOverlay: boolean;
   /** Shade dry cells by how soon they would flood. */
   vulnerability: boolean;
@@ -66,6 +68,7 @@ const initial = {
   floodError: null as string | null,
   rise: 0,
   playing: false,
+  floodEpoch: 0,
   floodOverlay: true,
   vulnerability: true,
   risks: [] as BuildingRisk[],

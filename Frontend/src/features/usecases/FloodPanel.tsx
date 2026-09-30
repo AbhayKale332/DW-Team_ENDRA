@@ -2,7 +2,9 @@ import { useEffect, useMemo } from 'react';
 import { Alert, Badge, Button, Group, Slider, SegmentedControl, Stack, Switch, Table, Text, Tooltip } from '@mantine/core';
 import { IconCrosshair, IconLock, IconPlayerPause, IconPlayerPlay } from '@tabler/icons-react';
 import { anchorBlocker } from '@/lib/dem';
-import { buildingDepth, floodStats, STOREY_M, TIER_COLORS, TIER_LABELS, TIER_LIMITS, WEIGHTS, type Tier } from '@/lib/usecases/flood';
+import { buildingDepth, floodStats, stageDepth, STOREY_M, TIER_COLORS, TIER_LABELS, TIER_LIMITS, WEIGHTS, type BuildingRisk, type Tier } from '@/lib/usecases/flood';
+import { MANNING_N } from '@/lib/usecases/floodSim';
+import { useFloodSim } from '@/store/floodSim';
 import { area } from '@/lib/format';
 import { KeyValueRows, PanelSection } from '@/components/panel';
 import { runAnchoring } from '@/features/anchoring/runAnchoring';
@@ -17,6 +19,8 @@ export function FloodPanel() {
   const anchor = useAnchor();
   const u = useUseCases();
   const { flood, risks, rise } = u;
+  // the simulated water while it runs, else the level it settles to
+  const live = useFloodSim((s) => s.live);
 
   // the arrival-level model is built once per scene / source; the slider only compares against it
   useEffect(() => {
@@ -40,14 +44,15 @@ export function FloodPanel() {
     return () => cancelAnimationFrame(raf);
   }, [u.playing, flood]);
 
-  const stats = useMemo(() => (flood ? floodStats(flood, rise) : null), [flood, rise]);
+  const stats = useMemo(() => live ?? (flood ? floodStats(flood, rise) : null), [live, flood, rise]);
+  const depthAt = (r: BuildingRisk) => (live ? stageDepth(r, live.stages[r.index]) : flood ? buildingDepth(r, flood, rise) : 0);
   const ranked = useMemo(() => risks.filter((r) => r.tier !== 'none').sort((a, b) => b.score - a.score), [risks]);
   const tierCount = useMemo(() => {
     const c: Record<Tier, number> = { critical: 0, high: 0, watch: 0, none: 0 };
     risks.forEach((r) => c[r.tier]++);
     return c;
   }, [risks]);
-  const wetNow = flood ? ranked.filter((r) => r.arrival <= flood.baseLevel + rise).length : 0;
+  const wetNow = ranked.filter((r) => depthAt(r) > 0).length;
 
   if (!scene) return null;
 
@@ -81,7 +86,7 @@ export function FloodPanel() {
     );
   }
 
-  const method = `Water rises from the source and floods connected lower ground first. Indicative screening on a ${scene.anchoring ? `${scene.anchoring.cellM.toFixed(0)} m` : '~30 m'} DEM (${scene.anchoring?.source ?? 'DEM'}): no rainfall, drainage, defences or flow speed. A finer DEM (Info tab → Load DEM file) sharpens it.`;
+  const method = `The source is held at the water level and the water flows out over the terrain: a shallow-water simulation (local inertial scheme, as in LISFLOOD-FP; Manning n = ${MANNING_N}), shown as a time-lapse. At rest it fills connected lower ground up to the level, which is what the buildings are ranked by. Indicative screening on a ${scene.anchoring ? `${scene.anchoring.cellM.toFixed(0)} m` : '~30 m'} DEM (${scene.anchoring?.source ?? 'DEM'}): no rainfall, drainage or defences. A finer DEM (Info tab → Load DEM file) sharpens it.`;
   const scoring = `Score 0–100 = ${WEIGHTS.urgency * 100} % urgency (how early it floods) + ${WEIGHTS.occupancy * 100} % occupancy (footprint × storeys of ${STOREY_M} m) + ${WEIGHTS.critical * 100} % critical facility (★, from OpenStreetMap Facilities). Critical ≥ ${TIER_LIMITS.critical}, High ≥ ${TIER_LIMITS.high}. Click a row to outline the building in 3D.`;
 
   return (
@@ -129,7 +134,11 @@ export function FloodPanel() {
             }
           >
             <Group gap={8} wrap="nowrap">
-              <Button size="compact-sm" variant="filled" aria-label={u.playing ? 'Pause' : 'Play rising water'} onClick={() => u.set({ playing: !u.playing, rise: !u.playing && rise >= flood.maxRise - 0.05 ? 0 : rise })}>
+              <Button size="compact-sm" variant="filled" aria-label={u.playing ? 'Pause' : 'Play rising water'} onClick={() => {
+                  // replaying from the top starts the water again from rest rather than draining the last run
+                  const restart = !u.playing && rise >= flood.maxRise - 0.05;
+                  u.set({ playing: !u.playing, rise: restart ? 0 : rise, floodEpoch: restart ? u.floodEpoch + 1 : u.floodEpoch });
+                }}>
                 {u.playing ? <IconPlayerPause size={14} /> : <IconPlayerPlay size={14} />}
               </Button>
               <Slider style={{ flex: 1 }} min={0} max={flood.maxRise} step={0.1} value={rise} onChange={(v) => u.set({ rise: v, playing: false })} label={(v) => `+${v.toFixed(1)} m`} aria-label="Water level rise" />
@@ -178,7 +187,7 @@ export function FloodPanel() {
                 </Table.Thead>
                 <Table.Tbody>
                   {ranked.slice(0, 10).map((r, i) => {
-                    const depth = buildingDepth(r, flood, rise);
+                    const depth = depthAt(r);
                     return (
                       <Table.Tr key={r.index} style={{ cursor: 'pointer', background: u.focusBuilding === r.index ? 'var(--mantine-color-cyan-light)' : undefined }} onClick={() => u.set({ focusBuilding: u.focusBuilding === r.index ? null : r.index })}>
                         <Table.Td>{i + 1}</Table.Td>
@@ -195,7 +204,7 @@ export function FloodPanel() {
                           +{r.rise.toFixed(1)} m
                         </Table.Td>
                         <Table.Td ta="right" className="dw-mono">
-                          {depth > 0 ? `${depth.toFixed(1)} m` : 'dry'}
+                          {depth <= 0 ? 'dry' : depth >= r.heightM ? 'submerged' : `${depth.toFixed(1)} m`}
                         </Table.Td>
                       </Table.Tr>
                     );

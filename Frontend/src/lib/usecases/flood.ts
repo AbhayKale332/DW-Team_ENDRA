@@ -5,8 +5,9 @@
  *
  *      arrival[c] = max(ground[c], min over neighbours n of arrival[n])        (seeds: their own ground)
  *
- *  so for any water level L, a cell is flooded iff arrival <= L and its depth is L - ground. The slider is then a
- *  comparison, not a simulation. No hydrodynamics, rainfall, drainage or flow speed: an indicative screening.
+ *  so for any water level L, a cell is flooded iff arrival <= L and its depth is L - ground. This is the state the
+ *  water settles to at L, and what buildings are ranked by; how it gets there (flow, speed, the advancing front) is
+ *  simulated by floodSim.ts. No rainfall, drainage or defences: an indicative screening.
  *
  *  Terrain comes from the DEM-anchored terrain (scene.terrain); without it there is nothing to flood. */
 import type { BuildingObject } from '@/domain/types';
@@ -30,6 +31,8 @@ export interface FloodModel {
   maxGround: number;
   source: FloodSource['kind'];
   seeds: number;
+  /** 1 on the cells the water comes from; null for the whole-scene level (no single source). */
+  seedMask: Uint8Array | null;
 }
 
 export type FloodError = { error: string };
@@ -97,8 +100,6 @@ export function buildFloodModel(grid: AnalysisGrid, source: FloodSource): FloodM
   }
   if (!Number.isFinite(minGround)) return { error: 'The terrain has no valid elevations.' };
 
-  const arrival = new Float32Array(n).fill(Infinity);
-  for (let i = 0; i < n; i++) if (!Number.isFinite(ground[i])) arrival[i] = NaN;
   const seeds: number[] = [];
   if (source.kind === 'water') {
     if (grid.water) for (let i = 0; i < n; i++) if (grid.water[i] && Number.isFinite(ground[i])) seeds.push(i);
@@ -111,41 +112,58 @@ export function buildFloodModel(grid: AnalysisGrid, source: FloodSource): FloodM
   }
 
   let baseLevel = minGround;
-  if (source.kind === 'bathtub') {
-    for (let i = 0; i < n; i++) if (Number.isFinite(ground[i])) arrival[i] = ground[i];
-  } else {
+  let seedMask: Uint8Array | null = null;
+  if (source.kind !== 'bathtub') {
     const sg = seeds.map((i) => ground[i]).sort((a, b) => a - b);
     baseLevel = sg[sg.length >> 1];
-    const heap = new Heap();
-    for (const s of seeds) {
-      arrival[s] = ground[s];
-      heap.push(ground[s], s);
-    }
-    const done = new Uint8Array(n);
-    while (heap.size) {
-      const [k, i] = heap.pop();
-      if (done[i]) continue;
-      done[i] = 1;
-      const x = i % w;
-      const y = (i - x) / w;
-      const visit = (j: number) => {
-        if (done[j] || !Number.isFinite(ground[j])) return;
-        const a = Math.max(ground[j], k);
-        if (a < arrival[j]) {
-          arrival[j] = a;
-          heap.push(a, j);
-        }
-      };
-      if (x > 0) visit(i - 1);
-      if (x < w - 1) visit(i + 1);
-      if (y > 0) visit(i - w);
-      if (y < h - 1) visit(i + w);
-    }
+    seedMask = new Uint8Array(n);
+    for (const s of seeds) seedMask[s] = 1;
   }
+  const arrival = arrivalLevels(ground, w, h, source.kind === 'bathtub' ? null : seeds);
   let maxArrival = baseLevel;
   for (let i = 0; i < n; i++) if (Number.isFinite(arrival[i]) && arrival[i] > maxArrival) maxArrival = arrival[i];
   const maxRise = Math.min(30, Math.max(2, Math.ceil(maxArrival - baseLevel + 0.5)));
-  return { w, h, cellM: grid.cellM, ground, arrival, baseLevel, maxRise, minGround, maxGround, source: source.kind, seeds: seeds.length };
+  return { w, h, cellM: grid.cellM, ground, arrival, baseLevel, maxRise, minGround, maxGround, source: source.kind, seeds: seeds.length, seedMask };
+}
+
+/** Priority-flood arrival levels (see the header) from `seeds`; null seeds = every cell is its own source, so the
+ *  arrival is the ground itself. NaN ground stays NaN; cells the seeds never reach are Infinity. */
+export function arrivalLevels(ground: Float32Array, w: number, h: number, seeds: ArrayLike<number> | null): Float32Array {
+  const n = w * h;
+  const arrival = new Float32Array(n).fill(Infinity);
+  for (let i = 0; i < n; i++) if (!Number.isFinite(ground[i])) arrival[i] = NaN;
+  if (!seeds) {
+    for (let i = 0; i < n; i++) if (Number.isFinite(ground[i])) arrival[i] = ground[i];
+    return arrival;
+  }
+  const heap = new Heap();
+  for (let k = 0; k < seeds.length; k++) {
+    const s = seeds[k];
+    if (!Number.isFinite(ground[s])) continue;
+    arrival[s] = ground[s];
+    heap.push(ground[s], s);
+  }
+  const done = new Uint8Array(n);
+  while (heap.size) {
+    const [k, i] = heap.pop();
+    if (done[i]) continue;
+    done[i] = 1;
+    const x = i % w;
+    const y = (i - x) / w;
+    const visit = (j: number) => {
+      if (done[j] || !Number.isFinite(ground[j])) return;
+      const a = Math.max(ground[j], k);
+      if (a < arrival[j]) {
+        arrival[j] = a;
+        heap.push(a, j);
+      }
+    };
+    if (x > 0) visit(i - 1);
+    if (x < w - 1) visit(i + 1);
+    if (y > 0) visit(i - w);
+    if (y < h - 1) visit(i + w);
+  }
+  return arrival;
 }
 
 export interface FloodStats {
@@ -199,6 +217,8 @@ export interface BuildingRisk {
   /** Metres of rise above the base level at which it floods. */
   rise: number;
   groundM: number;
+  /** Roof height above the ground, metres: water deeper than this submerges the building. */
+  heightM: number;
   areaM2: number;
   storeys: number;
   facility: string | null;
@@ -276,7 +296,7 @@ export function assessBuildings(buildings: BuildingObject[], grid: AnalysisGrid,
       }
     }
     maxOcc = Math.max(maxOcc, b.areaM2 * storeys);
-    out.push({ index, arrival, rise: arrival - model.baseLevel, groundM: gN ? gSum / gN : NaN, areaM2: b.areaM2, storeys, facility, score: 0, tier: 'none', cx, cy });
+    out.push({ index, arrival, rise: arrival - model.baseLevel, groundM: gN ? gSum / gN : NaN, heightM: b.h, areaM2: b.areaM2, storeys, facility, score: 0, tier: 'none', cx, cy });
   }
   for (const r of out) {
     if (!Number.isFinite(r.arrival) || r.rise > model.maxRise) continue;
@@ -291,4 +311,9 @@ export function assessBuildings(buildings: BuildingObject[], grid: AnalysisGrid,
 /** Depth of water on a building's ground at `rise`, metres; 0 when dry. */
 export function buildingDepth(r: BuildingRisk, model: FloodModel, rise: number): number {
   return r.arrival <= model.baseLevel + rise ? model.baseLevel + rise - r.groundM : 0;
+}
+
+/** Depth at a building from the simulated water surface there (`stage`, absolute; NaN = dry), metres. */
+export function stageDepth(r: BuildingRisk, stage: number): number {
+  return Number.isFinite(stage) ? Math.max(0, stage - r.groundM) : 0;
 }

@@ -1,5 +1,6 @@
 import { ActionIcon, Button, Menu, Switch, Tooltip } from '@mantine/core';
-import { IconAntenna, IconBook, IconChevronDown, IconDroplet, IconLayoutSidebar, IconLayoutSidebarRight } from '@tabler/icons-react';
+import { IconAntenna, IconBook, IconChevronDown, IconDroplet, IconLayoutSidebar, IconLayoutSidebarRight, IconMapPin } from '@tabler/icons-react';
+import { gcpEligible, setGcpOpen, useGcp } from '@/features/gcp/gcpStore';
 import { useUi } from '@/store/ui';
 import { useScene } from '@/store/scene';
 import { useUseCases, type UseCase } from '@/store/usecases';
@@ -27,7 +28,10 @@ function ScenariosMenu() {
   const hasScene = useScene((s) => !!s.scene);
   const open = useUseCases((s) => s.open);
   const active = useUseCases((s) => s.active);
-  const show = (u: UseCase) => useUseCases.getState().set({ open: true, active: u });
+  const show = (u: UseCase) => {
+    setGcpOpen(false);
+    useUseCases.getState().set({ open: true, active: u });
+  };
   return (
     <Menu position="bottom-start" withinPortal>
       <Menu.Target>
@@ -50,6 +54,26 @@ function ScenariosMenu() {
         )}
       </Menu.Dropdown>
     </Menu>
+  );
+}
+
+/** Ground control points: heights at picked points make an image without georeferencing an absolute DSM. */
+function GcpButton() {
+  const eligible = useScene((s) => gcpEligible(s.scene));
+  const open = useGcp((s) => s.open);
+  const toggle = () => {
+    if (!open) useUseCases.getState().set({ open: false, placing: false, pickingSource: false, playing: false });
+    setGcpOpen(!open);
+  };
+  return (
+    <Tooltip label={eligible ? 'Ground control points' : 'Ground control points (images without georeferencing)'}>
+      {/* the wrapper keeps the tooltip working while the button is disabled */}
+      <span style={{ display: 'inline-flex' }}>
+        <Button size="compact-md" variant={open ? 'light' : 'subtle'} color={open ? 'dwBlue' : 'gray'} disabled={!eligible} leftSection={<IconMapPin size={16} stroke={1.6} />} onClick={toggle} aria-pressed={open}>
+          GCP
+        </Button>
+      </span>
+    </Tooltip>
   );
 }
 
@@ -91,6 +115,7 @@ export function AppHeader() {
       <MenuBar />
       <span className={classes.divider} aria-hidden />
       <ScenariosMenu />
+      <GcpButton />
       <RawToggle />
       <div className={`${classes.headerActions} dw-no-print`}>
         <Button component="a" href={DOCS_URL} target="_blank" rel="noopener" size="compact-md" variant="subtle" color="gray" leftSection={<IconBook size={16} stroke={1.6} />}>

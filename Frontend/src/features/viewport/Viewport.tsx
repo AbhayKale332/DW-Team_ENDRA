@@ -17,6 +17,7 @@ import { Environment } from './scene/Environment';
 import { Markers } from './scene/Markers';
 import { TowerMarkers } from './scene/TowerMarkers';
 import { FloodBuildings } from './scene/FloodBuildings';
+import { FloodWater } from './scene/FloodWater';
 import { PickLayer } from './scene/PickLayer';
 import { FpsReporter, ScreenshotProvider } from './scene/Helpers';
 import { OrbitRig } from './cameras/OrbitRig';
@@ -113,6 +114,7 @@ export function Viewport() {
               <Markers />
               <TowerMarkers />
               <FloodBuildings />
+              <FloodWater />
               <Rig />
               <PickLayer />
               <FpsReporter />

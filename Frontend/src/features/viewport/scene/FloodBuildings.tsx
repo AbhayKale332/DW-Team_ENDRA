@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import * as THREE from 'three';
 import { useThree } from '@react-three/fiber';
+import CustomShaderMaterial from 'three-custom-shader-material/vanilla';
 import { useScene } from '@/store/scene';
 import { activeObjectKinds, useView } from '@/store/view';
 import { useUseCases } from '@/store/usecases';
+import { SIM_GLSL, SIM_UNIFORMS_GLSL, simUniforms, useFloodSim } from '@/store/floodSim';
 import { buildingGeometry, type MeshArrays } from '@/lib/objectGeometry';
-import { TIER_COLORS, type Tier } from '@/lib/usecases/flood';
+import { stageDepth, TIER_COLORS, type Tier } from '@/lib/usecases/flood';
 import { loadObjectSurface } from '../objectSurfaceClient';
 import { objectFrame } from './objectLayer';
 
@@ -19,8 +21,43 @@ function toGeometry(a: MeshArrays) {
   return g;
 }
 
+const vertexShader = /* glsl */ `
+  varying vec3 vW;
+  void main() {
+    vW = (modelMatrix * vec4(position, 1.0)).xyz;
+  }
+`;
+
+// Below the simulated water surface a wall or roof sinks into the water colour, more the deeper it is; a band of
+// foam marks the water line.
+const fragmentShader = /* glsl */ `
+  ${SIM_UNIFORMS_GLSL}
+  varying vec3 vW;
+  ${SIM_GLSL}
+  void main() {
+    if (uHasSim > 0.5) {
+      vec4 s = simAt(vW.xz * uSimWorld.xy + uSimWorld.zw);
+      if (s.r > 0.01) {
+        float under = s.g * uExag - vW.y; // world units below the surface
+        float m = under / max(uExag, 1e-3);
+        if (m > 0.0) {
+          float k = 1.0 - exp(-m * 0.6);
+          csm_DiffuseColor.rgb = mix(csm_DiffuseColor.rgb * 0.55, vec3(0.05, 0.16, 0.24), 0.3 + 0.6 * k);
+          csm_Emissive *= 1.0 - k;
+        }
+        float band = 1.0 - smoothstep(0.0, max(fwidth(vW.y) * 1.5, 0.12 * uExag), abs(under));
+        csm_DiffuseColor.rgb = mix(csm_DiffuseColor.rgb, vec3(0.9, 0.92, 0.9), band * 0.85);
+      }
+    }
+  }
+`;
+
 const material = (color: string, wet: boolean) =>
-  new THREE.MeshStandardMaterial({
+  new CustomShaderMaterial({
+    baseMaterial: THREE.MeshStandardMaterial,
+    vertexShader,
+    fragmentShader,
+    uniforms: { ...simUniforms },
     color: wet ? color : new THREE.Color(color).lerp(new THREE.Color('#ffffff'), 0.5),
     emissive: wet ? color : '#000000',
     emissiveIntensity: wet ? 0.35 : 0,
@@ -29,11 +66,11 @@ const material = (color: string, wet: boolean) =>
     polygonOffset: true,
     polygonOffsetFactor: -2,
     polygonOffsetUnits: -2,
-  });
+  }) as unknown as THREE.MeshStandardMaterial;
 
-/** Buildings the flood model reaches, drawn over the building models: tier colour, solid where the water is
- *  already at the footprint and pale where it is still to come. Geometry is rebuilt only when a building crosses
- *  the water line, not on every slider tick. */
+/** Buildings the flood model reaches, drawn over the building models: tier colour, solid where the simulated
+ *  water is already at the footprint and pale where it is still to come, and sunk into the water colour below its
+ *  surface. Geometry is rebuilt only when a building crosses the water line, not on every frame. */
 export function FloodBuildings() {
   const scene = useScene((s) => s.scene);
   const mode = useView((s) => s.mode);
@@ -47,6 +84,7 @@ export function FloodBuildings() {
   const flood = useUseCases((s) => s.flood);
   const rise = useUseCases((s) => s.rise);
   const focus = useUseCases((s) => s.focusBuilding);
+  const live = useFloodSim((s) => s.live);
   const exaggeration = useView((s) => s.exaggeration);
   const invalidate = useThree((s) => s.invalidate);
   const [ground, setGround] = useState<Float32Array | null>(null);
@@ -71,11 +109,16 @@ export function FloodBuildings() {
   }, []);
   useEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
 
-  // which buildings are wet at this rise: the only thing that changes geometry
+  // which buildings the water has reached: the only thing that changes geometry (the settled level until the
+  // simulation reports)
   const wetKey = useMemo(() => {
     if (!flood) return '';
-    return risks.map((r) => (r.tier !== 'none' && r.arrival <= flood.baseLevel + rise ? '1' : '0')).join('');
-  }, [risks, flood, rise]);
+    const wet = (i: number) => {
+      const r = risks[i];
+      return live ? stageDepth(r, live.stages[r.index]) > 0 : r.arrival <= flood.baseLevel + rise;
+    };
+    return risks.map((r, i) => (r.tier !== 'none' && wet(i) ? '1' : '0')).join('');
+  }, [risks, flood, rise, live]);
 
   const groups = useMemo(() => {
     if (!scene?.objects || !enabled || !ground) return [];

@@ -1,0 +1,26 @@
+{
+ "grid": [
+  443,
+  299
+ ],
+ "src_px": [
+  886,
+  598
+ ],
+ "gsd_m": 0.5,
+ "height_max_m": 28.774240493774414,
+ "height_max_src_m": 28.826753616333008,
+ "crs": null,
+ "transform": null,
+ "classes": {
+  "0": "other",
+  "1": "ground",
+  "2": "low_veg",
+  "3": "building",
+  "4": "water",
+  "5": "road",
+  "6": "tree"
+ },
+ "frac_below_1m": 0.5682636629245718,
+ "n_buildings": 8
+}

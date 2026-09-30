@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import CustomShaderMaterial from 'three-custom-shader-material/vanilla';
 import { lut, type ColormapId } from '@/theme/colormaps';
 import type { DrapeLayer } from '@/store/view';
+import { SIM_GLSL, SIM_UNIFORMS_GLSL, simUniforms } from '@/store/floodSim';
 
 /** Row order of the LUT atlas texture. */
 export const LUT_ROWS: ColormapId[] = ['turbo', 'terrain', 'viridis', 'cividis', 'grey', 'diverging', 'slope', 'confidence'];
@@ -98,6 +99,14 @@ export interface TerrainUniforms {
   uAgl: THREE.IUniform<THREE.Texture | null>;
   uHasAgl: THREE.IUniform<number>;
   uAglMax: THREE.IUniform<number>;
+  /** The running flood simulation (shared with the water surface; see store/floodSim). */
+  uSim: THREE.IUniform<THREE.Texture | null>;
+  uSimSize: THREE.IUniform<THREE.Vector2>;
+  uSimWorld: THREE.IUniform<THREE.Vector4>;
+  uSimUv: THREE.IUniform<THREE.Vector4>;
+  uHasSim: THREE.IUniform<number>;
+  uWaterMesh: THREE.IUniform<number>;
+  uExag: THREE.IUniform<number>;
 }
 
 export function createUniforms(): TerrainUniforms {
@@ -135,6 +144,7 @@ export function createUniforms(): TerrainUniforms {
     uAgl: { value: null },
     uHasAgl: { value: 0 },
     uAglMax: { value: 1 },
+    ...simUniforms,
   };
 }
 
@@ -182,8 +192,10 @@ const fragmentShader = /* glsl */ `
   uniform sampler2D uAgl;
   uniform float uHasAgl;
   uniform float uAglMax;
+  ${SIM_UNIFORMS_GLSL}
   varying vec2 vGrid;
   varying float vShade;
+  ${SIM_GLSL}
 
   const float LUT_ROWS = 8.0;
   vec3 cmap(float row, float t) {
@@ -244,6 +256,7 @@ const fragmentShader = /* glsl */ `
   // Use-case overlays, drawn over whatever layer is active. The texture lives on the analysis grid.
   //   1 coverage (RGBA8): R = class 0..3 (/3), G = blocked flag (/255: 1 structures, 2 terrain), A = has data
   //   2 flood (RGBA16F):  R = arrival rise (m above the source level), G = ground rise (m)
+  //     where the water is comes from the running simulation (uSim) once it has a frame, else from the arrival
   vec3 applyOverlay(vec3 color, vec2 g) {
     if (uOvl == 0) return color;
     vec2 q = g * uOvlScale;
@@ -261,8 +274,15 @@ const fragmentShader = /* glsl */ `
     }
     float arr = t.r;
     float gr = t.g;
-    if (arr <= uWater) {
-      float depth = max(uWater - gr, 0.0);
+    bool wet = arr <= uWater;
+    float depth = max(uWater - gr, 0.0);
+    if (uHasSim > 0.5) {
+      depth = max(simAt(g * uSimUv.xy + uSimUv.zw).r, 0.0);
+      wet = depth > 0.01;
+    }
+    if (wet) {
+      // under the 3D water surface: the ground just reads as soaked, the surface above carries the colour
+      if (uWaterMesh > 0.5) return color * mix(0.78, 0.5, clamp(depth, 0.0, 1.0)) + vec3(0.0, 0.015, 0.03);
       vec3 wc = mix(vec3(0.55, 0.82, 0.96), vec3(0.04, 0.22, 0.62), clamp(depth / 4.0, 0.0, 1.0));
       return mix(color, wc, clamp(0.55 + 0.3 * depth, 0.0, 0.88));
     }

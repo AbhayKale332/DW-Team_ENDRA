@@ -149,6 +149,7 @@ export async function buildProjectBlob({ fetchOutputs = true }: { fetchOutputs?:
     usecases: snapshotUseCases(),
     removeOffset: st.removeOffset,
     dismissed: st.dismissed,
+    gcps: scene.gcps?.length ? scene.gcps : null,
   };
   files['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2));
   const zip = zipSync(files, { level: 6 });
@@ -209,21 +210,28 @@ async function adoptProject(bytes: Uint8Array, opts: { sample?: boolean } = {}) 
     provenance: { ...manifest.provenance, source: opts.sample ? 'sample' : 'project' },
   });
 
+  // Ground control points: georeference and/or absolute heights, recomputed exactly as applied.
+  if (manifest.gcps?.length) {
+    try {
+      scene = (await import('@/lib/gcp')).applyGcpsToScene(scene, manifest.gcps).scene;
+    } catch (e) {
+      console.warn('Project ground control points unusable', e);
+    }
+  }
   // Anchor from the DEM cells saved with the project: same result as when it was saved, and no network needed.
   const demCache = json<DemCellsCache>(files['dem_cells.json']);
-  let anchored = false;
-  if (demCache) {
+  const dem = await import('@/lib/dem');
+  if (demCache && !scene.anchoring) {
     try {
-      const dem = await import('@/lib/dem');
       const saved = manifest.anchoring;
       scene = await dem.anchorScene(scene, { kind: 'cells', cache: demCache }, { structureShare: saved?.structureShare });
       if (saved && scene.anchoring) scene = { ...scene, anchoring: { ...scene.anchoring, source: saved.source, sourceId: saved.sourceId } };
-      if (saved?.heightRef === 'ndsm') scene = dem.withHeightReference(scene, 'ndsm');
-      anchored = true;
     } catch (e) {
       console.warn('Project DEM cells unusable; anchoring again', e);
     }
   }
+  if (scene.anchoring && manifest.anchoring?.heightRef === 'ndsm') scene = dem.withHeightReference(scene, 'ndsm');
+  const anchored = !!scene.anchoring;
 
   useTool.getState().clear();
   useScene.getState().setScene(scene);

@@ -1,21 +1,25 @@
 ---
 /**
- * Interactive mini 3D viewer for the web app's bundled Cartosat-2S campus sample.
- * Data is packed by scripts/make_campus_sample.py into public/samples/campus/.
+ * Interactive mini 3D viewer for a scene packed into public/samples/<sample>/
+ * by scripts/make_campus_sample.py or scripts/make_dwproj_sample.py.
  * three.js loads lazily when the viewer scrolls near the viewport.
  */
 import { getImage } from 'astro:assets';
 import type { ImageMetadata } from 'astro';
 interface Props {
+	sample: string;
+	/** Status bar text: sensor, GSD, size, CRS. */
+	label: string;
 	fallback?: ImageMetadata;
 	height?: number;
 }
-const { fallback, height = 520 } = Astro.props;
+const { sample, label, fallback, height = 520 } = Astro.props;
 const fb = fallback ? await getImage({ src: fallback, width: 1200 }) : null;
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const dataBase = `${base}/samples/${sample}/`;
 ---
 
-<figure class="cv not-content" data-base={`${base}/samples/campus/`}>
+<figure class="cv not-content" data-base={dataBase}>
 	<div class="stage" style={`height:${height}px`}>
 		<div class="canvas-host"></div>
 
@@ -56,7 +60,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 		</div>
 
 		<div class="status">
-			<span>Cartosat-2S · 0.6 m/px · 1024 × 1024 · EPSG:32645</span>
+			<span>{label}</span>
 			<span class="readout"></span>
 		</div>
 
@@ -67,7 +71,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 			</span>
 		</button>
 
-		{fb && <img class="fallback" src={fb.src} alt="Static render of the campus scene" hidden />}
+		<img class="fallback" src={fb ? fb.src : `${dataBase}rgb.jpg`} alt="Static view of the scene" loading="lazy" hidden />
 	</div>
 	<figcaption><slot /></figcaption>
 </figure>
@@ -449,12 +453,13 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 			return fail('Could not load the 3D scene');
 		}
 
-		const G = meta.grid as number;
+		// grid is N (square, campus) or [cols, rows]
+		const [GW, GH]: [number, number] = Array.isArray(meta.grid) ? meta.grid : [meta.grid, meta.grid];
 		const [SW, SH] = meta.src_px as [number, number];
 		const gsd = meta.gsd_m as number;
 		const hmax = meta.height_max_m as number;
 		const Wm = SW * gsd, Hm = SH * gsd;
-		const heights = new Float32Array(G * G);
+		const heights = new Float32Array(GW * GH);
 		for (let i = 0; i < heights.length; i++) heights[i] = (heightsU16[i] / 65535) * hmax;
 		root.querySelector<HTMLElement>('.hmax')!.textContent = `${meta.height_max_src_m.toFixed(1)} m`;
 
@@ -468,7 +473,8 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 		const scene = new THREE.Scene();
 		const camera = new THREE.PerspectiveCamera(38, 1, 1, 6000);
-		const HOME = new THREE.Vector3(-60, 440, 660);
+		// framed for the 614 m campus; scaled to the scene's extent
+		const HOME = new THREE.Vector3(-60, 440, 660).multiplyScalar(Math.max(Wm, Hm) / 614);
 		camera.position.copy(HOME);
 
 		scene.add(new THREE.HemisphereLight(0xffffff, 0x3a3f46, 1.6));
@@ -502,10 +508,10 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 		};
 		// height tint over a faint optical base
 		const heightTex = mkCanvasTex(SW, SH, (px) => {
-			const s = SW / G;
+			const sx = SW / GW, sy = SH / GH;
 			for (let r = 0; r < SH; r++)
 				for (let c = 0; c < SW; c++) {
-					const hv = heights[Math.min(G - 1, Math.floor(r / s)) * G + Math.min(G - 1, Math.floor(c / s))];
+					const hv = heights[Math.min(GH - 1, Math.floor(r / sy)) * GW + Math.min(GW - 1, Math.floor(c / sx))];
 					const [R, Gc, B] = turbo(hv / hmax);
 					const o = (r * SW + c) * 4;
 					const lum = (rgb.data.data[o] * 0.3 + rgb.data.data[o + 1] * 0.59 + rgb.data.data[o + 2] * 0.11) / 255;
@@ -529,12 +535,12 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 		const textures: Record<string, any> = { optical, height: heightTex, classes: classTex };
 
 		// ---------- terrain ----------
-		const geo = new THREE.PlaneGeometry(Wm, Hm, G - 1, G - 1);
+		const geo = new THREE.PlaneGeometry(Wm, Hm, GW - 1, GH - 1);
 		geo.rotateX(-Math.PI / 2);
 		const pos = geo.attributes.position as any;
 		let exag = 1;
 		const applyHeights = () => {
-			for (let i = 0; i < G * G; i++) pos.setY(i, heights[i] * exag);
+			for (let i = 0; i < GW * GH; i++) pos.setY(i, heights[i] * exag);
 			pos.needsUpdate = true;
 			geo.computeVertexNormals();
 			geo.computeBoundingSphere();
@@ -634,8 +640,9 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 		// ---------- hover ----------
 		const ray = new THREE.Raycaster();
 		const ndc = new THREE.Vector2();
-		const zone = parseInt(String(meta.crs).split(':')[1], 10) - 32600;
-		const t = meta.transform as number[];
+		// null for screenshots: no location readout
+		const t = meta.crs && meta.transform ? (meta.transform as number[]) : null;
+		const zone = t ? parseInt(String(meta.crs).split(':')[1], 10) - 32600 : 0;
 		let queued: PointerEvent | null = null;
 		const fmt = (v: number, d = 1) => `${v.toFixed(d)} m`;
 		const pick = () => {
@@ -652,12 +659,16 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 			}
 			const col = (hit.point.x + Wm / 2) / gsd, row = (hit.point.z + Hm / 2) / gsd;
 			if (col < 0 || row < 0 || col >= SW || row >= SH) return;
-			const gi = Math.min(G - 1, Math.floor((row / SH) * G)) * G + Math.min(G - 1, Math.floor((col / SW) * G));
+			const gi = Math.min(GH - 1, Math.floor((row / SH) * GH)) * GW + Math.min(GW - 1, Math.floor((col / SW) * GW));
 			const hHere = heights[gi];
 			const cls = seg.data.data[(Math.floor(row) * seg.w + Math.floor(col)) * 4];
-			const [lat, lon] = utmToLatLon(t[2] + (col + 0.5) * t[0], t[5] + (row + 0.5) * t[4], zone);
-			const ll = `${lat.toFixed(6)}°N ${lon.toFixed(6)}°E`;
-			readout.textContent = `h ${fmt(hHere)} · ${ll}`;
+			let ll = '', llRow = '';
+			if (t) {
+				const [lat, lon] = utmToLatLon(t[2] + (col + 0.5) * t[0], t[5] + (row + 0.5) * t[4], zone);
+				ll = `${lat.toFixed(6)}°N ${lon.toFixed(6)}°E`;
+				llRow = `<div class="row"><span>Location</span><b>${ll}</b></div>`;
+			}
+			readout.textContent = ll ? `h ${fmt(hHere)} · ${ll}` : `h ${fmt(hHere)}`;
 			const b = buildings.find((bb) => inPoly(col, row, bb.poly));
 			if (b) {
 				const floors = Math.max(1, Math.round(b.h / 3));
@@ -667,12 +678,12 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 					`<div class="row"><span>Highest point</span><b>${fmt(b.h_max)}</b></div>` +
 					`<div class="row"><span>Footprint</span><b>${Math.round(b.area_m2).toLocaleString('en')} m²</b></div>` +
 					`<div class="row"><span>Height here</span><b>${fmt(hHere)}</b></div>` +
-					`<div class="row"><span>Location</span><b>${ll}</b></div>`;
+					llRow;
 			} else {
 				hoverEl.innerHTML =
 					`<div class="hh"><span>${CLASS_NAME[cls] ?? 'Surface'}</span><span>${fmt(hHere)}</span></div>` +
 					`<div class="row"><span>Height above ground</span><b>${fmt(hHere)}</b></div>` +
-					`<div class="row"><span>Location</span><b>${ll}</b></div>`;
+					llRow;
 			}
 			hoverEl.hidden = false;
 		};

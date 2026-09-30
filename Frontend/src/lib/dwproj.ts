@@ -14,7 +14,7 @@
  *
  *  Version 1 projects (no v2 fields and files) still open. */
 import { strFromU8, unzipSync } from 'fflate';
-import type { AnchoringInfo, CameraBookmark, ClassMap, Georef, HeightGrid, Provenance, ReferenceSurface, SceneMeta, SceneObjects } from '@/domain/types';
+import type { AnchoringInfo, CameraBookmark, ClassMap, Georef, GroundControlPoint, HeightGrid, Provenance, ReferenceSurface, SceneMeta, SceneObjects } from '@/domain/types';
 import { parseNpy } from './npy';
 import { parseObjects } from './objects';
 import { decodeGray8Png } from './png';
@@ -47,6 +47,8 @@ export interface Manifest {
   usecases?: Record<string, unknown>;
   removeOffset?: boolean;
   dismissed?: string[];
+  /** Ground control points applied to a scene without its own georeferencing. */
+  gcps?: GroundControlPoint[] | null;
 }
 
 export interface ProjectCore {

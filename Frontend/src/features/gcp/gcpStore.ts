@@ -15,9 +15,16 @@ interface GcpState {
   points: GroundControlPoint[];
   /** The next click on the terrain adds a point. */
   picking: boolean;
+  /** The GCP card is showing (header → GCP). */
+  open: boolean;
+  /** Newest point: its height field takes the focus. */
+  lastAdded: string | null;
 }
 
-export const useGcp = create<GcpState>()(() => ({ sceneId: null, key: null, points: [], picking: false }));
+export const useGcp = create<GcpState>()(() => ({ sceneId: null, key: null, points: [], picking: false, open: false, lastAdded: null }));
+
+/** GCPs are for scenes without their own georeferencing (or ones georeferenced by GCPs). */
+export const gcpEligible = (s: Scene | null) => !!s && (!s.georef || !!s.gcps);
 
 const keyOf = (s: Scene) => {
   const g = s.ndsm ?? s.heights;
@@ -32,17 +39,21 @@ useScene.subscribe((s, prev) => {
   const scene = s.scene;
   if (scene === prev.scene) return;
   const st = useGcp.getState();
-  if (!scene) return useGcp.setState({ sceneId: null, points: [], picking: false });
+  if (!scene) return useGcp.setState({ sceneId: null, points: [], picking: false, open: false });
   if (st.sceneId === scene.id) return;
   const key = keyOf(scene);
-  useGcp.setState({ sceneId: scene.id, key, picking: false, points: scene.gcps ?? (st.key === key ? st.points : []) });
+  useGcp.setState({ sceneId: scene.id, key, picking: false, open: st.open && gcpEligible(scene), points: scene.gcps ?? (st.key === key ? st.points : []) });
 });
+
+export function setGcpOpen(open: boolean) {
+  useGcp.setState({ open, picking: false });
+}
 
 const uid = () => `g${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`;
 
 export function addGcp(col: number, row: number) {
-  const st = useGcp.getState();
-  useGcp.setState({ points: [...st.points, { id: uid(), col, row, lat: null, lon: null, elev: null }], picking: false });
+  const id = uid();
+  useGcp.setState({ points: [...useGcp.getState().points, { id, col, row, lat: null, lon: null, elev: null }], picking: false, lastAdded: id });
 }
 
 export function updateGcp(id: string, patch: Partial<GroundControlPoint>) {

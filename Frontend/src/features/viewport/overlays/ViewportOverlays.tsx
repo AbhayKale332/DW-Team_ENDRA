@@ -3,6 +3,7 @@ import { canGeolocate } from '@/lib/osm';
 import { useCamera } from '@/store/camera';
 import { ProcessingOverlay } from '@/features/processing/ProcessingOverlay';
 import { ScenarioOverlay } from '@/features/usecases/UseCasesTab';
+import { GcpOverlay } from '@/features/gcp/GcpOverlay';
 import { ProductChip } from '@/features/anchoring/ProductChip';
 import { ToolPalette } from '@/features/analysis/ToolPalette';
 import { ViewSwitcher } from './ViewSwitcher';
@@ -34,6 +35,7 @@ export function ViewportOverlays() {
         {hasScene && orbit && <ToolPalette />}
         {hasScene && <ProductChip />}
         <ScenarioOverlay />
+        <GcpOverlay />
       </div>
       <div className={classes.topCenter}>
         {!orbit && <ModeBar />}

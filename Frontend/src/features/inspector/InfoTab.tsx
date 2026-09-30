@@ -2,9 +2,7 @@ import { Alert, Anchor, List, Stack, Text } from '@mantine/core';
 import { IconInfoCircle, IconPhoto } from '@tabler/icons-react';
 import { EmptyPanel, KeyValueRows, PanelSection } from '@/components/panel';
 import { useScene } from '@/store/scene';
-import { ElevationReference } from '@/features/anchoring/ElevationReference';
-import { GcpPanel } from '@/features/gcp/GcpPanel';
-import { lonLatAt, formatLonLat } from '@/lib/georef';
+import { ElevationReference } from '@/features/anchoring/ElevationReference';import { lonLatAt, formatLonLat } from '@/lib/georef';
 import { summariseObjects } from '@/lib/objects';
 import { download } from '@/lib/download';
 
@@ -22,7 +20,6 @@ export function InfoTab() {
   return (
     <Stack gap="lg" p="md">
       <ElevationReference scene={scene} />
-      {(!g || scene.gcps) && <GcpPanel scene={scene} />}
       <PanelSection title={scene.product === 'DSM' ? 'Elevations' : 'Heights'} gap={4}>
         <KeyValueRows
           rows={[
