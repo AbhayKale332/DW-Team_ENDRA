@@ -1,5 +1,5 @@
 import { ActionIcon, Button, Menu, Switch, Tooltip } from '@mantine/core';
-import { IconAntenna, IconChevronDown, IconDroplet, IconLayoutSidebar, IconLayoutSidebarRight } from '@tabler/icons-react';
+import { IconAntenna, IconBook, IconChevronDown, IconDroplet, IconLayoutSidebar, IconLayoutSidebarRight } from '@tabler/icons-react';
 import { useUi } from '@/store/ui';
 import { useScene } from '@/store/scene';
 import { useUseCases, type UseCase } from '@/store/usecases';
@@ -8,6 +8,8 @@ import { BrandMark } from './Brand';
 import { MenuBar } from './MenuBar';
 import { BackendStatus } from './BackendStatus';
 import classes from './shell.module.css';
+
+const DOCS_URL = 'https://docs.depthwizard.teamendra.tech/';
 
 /** Header toggle; a pressed one stays tinted so the open panels read at a glance. */
 function HeaderToggle({ label, pressed, onClick, children }: { label: string; pressed?: boolean; onClick: () => void; children: React.ReactNode }) {
@@ -91,6 +93,10 @@ export function AppHeader() {
       <ScenariosMenu />
       <RawToggle />
       <div className={`${classes.headerActions} dw-no-print`}>
+        <Button component="a" href={DOCS_URL} target="_blank" rel="noopener" size="compact-md" variant="subtle" color="gray" leftSection={<IconBook size={16} stroke={1.6} />}>
+          Docs
+        </Button>
+        <span className={classes.divider} style={{ marginInline: 8 }} aria-hidden />
         <BackendStatus />
         <span className={classes.divider} style={{ marginInline: 8 }} aria-hidden />
         <HeaderToggle label="Project panel ([)" pressed={projectOpen} onClick={() => useUi.getState().set({ projectOpen: !projectOpen })}>

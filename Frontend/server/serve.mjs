@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { brotliCompressSync, constants as zlib, gzipSync } from 'node:zlib';
 import { spaceUrlFromId } from './space.mjs';
 import { relayOverpass } from './overpass.mjs';
+import { samplesIndex } from './samples.mjs';
 import { createRateLimiter, isAllowedSpaceRequest, pickForwardHeaders, MAX_UPLOAD_BYTES } from './guard.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -49,6 +50,7 @@ const TYPES = {
   '.woff2': 'font/woff2',
   '.woff': 'font/woff',
   '.npy': 'application/octet-stream',
+  '.dwproj': 'application/zip',
 };
 const COMPRESSIBLE = new Set(['.html', '.js', '.css', '.json', '.svg', '.npy']);
 
@@ -155,6 +157,11 @@ function encodeFor(file, body, acceptEncoding) {
 
 async function serveStatic(req, res) {
   const url = new URL(req.url, 'http://x');
+  // rescanned per request: a sample folder dropped into dist/samples is listed without a rebuild
+  if (url.pathname === '/samples/index.json') {
+    res.writeHead(200, { ...SECURITY_HEADERS, 'content-type': TYPES['.json'], 'cache-control': 'no-store' });
+    return res.end(req.method === 'HEAD' ? undefined : samplesIndex(join(DIST, 'samples')));
+  }
   let file;
   try {
     file = normalize(join(DIST, decodeURIComponent(url.pathname)));

@@ -3,7 +3,7 @@ import { prepareInput } from '@/lib/input';
 import { useScene } from '@/store/scene';
 import { useUi } from '@/store/ui';
 import { DepthWizardError, toDepthWizardError } from '@/api/errors';
-import { loadSample, SAMPLES } from '@/lib/samples';
+import { sampleUrl, type SampleDef } from '@/lib/samples';
 import { useTool } from '@/store/tool';
 import { useCamera } from '@/store/camera';
 import { useView } from '@/store/view';
@@ -69,22 +69,17 @@ export async function openFiles(files: File[]) {
   return stageImage(first);
 }
 
-export async function openSample(id: string) {
-  const def = SAMPLES.find((s) => s.id === id);
-  if (!def) return;
+/** Open a sample scene: its .dwproj, like any project. */
+export async function openSample(def: SampleDef) {
   const n = notifications.show({ loading: true, title: 'Loading sample', message: def.name, autoClose: false, withCloseButton: false });
   try {
-    const { scene, reference, demCache } = await loadSample(def);
-    useTool.getState().clear();
-    useCamera.getState().set({ mode: 'orbit' });
-    useView.getState().set({ mode: 'dsm3d' });
-    useScene.getState().setScene(scene);
-    const anchoring = await import('@/features/anchoring/runAnchoring');
-    if (demCache) anchoring.registerBundledDem(scene.id, demCache);
-    anchoring.autoAnchor();
-    if (reference) useScene.getState().setReference(reference);
-    useUi.getState().set({ projectOpen: false });
-    notifications.update({ id: n, loading: false, title: 'Sample loaded', message: def.name, autoClose: 2500, withCloseButton: true, color: 'dwBlue' });
+    const r = await fetch(sampleUrl(def));
+    if (!r.ok) throw new Error(`Could not load ${def.file} (HTTP ${r.status})`);
+    const blob = await r.blob();
+    const { openProject } = await import('./project');
+    if (await openProject(blob, { sample: true }))
+      notifications.update({ id: n, loading: false, title: 'Sample loaded', message: def.name, autoClose: 2500, withCloseButton: true, color: 'dwBlue' });
+    else notifications.hide(n);
   } catch (e) {
     notifications.hide(n);
     reportError(e, 'Could not load sample');

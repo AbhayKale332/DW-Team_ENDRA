@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { Menu, Menubar, Text, useMantineColorScheme } from '@mantine/core';
 import {
-  IconBook,
   IconBox,
   IconBrain,
   IconClock,
@@ -17,6 +16,7 @@ import {
   IconInfoCircle,
   IconKeyboard,
   IconMap2,
+  IconPackage,
   IconPlaneTilt,
   IconRoute,
   IconSettings,
@@ -33,7 +33,7 @@ import { newProject, openSample } from '@/features/files/openFile';
 import { openRecent, saveProject } from '@/features/files/project';
 import { runExport, type ExportKind } from '@/features/files/exports';
 import { listRecent, type RecentEntry } from '@/lib/recent';
-import { SAMPLES } from '@/lib/samples';
+import { loadSamples, useSamples } from '@/lib/samples';
 import { setViewMode } from '@/features/viewport/overlays/ViewSwitcher';
 import { setCameraMode } from '@/features/viewport/overlays/NavigationHud';
 import { openAny } from './commands';
@@ -77,9 +77,18 @@ export function MenuBar() {
   const showStatusBar = useSettings((s) => s.showStatusBar);
   const { colorScheme, setColorScheme } = useMantineColorScheme();
   const [recent, setRecent] = useState<RecentEntry[]>([]);
+  const samples = useSamples((s) => s.samples);
 
   return (
-    <Menubar className={classes.menubar} aria-label="Application menu" onOpenChange={(i) => i === 0 && void listRecent().then(setRecent)}>
+    <Menubar
+      className={classes.menubar}
+      aria-label="Application menu"
+      onOpenChange={(i) => {
+        if (i !== 0) return;
+        void listRecent().then(setRecent);
+        void loadSamples();
+      }}
+    >
       <Menubar.Menu width={260}>
         <Menubar.Target className={classes.menuButton}>
           <TargetLabel icon={IconFolder} label="File" />
@@ -112,8 +121,9 @@ export function MenuBar() {
               <Menu.Sub.Item leftSection={<IconSparkles {...I} />}>Sample Scenes</Menu.Sub.Item>
             </Menu.Sub.Target>
             <Menu.Sub.Dropdown miw={240}>
-              {SAMPLES.map((s) => (
-                <Menu.Item key={s.id} leftSection={<IconBox {...I} />} onClick={() => void openSample(s.id)}>
+              {samples.length === 0 && <Menu.Item disabled>No Sample Scenes</Menu.Item>}
+              {samples.map((s) => (
+                <Menu.Item key={s.id} leftSection={<IconBox {...I} />} onClick={() => void openSample(s)}>
                   {s.name}
                 </Menu.Item>
               ))}
@@ -130,6 +140,10 @@ export function MenuBar() {
               </Menu.Sub.Item>
             </Menu.Sub.Target>
             <Menu.Sub.Dropdown miw={220}>
+              <Menu.Item leftSection={<IconPackage {...I} />} onClick={() => void saveProject()}>
+                Entire Project (.dwproj)
+              </Menu.Item>
+              <Menu.Divider />
               <Menu.Sub>
                 <Menu.Sub.Target>
                   <Menu.Sub.Item leftSection={<IconCube {...I} />}>3D Object</Menu.Sub.Item>
@@ -247,9 +261,6 @@ export function MenuBar() {
           <TargetLabel icon={IconHelpCircle} label="Help" />
         </Menubar.Target>
         <Menubar.Dropdown>
-          <Menu.Item leftSection={<IconBook {...I} />} onClick={() => ui.set({ dialog: 'docs' })}>
-            Documentation
-          </Menu.Item>
           <Menu.Item leftSection={<IconKeyboard {...I} />} rightSection={<Shortcut k="?" />} onClick={() => ui.set({ dialog: 'shortcuts' })}>
             Keyboard Shortcuts
           </Menu.Item>

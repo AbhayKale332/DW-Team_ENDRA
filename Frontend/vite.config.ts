@@ -3,8 +3,10 @@ import { defineConfig, loadEnv, type Connect, type Plugin, type ProxyOptions } f
 import react from '@vitejs/plugin-react';
 import { fileURLToPath, URL } from 'node:url';
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { spaceUrlFromId } from './server/space.mjs';
 import { relayOverpass } from './server/overpass.mjs';
+import { samplesIndex } from './server/samples.mjs';
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8')) as { version: string };
 
@@ -24,6 +26,28 @@ function overpassRelay(): Plugin {
     name: 'overpass-relay',
     configureServer: (server) => void server.middlewares.use(handle),
     configurePreviewServer: (server) => void server.middlewares.use(handle),
+  };
+}
+
+/** samples/index.json: every .dwproj under samples/, rescanned per request in dev/preview and written into the build. */
+function samplesIndexPlugin(): Plugin {
+  let publicSamples = '';
+  let builtSamples = '';
+  const serve = (dir: () => string): Connect.NextHandleFunction => (req, res, next) => {
+    if (!/\/samples\/index\.json(\?|$)/.test(req.url ?? '')) return next();
+    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(samplesIndex(dir()));
+  };
+  return {
+    name: 'samples-index',
+    configResolved: (c) => {
+      publicSamples = resolve(c.publicDir, 'samples');
+      builtSamples = resolve(c.root, c.build.outDir, 'samples');
+    },
+    configureServer: (server) => void server.middlewares.use(serve(() => publicSamples)),
+    configurePreviewServer: (server) => void server.middlewares.use(serve(() => builtSamples)),
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'samples/index.json', source: samplesIndex(publicSamples) });
+    },
   };
 }
 
@@ -48,7 +72,7 @@ export default defineConfig(({ mode }) => {
   return {
     // Relative base keeps the build portable: static hosts, file:// and a future Tauri shell.
     base: './',
-    plugins: [react(), overpassRelay()],
+    plugins: [react(), overpassRelay(), samplesIndexPlugin()],
     define: { __APP_VERSION__: JSON.stringify(pkg.version) },
     resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
     server: { proxy: hfProxy },

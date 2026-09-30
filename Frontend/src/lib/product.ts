@@ -22,6 +22,17 @@ const datumLabel = (s: Pick<Scene, 'anchoring'>) => (s.anchoring?.datum && s.anc
 
 /** The honest description of a scene's height product. Absolute only when a DEM has anchored it. */
 export function productInfo(scene: Pick<Scene, 'product' | 'anchoring'>): ProductInfo {
+  if (scene.product === 'DSM' && scene.anchoring?.sourceId === 'gcp') {
+    return {
+      short: 'DSM · absolute',
+      title: 'Absolute DSM',
+      tone: 'green',
+      axis: 'Elevation',
+      unit: 'm (GCP datum)',
+      reading: 'elev',
+      summary: 'Elevation fitted to the ground control points: ground from the points, structure height from the model.',
+    };
+  }
   if (scene.product === 'DSM') {
     const datum = datumLabel(scene);
     return {

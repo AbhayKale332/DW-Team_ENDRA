@@ -4,7 +4,7 @@ import { buildAnalysisGrid, type AnalysisGrid } from '@/lib/usecases/grid';
 import { DEFAULT_TOWER, type Tower } from '@/lib/usecases/telecom';
 import { usePoi, poisFor } from '@/features/poi/poiStore';
 import { useScene } from '@/store/scene';
-import { useUseCases } from '@/store/usecases';
+import { useUseCases, type UseCaseSnapshot } from '@/store/usecases';
 import { analysisWorker } from '@/workers/clients';
 
 /** The analysis grid of a scene, built once per scene object and mirrored into the analysis worker. */
@@ -24,6 +24,8 @@ export function analysisGridFor(scene: Scene) {
 
 let seq = { coverage: 0, suggest: 0, flood: 0 };
 let timer: ReturnType<typeof setTimeout> | undefined;
+/** Water level of a reopened project: applied once its flood model has been rebuilt (a new scene resets the level). */
+let pendingRise: { sceneId: string; rise: number } | null = null;
 
 const uid = () => `t${Date.now().toString(36)}${Math.floor(Math.random() * 1e4).toString(36)}`;
 
@@ -115,7 +117,9 @@ export async function runFlood() {
       useUseCases.getState().set({ floodStatus: 'error', floodError: model.error, flood: null, risks: [] });
       return;
     }
-    useUseCases.getState().set({ flood: model, floodStatus: 'done', rise: Math.min(useUseCases.getState().rise, model.maxRise), risks: risksFor(scene, grid, model) });
+    const restored = pendingRise?.sceneId === scene.id ? pendingRise.rise : null;
+    pendingRise = null;
+    useUseCases.getState().set({ flood: model, floodStatus: 'done', rise: Math.min(restored ?? useUseCases.getState().rise, model.maxRise), risks: risksFor(scene, grid, model) });
   } catch (e) {
     if (my !== seq.flood) return;
     useUseCases.getState().set({ floodStatus: 'error', floodError: e instanceof Error ? e.message : String(e), flood: null, risks: [] });
@@ -134,6 +138,15 @@ export function rerankWithFacilities() {
   const { flood } = useUseCases.getState();
   if (!scene || !flood) return;
   useUseCases.getState().set({ risks: risksFor(scene, analysisGridFor(scene).grid, flood) });
+}
+
+/** Scenario inputs of a reopened project; coverage and flood results are recomputed from them. */
+export function restoreUseCases(sceneId: string, snap: UseCaseSnapshot) {
+  const { rise, ...rest } = snap;
+  pendingRise = typeof rise === 'number' && rise > 0 ? { sceneId, rise } : null;
+  useUseCases.getState().reset();
+  useUseCases.getState().set(rest);
+  if (rest.towers?.length) refreshCoverage(0);
 }
 
 /** Drop results computed for another scene / terrain. */

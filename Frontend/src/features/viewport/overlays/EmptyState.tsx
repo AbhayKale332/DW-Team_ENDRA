@@ -1,7 +1,8 @@
+import { useEffect } from 'react';
 import { Button, Group, Menu, Stack, Text, Title } from '@mantine/core';
 import { IconChevronDown, IconFolderOpen, IconSparkles } from '@tabler/icons-react';
 import { useScene } from '@/store/scene';
-import { SAMPLES } from '@/lib/samples';
+import { loadSamples, useSamples } from '@/lib/samples';
 import { IMAGE_ACCEPT, openSample, pickFiles, stageImage } from '@/features/files/openFile';
 import { BrandMark } from '@/features/shell/Brand';
 import classes from './overlays.module.css';
@@ -11,6 +12,8 @@ export function EmptyState() {
   const hasScene = useScene((s) => !!s.scene);
   const hasInput = useScene((s) => !!s.input);
   const running = useScene((s) => s.run.status === 'running');
+  const samples = useSamples((s) => s.samples);
+  useEffect(() => void loadSamples(), []);
   if (hasScene || running) return null;
   return (
     <div className={classes.empty}>
@@ -35,20 +38,22 @@ export function EmptyState() {
                 Open image…
               </Button>
             )}
-            <Menu position="bottom-start" width={320}>
-              <Menu.Target>
-                <Button variant="default" leftSection={<IconSparkles size={16} />} rightSection={<IconChevronDown size={14} />}>
-                  Try a sample scene
-                </Button>
-              </Menu.Target>
-              <Menu.Dropdown>
-                {SAMPLES.map((s) => (
-                  <Menu.Item key={s.id} onClick={() => void openSample(s.id)}>
-                    {s.name}
-                  </Menu.Item>
-                ))}
-              </Menu.Dropdown>
-            </Menu>
+            {samples.length > 0 && (
+              <Menu position="bottom-start" width={320} onOpen={() => void loadSamples()}>
+                <Menu.Target>
+                  <Button variant="default" leftSection={<IconSparkles size={16} />} rightSection={<IconChevronDown size={14} />}>
+                    Try a sample scene
+                  </Button>
+                </Menu.Target>
+                <Menu.Dropdown>
+                  {samples.map((s) => (
+                    <Menu.Item key={s.id} onClick={() => void openSample(s)}>
+                      {s.name}
+                    </Menu.Item>
+                  ))}
+                </Menu.Dropdown>
+              </Menu>
+            )}
           </Group>
         </Stack>
       </div>

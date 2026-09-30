@@ -7,7 +7,7 @@ import { ERROR_COPY } from '@/api/errors';
 import type { ProgressStage } from '@/api/provider';
 import { cancelPrediction, runPrediction } from './runPrediction';
 import { openSample } from '@/features/files/openFile';
-import { SAMPLES } from '@/lib/samples';
+import { useSamples } from '@/lib/samples';
 import classes from '@/features/viewport/overlays/overlays.module.css';
 
 const STAGES: Array<{ id: ProgressStage; label: string }> = [
@@ -33,6 +33,7 @@ function useElapsed(start: number | null, active: boolean) {
 /** Accessible progress stepper for a model run, plus the recovery UI when a run fails. */
 export function ProcessingOverlay() {
   const run = useScene((s) => s.run);
+  const firstSample = useSamples((s) => s.samples[0]);
   const tta = useScene((s) => s.params.tta);
   const hasPrevious = useScene((s) => !!s.scene);
   const elapsed = useElapsed(run.startedAt, run.status === 'running');
@@ -63,9 +64,11 @@ export function ProcessingOverlay() {
                 Connection settings
               </Button>
             )}
-            <Button size="xs" variant="default" leftSection={<IconSparkles size={14} />} onClick={() => void openSample(SAMPLES[0].id)}>
-              Open a sample
-            </Button>
+            {firstSample && (
+              <Button size="xs" variant="default" leftSection={<IconSparkles size={14} />} onClick={() => void openSample(firstSample)}>
+                Open a sample
+              </Button>
+            )}
             <Button size="xs" variant="subtle" color="gray" onClick={() => useScene.getState().setRun({ status: 'idle', error: null })}>
               Dismiss
             </Button>

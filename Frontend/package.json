@@ -16,7 +16,8 @@
     "e2e": "playwright test",
     "serve": "node server/serve.mjs",
     "make-sample": "node scripts/sample-from-space.mjs",
-    "cache-dem": "node scripts/cache-dem.mjs"
+    "cache-dem": "node scripts/cache-dem.mjs",
+    "pack-sample": "node scripts/pack-sample.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",

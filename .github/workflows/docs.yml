@@ -1,0 +1,98 @@
+# Build DOCS/ into a static site (MkDocs Material) and publish it on GitHub Pages
+# at https://docs.depthwizard.teamendra.tech/
+#
+# One-time setup: Settings → Pages → Source: "GitHub Actions", and Custom domain: docs.depthwizard.teamendra.tech
+# (DNS: a CNAME record docs.depthwizard → <owner>.github.io).
+name: Deploy docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'DOCS/**'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# one deployment at a time; a newer push supersedes a queued one but never cancels a running deploy
+concurrency:
+  group: pages-docs
+  cancel-in-progress: false
+
+env:
+  DOCS_DOMAIN: docs.depthwizard.teamendra.tech
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install MkDocs
+        run: pip install --disable-pip-version-check mkdocs-material
+
+      - name: Site config
+        run: |
+          cat > mkdocs.yml <<EOF
+          site_name: DepthWizard Docs
+          site_url: https://${DOCS_DOMAIN}/
+          docs_dir: DOCS
+          site_dir: site
+          theme:
+            name: material
+            features:
+              - navigation.sections
+              - navigation.indexes
+              - search.highlight
+            palette:
+              - scheme: default
+                toggle: { icon: material/weather-night, name: Dark mode }
+              - scheme: slate
+                toggle: { icon: material/weather-sunny, name: Light mode }
+          markdown_extensions:
+            - admonition
+            - tables
+            - toc: { permalink: true }
+            - pymdownx.highlight
+            - pymdownx.superfences
+          EOF
+
+      - name: Home page (when DOCS has none)
+        run: |
+          if [ ! -f DOCS/index.md ] && [ ! -f DOCS/README.md ]; then
+            {
+              echo "# DepthWizard Docs"
+              echo
+              find DOCS -name '*.md' | sort | while read -r f; do
+                p="${f#DOCS/}"
+                echo "- [${p%.md}](${p// /%20})"
+              done
+            } > DOCS/index.md
+          fi
+
+      - name: Build
+        run: |
+          mkdocs build
+          echo "$DOCS_DOMAIN" > site/CNAME
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

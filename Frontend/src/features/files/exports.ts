@@ -111,9 +111,8 @@ export async function runExport(kind: ExportKind) {
       }
       case 'server-glb': {
         const a = scene.artefacts.find((x) => x.name === 'terrain.glb');
-        if (!a?.url) throw new Error('This result has no server mesh.');
-        const r = await fetch(a.url);
-        blob = await r.blob();
+        if (!a?.blob && !a?.url) throw new Error('This result has no server mesh.');
+        blob = a.blob ?? (await fetch(a.url!).then((r) => r.blob()));
         name = `${stem}_model_terrain.glb`;
         break;
       }

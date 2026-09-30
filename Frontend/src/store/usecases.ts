@@ -77,3 +77,18 @@ export const useUseCases = create<UseCaseState>()((set) => ({
   set: (p) => set(p),
   reset: () => set(initial),
 }));
+
+/** What a project keeps of the scenarios: the inputs. Results are recomputed when it is reopened. */
+const PERSISTED = ['active', 'open', 'towers', 'params', 'telecomOverlay', 'floodSource', 'floodPoint', 'rise', 'floodOverlay', 'vulnerability'] as const;
+export type UseCaseSnapshot = Partial<Pick<UseCaseState, (typeof PERSISTED)[number]>>;
+
+export function snapshotUseCases(): UseCaseSnapshot {
+  const s = useUseCases.getState();
+  return Object.fromEntries(PERSISTED.map((k) => [k, s[k]])) as UseCaseSnapshot;
+}
+
+/** Keep only the known keys of a saved snapshot (it comes from a file). */
+export function pickUseCases(saved: Record<string, unknown> | null | undefined): UseCaseSnapshot {
+  if (!saved) return {};
+  return Object.fromEntries(PERSISTED.filter((k) => saved[k] !== undefined).map((k) => [k, saved[k]])) as UseCaseSnapshot;
+}

@@ -1,9 +1,7 @@
 import type { BackendStatus, InferenceProvider, ModelInfo, PredictionResult, PredictRequest, ProgressEvent } from '../provider';
 import { DepthWizardError } from '../errors';
-import { parseNpy } from '@/lib/npy';
-import { classMapFromPng, fetchOptional } from '@/lib/classMap';
-import { fetchObjects } from '@/lib/objects';
-import { SAMPLES } from '@/lib/samples';
+import { readProject } from '@/lib/dwproj';
+import { loadSamples, sampleUrl, type SampleDef } from '@/lib/samples';
 import type { SceneMeta } from '@/domain/types';
 
 async function fetchOk(url: string, signal: AbortSignal) {
@@ -28,7 +26,8 @@ export class MockProvider implements InferenceProvider {
   readonly label = 'Offline demo (sample result)';
   readonly capabilities = { absoluteDsm: false, uncertainty: false, serverValidation: false, cancel: true };
 
-  constructor(private readonly base = SAMPLES[0].base) {}
+  /** Default: the first sample project. */
+  constructor(private readonly sample?: SampleDef) {}
 
   async status(onChange?: (s: BackendStatus) => void): Promise<BackendStatus> {
     const s: BackendStatus = { state: 'running', message: 'Offline demo provider' };
@@ -48,28 +47,26 @@ export class MockProvider implements InferenceProvider {
     await wait(700, signal);
     if (fail === 'quota') throw new DepthWizardError('quota', 'GPU quota used up', 'Your ZeroGPU quota for today is used up.');
     onProgress({ stage: 'fetching' });
-    const [buf, meta, segBuf] = await Promise.all([
-      fetchOk(`${this.base}/ndsm_m.npy`, signal).then((r) => r.arrayBuffer()),
-      fetchOk(`${this.base}/meta.json`, signal).then((r) => r.json() as Promise<SceneMeta>),
-      fetchOptional(`${this.base}/seg.png`, { signal }),
-    ]);
-    const arr = parseNpy(buf);
-    const gsd = req.gsd ?? meta.scene?.gsd_m ?? 0.5;
-    const grid = { width: arr.shape[1], height: arr.shape[0], gsd };
-    const classes = classMapFromPng(segBuf, meta, grid.width, grid.height);
-    const objects = await fetchObjects(`${this.base}/objects.json`, grid, { signal });
+    const sample = this.sample ?? (await loadSamples())[0];
+    if (!sample) throw new DepthWizardError('network', 'Sample unavailable', 'There is no sample project (.dwproj) under samples/.');
+    const p = readProject(new Uint8Array(await fetchOk(sampleUrl(sample), signal).then((r) => r.arrayBuffer())));
+    const meta: SceneMeta = p.manifest.meta;
+    const gsd = req.gsd ?? p.manifest.gsd;
+    const { heights, classes } = p;
+    const objects = p.objects ? { ...p.objects, gsd } : null;
+    const file = (name: string, data: BlobPart | undefined, type: string) => (data ? [{ name, blob: new Blob([data], { type }) }] : []);
     return {
-      heights: { data: arr.data, width: grid.width, height: grid.height },
+      heights,
       classes,
       objects,
       meta: { ...meta, scene: { ...meta.scene, gsd_m: gsd, gsd_source: req.gsd ? 'user' : 'assumed' } },
       status: { lines: ['Offline demo: returned the bundled sample result.'], gsd, gsdSource: req.gsd ? 'user' : 'assumed' },
       warning: null,
       artefacts: [
-        { name: 'ndsm_m.npy', url: `${this.base}/ndsm_m.npy` },
-        { name: 'meta.json', url: `${this.base}/meta.json` },
-        ...(classes ? [{ name: 'seg.png', url: `${this.base}/seg.png` }] : []),
-        ...(objects ? [{ name: 'objects.json', url: `${this.base}/objects.json` }] : []),
+        ...file('ndsm_m.npy', p.files['ndsm_m.npy'] as BlobPart, 'application/octet-stream'),
+        ...file('meta.json', JSON.stringify(meta), 'application/json'),
+        ...file('seg.png', p.files['seg.png'] as BlobPart | undefined, 'image/png'),
+        ...file('objects.json', p.files['objects.json'] as BlobPart | undefined, 'application/json'),
       ],
     };
   }

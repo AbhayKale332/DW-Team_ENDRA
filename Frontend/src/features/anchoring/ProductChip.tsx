@@ -28,7 +28,7 @@ export function ProductChip() {
       )}
       {!running && scene.product === 'DSM' && scene.anchoring && (
         <Text size="xs" c="dimmed">
-          {scene.anchoring.sourceId === 'local-file' ? 'local DEM' : 'DEM-anchored'}
+          {scene.anchoring.sourceId === 'gcp' ? 'GCP-anchored' : scene.anchoring.sourceId === 'local-file' ? 'local DEM' : 'DEM-anchored'}
         </Text>
       )}
     </Group>

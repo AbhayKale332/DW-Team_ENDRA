@@ -3,8 +3,10 @@ import { IconInfoCircle, IconPhoto } from '@tabler/icons-react';
 import { EmptyPanel, KeyValueRows, PanelSection } from '@/components/panel';
 import { useScene } from '@/store/scene';
 import { ElevationReference } from '@/features/anchoring/ElevationReference';
+import { GcpPanel } from '@/features/gcp/GcpPanel';
 import { lonLatAt, formatLonLat } from '@/lib/georef';
 import { summariseObjects } from '@/lib/objects';
+import { download } from '@/lib/download';
 
 const metres = (v: number | null) => (v === null ? '–' : `${v.toFixed(1)} m`);
 
@@ -20,6 +22,7 @@ export function InfoTab() {
   return (
     <Stack gap="lg" p="md">
       <ElevationReference scene={scene} />
+      {(!g || scene.gcps) && <GcpPanel scene={scene} />}
       <PanelSection title={scene.product === 'DSM' ? 'Elevations' : 'Heights'} gap={4}>
         <KeyValueRows
           rows={[
@@ -97,7 +100,11 @@ export function InfoTab() {
           <List size="xs" spacing={2}>
             {scene.artefacts.map((a) => (
               <List.Item key={a.name}>
-                {a.url ? (
+                {a.blob ? (
+                  <Anchor component="button" type="button" fz="xs" onClick={() => download(a.blob!, a.name)}>
+                    {a.name}
+                  </Anchor>
+                ) : a.url ? (
                   <Anchor href={a.url} target="_blank" rel="noopener" download={a.name}>
                     {a.name}
                   </Anchor>

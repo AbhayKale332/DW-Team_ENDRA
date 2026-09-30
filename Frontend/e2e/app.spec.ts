@@ -81,7 +81,7 @@ test('mock inference run shows staged progress and produces a scene', async ({ p
   await page.goto('/?mock');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: 'Open image…' }).click();
-  await (await chooser).setFiles('public/samples/buildings_large_campus/rgb.png');
+  await (await chooser).setFiles('e2e/fixtures/rgb.png');
   const run = page.getByRole('button', { name: 'Estimate heights' });
   await expect(run).toBeEnabled();
   await run.click();

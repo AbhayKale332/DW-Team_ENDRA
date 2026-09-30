@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Badge, Button, Divider, Drawer, Group, Kbd, Modal, Select, SimpleGrid, Stack, Table, Text, Title, Typography } from '@mantine/core';
+import { Badge, Button, Divider, Group, Kbd, Modal, Select, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
 import { useUi } from '@/store/ui';
 import { useSettings } from '@/store/settings';
 import { getProvider, PROVIDER_OPTIONS, type ProviderId } from '@/api/registry';
@@ -130,63 +130,6 @@ function AboutDialog() {
   );
 }
 
-function DocsDrawer() {
-  return (
-    <Typography fz="sm">
-      <h3>Workflow</h3>
-      <ol>
-        <li>
-          <b>Open</b> a PNG, JPG or GeoTIFF (File → Load / Open, drag and drop, or the Project panel).
-        </li>
-        <li>
-          <b>Declare the resolution.</b> GeoTIFFs provide it; for plain images pick the metres per pixel. Heights scale with this value.
-        </li>
-        <li>
-          <b>Estimate heights.</b> The image is sent to the DepthWizard model; progress is shown over the viewport.
-        </li>
-        <li>
-          <b>Explore</b> in the 3D DSM view, the Height Map or the Input Image (quick switcher, top left, or keys 1–3).
-        </li>
-        <li>
-          <b>Analyse</b> with Scenarios (telecom coverage, flood response) from the header; <b>validate</b> against a reference raster in the Inspector.
-        </li>
-        <li>
-          <b>Export</b> the DSM as GeoTIFF, the terrain as GLB/OBJ/PLY/STL, or the heatmap as PNG/JPG; save the workspace as a project.
-        </li>
-      </ol>
-      <h3>Products</h3>
-      <ul>
-        <li>
-          <b>rDSM</b> — plain images: heights above local ground, not georeferenced. Absolute values depend on the declared resolution.
-        </li>
-        <li>
-          <b>nDSM</b> — GeoTIFFs: heights above ground on the image's own coordinate grid.
-        </li>
-        <li>
-          <b>DSM</b> — absolute elevations, after anchoring a georeferenced result to a DEM (Inspector → Info).
-        </li>
-      </ul>
-      <h3>Navigation</h3>
-      <ul>
-        <li>Orbit: drag to rotate, right-drag to pan, scroll to zoom. The compass faces north on click.</li>
-        <li>First person (F): pointer-lock mouse look, WASD, Shift to run.</li>
-        <li>Flight simulator (G): W/S throttle, arrows pitch and roll, Q/E yaw; the HUD shows height above ground.</li>
-        <li>Drone tour (T): a cinematic loop for presentations and recordings.</li>
-      </ul>
-      <h3>Projection</h3>
-      <p>
-        Every grid pixel becomes a vertex at its pixel centre (x east, z south, y up, metres). The optical image is draped with pixel-centre exact texture coordinates, so a feature in the image
-        sits exactly on its estimated height.
-      </p>
-      <h3>Limitations</h3>
-      <ul>
-        <li>Scenes up to 8192 px (long side) are processed at full resolution as 512 px tiles; larger ones are downsampled first. The drape keeps full resolution.</li>
-        <li>Cloud, water glint and deep shadow can produce spurious heights.</li>
-      </ul>
-    </Typography>
-  );
-}
-
 /** All application dialogs, driven by uiStore.dialog. */
 export function Dialogs() {
   const dialog = useUi((s) => s.dialog);
@@ -204,9 +147,6 @@ export function Dialogs() {
       <Modal opened={dialog === 'about'} onClose={close} title="About" size="md">
         <AboutDialog />
       </Modal>
-      <Drawer opened={dialog === 'docs'} onClose={close} title="Documentation" position="right" size="lg">
-        <DocsDrawer />
-      </Drawer>
     </>
   );
 }

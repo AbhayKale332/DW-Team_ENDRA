@@ -1,38 +1,28 @@
-import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
+import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from 'fflate';
 import { notifications } from '@mantine/notifications';
-import type { CameraBookmark, ClassMap, Georef, Provenance, ReferenceSurface, SceneMeta, SceneObjects } from '@/domain/types';
+import type { Artefact, SceneMeta } from '@/domain/types';
+import { buf, json, mimeOf, readProject, type Manifest } from '@/lib/dwproj';
+import type { DemCellsCache } from '@/lib/dem';
 import { parseNpy, writeNpyF32 } from '@/lib/npy';
-import { parseObjects, serializeObjects } from '@/lib/objects';
-import { decodeGray8Png, encodeGray8Png } from '@/lib/png';
+import { serializeObjects } from '@/lib/objects';
+import type { OsmFeature } from '@/lib/osm';
+import type { Poi } from '@/lib/poi';
+import { encodeGray8Png } from '@/lib/png';
 import { buildScene } from '@/lib/sceneBuilder';
 import { download, safeStem } from '@/lib/download';
 import { getRecentBlob, putRecent } from '@/lib/recent';
-import { stemOf } from '@/lib/input';
+import { prepareInput, stemOf } from '@/lib/input';
 import { useScene } from '@/store/scene';
 import { useView } from '@/store/view';
 import { useCamera, viewportApi } from '@/store/camera';
-import { useTool } from '@/store/tool';
+import { useTool, type GridPoint } from '@/store/tool';
 import { useUi } from '@/store/ui';
+import { useAnchor } from '@/store/anchor';
+import { pickUseCases, snapshotUseCases } from '@/store/usecases';
+import { osmFeaturesFor, useOsm } from '@/features/osm/osmStore';
+import { poisFor, usePoi } from '@/features/poi/poiStore';
+import { restoreUseCases } from '@/features/usecases/actions';
 import { reportError } from './openFile';
-
-interface Manifest {
-  format: 'dwproj';
-  version: 1;
-  name: string;
-  imageName: string;
-  gsd: number;
-  gsdSource: 'user' | 'geotiff' | 'assumed';
-  georef: Georef | null;
-  meta: SceneMeta;
-  statusLines: string[];
-  provenance: Provenance;
-  view: Record<string, unknown>;
-  bookmarks: CameraBookmark[];
-  tools: { probe: unknown; measure: unknown; profile: unknown };
-  reference: { name: string; kind: ReferenceSurface['kind']; alignment: ReferenceSurface['alignment']; notes: string[] } | null;
-  /** Present when the project carries `seg.png` (object classes). Absent in older projects. */
-  classes?: { names: string[] } | null;
-}
 
 async function thumbnail(): Promise<string | null> {
   const shot = await viewportApi.screenshot();
@@ -51,18 +41,96 @@ async function thumbnail(): Promise<string | null> {
   });
 }
 
-/** Serialise the current workspace into a .dwproj (zip) blob. */
-export async function buildProjectBlob(): Promise<{ blob: Blob; name: string } | null> {
-  const { scene, reference } = useScene.getState();
+/** Model output files fetched once per URL (the Space's file links expire, so a project keeps the bytes). */
+const outputCache = new Map<string, Blob>();
+
+async function outputBlob(a: Artefact, fetchMissing: boolean): Promise<Blob | null> {
+  if (a.blob) return a.blob;
+  if (!a.url) return null;
+  const hit = outputCache.get(a.url);
+  if (hit || !fetchMissing) return hit ?? null;
+  try {
+    const r = await fetch(a.url);
+    if (!r.ok) return null;
+    const b = await r.blob();
+    outputCache.set(a.url, b);
+    return b;
+  } catch {
+    return null;
+  }
+}
+
+/** Already-compressed formats are stored, not deflated again. */
+const STORED = /\.(png|jpe?g|glb|zip|dwproj|tiff?)$/i;
+const safeName = (n: string) => n.replace(/[\\/]+/g, '_');
+
+/** Serialise the whole workspace into a .dwproj (zip) blob: everything needed to reopen it on another machine,
+ *  offline. `fetchOutputs` downloads model output files not fetched yet (Recent skips that to stay cheap). */
+export async function buildProjectBlob({ fetchOutputs = true }: { fetchOutputs?: boolean } = {}): Promise<{ blob: Blob; name: string } | null> {
+  const st = useScene.getState();
+  const { scene, reference, input } = st;
   if (!scene) return null;
   const { set: _s, reset: _r, ...view } = useView.getState();
   const tool = useTool.getState();
   const ext = scene.image.type === 'image/jpeg' ? 'jpg' : 'png';
+  const files: Zippable = {};
+  const put = (name: string, data: Uint8Array) => void (files[name] = STORED.test(name) ? [data, { level: 0 }] : data);
+  const bytes = async (b: Blob) => new Uint8Array(await b.arrayBuffer());
+
+  const imageName = `input.${ext}`;
+  put(imageName, await bytes(scene.image));
+  // always the above-ground heights: an anchored scene re-anchors from dem_cells.json when reopened
+  put('ndsm_m.npy', writeNpyF32((scene.ndsm ?? scene.heights).data, [scene.heights.height, scene.heights.width]));
+  if (reference) put('reference_m.npy', writeNpyF32(reference.data, [scene.heights.height, scene.heights.width]));
+  if (scene.classes) put('seg.png', await bytes(encodeGray8Png(scene.classes.data, scene.classes.width, scene.classes.height)));
+  // Same schema the Space publishes, so a project's objects.json is readable by anything that reads the Space's.
+  if (scene.objects) put('objects.json', strToU8(JSON.stringify(serializeObjects(scene.objects))));
+
+  const a = scene.anchoring;
+  if (a?.demCells) {
+    const cache: DemCellsCache = {
+      version: 1,
+      rows: a.demCells.rows,
+      cols: a.demCells.cols,
+      cellPx: a.cellPx,
+      cells: Array.from(a.demCells.data, (v) => (Number.isFinite(v) ? v : null)),
+      source: a.source.replace(/ \(bundled cache\)$/, ''),
+      datum: a.datum,
+      tileZoom: a.tileZoom,
+      fetchedAt: a.fetchedAt,
+      notes: a.notes,
+    };
+    put('dem_cells.json', strToU8(JSON.stringify(cache)));
+  }
+  const osm = osmFeaturesFor(useOsm.getState(), scene);
+  if (osm) put('osm.json', strToU8(JSON.stringify(osm)));
+  const pois = poisFor(usePoi.getState(), scene);
+  if (pois) put('pois.json', strToU8(JSON.stringify(pois)));
+
+  let source: Manifest['source'] = null;
+  if (input) {
+    source = { name: input.name, file: `source/${safeName(input.name)}` };
+    put(source.file, await bytes(input.file));
+  }
+  const outputs: NonNullable<Manifest['outputs']> = [];
+  for (const art of scene.artefacts) {
+    // the model's height map is the project's own ndsm_m.npy: do not store it twice
+    if (art.name === 'ndsm_m.npy') {
+      outputs.push({ name: art.name, file: 'ndsm_m.npy' });
+      continue;
+    }
+    const b = await outputBlob(art, fetchOutputs);
+    if (!b) continue;
+    const file = `outputs/${safeName(art.name)}`;
+    put(file, await bytes(b));
+    outputs.push({ name: art.name, file });
+  }
+
   const manifest: Manifest = {
     format: 'dwproj',
-    version: 1,
+    version: 2,
     name: scene.name,
-    imageName: `input.${ext}`,
+    imageName,
     gsd: scene.gsd,
     gsdSource: scene.gsdSource,
     georef: scene.georef,
@@ -74,30 +142,32 @@ export async function buildProjectBlob(): Promise<{ blob: Blob; name: string } |
     tools: { probe: tool.probe, measure: tool.measure, profile: tool.profile },
     reference: reference ? { name: reference.name, kind: reference.kind, alignment: reference.alignment, notes: reference.notes } : null,
     classes: scene.classes ? { names: Array.from(scene.classes.names, (n) => n ?? '') } : null,
+    anchoring: a ? { source: a.source, sourceId: a.sourceId, structureShare: a.structureShare, heightRef: scene.product === 'DSM' ? 'dsm' : 'ndsm' } : null,
+    source,
+    outputs,
+    params: st.params,
+    usecases: snapshotUseCases(),
+    removeOffset: st.removeOffset,
+    dismissed: st.dismissed,
   };
-  const files: Record<string, Uint8Array> = {
-    'manifest.json': strToU8(JSON.stringify(manifest, null, 2)),
-    [manifest.imageName]: new Uint8Array(await scene.image.arrayBuffer()),
-    // always the above-ground heights: an anchored scene re-anchors (from cached DEM tiles) when reopened
-    'ndsm_m.npy': writeNpyF32((scene.ndsm ?? scene.heights).data, [scene.heights.height, scene.heights.width]),
-  };
-  if (reference) files['reference_m.npy'] = writeNpyF32(reference.data, [scene.heights.height, scene.heights.width]);
-  if (scene.classes) files['seg.png'] = new Uint8Array(await encodeGray8Png(scene.classes.data, scene.classes.width, scene.classes.height).arrayBuffer());
-  // Same schema the Space publishes, so a project's objects.json is readable by anything that reads the Space's.
-  if (scene.objects) files['objects.json'] = strToU8(JSON.stringify(serializeObjects(scene.objects)));
+  files['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2));
   const zip = zipSync(files, { level: 6 });
   return { blob: new Blob([zip as BlobPart], { type: 'application/zip' }), name: `${safeStem(scene.name)}.dwproj` };
 }
 
+/** Save (and Export → Entire Project): the complete project as one .dwproj file. */
 export async function saveProject() {
+  if (!useScene.getState().scene) return;
+  const id = notifications.show({ loading: true, title: 'Saving project', message: 'Packing all project files', autoClose: false, withCloseButton: false });
   try {
     const built = await buildProjectBlob();
-    if (!built) return;
+    if (!built) return void notifications.hide(id);
     download(built.blob, built.name);
     await rememberRecent(built.blob);
     useScene.getState().set({ dirty: false });
-    notifications.show({ title: 'Project saved', message: built.name, color: 'teal' });
+    notifications.update({ id, loading: false, color: 'teal', title: 'Project saved', message: `${built.name} · ${(built.blob.size / 1e6).toFixed(1)} MB`, autoClose: 3500, withCloseButton: true });
   } catch (e) {
+    notifications.hide(id);
     reportError(e, 'Could not save project');
   }
 }
@@ -106,67 +176,105 @@ export async function saveProject() {
 export async function rememberRecent(blob?: Blob) {
   const scene = useScene.getState().scene;
   if (!scene) return;
-  const b = blob ?? (await buildProjectBlob())?.blob;
+  const b = blob ?? (await buildProjectBlob({ fetchOutputs: false }))?.blob;
   if (!b) return;
   await putRecent({ id: scene.id, name: scene.name, savedAt: new Date().toISOString(), thumbnail: await thumbnail(), size: b.size }, b);
 }
 
-async function adoptProject(bytes: Uint8Array) {
-  const files = unzipSync(bytes);
-  const manifest = JSON.parse(strFromU8(files['manifest.json'])) as Manifest;
-  if (manifest.format !== 'dwproj') throw new Error('Not a DepthWizard project');
-  const arr = parseNpy(files['ndsm_m.npy'].slice().buffer);
-  const [h, w] = arr.shape;
-  const img = files[manifest.imageName];
-  const image = new Blob([img as BlobPart], { type: manifest.imageName.endsWith('jpg') ? 'image/jpeg' : 'image/png' });
-  let classes: ClassMap | null = null;
-  if (manifest.classes && files['seg.png']) {
-    try {
-      classes = { ...decodeGray8Png(files['seg.png'].slice().buffer), names: manifest.classes.names };
-    } catch (e) {
-      console.warn('Project seg.png unreadable; class layer disabled', e);
-    }
-  }
-  let objects: SceneObjects | null = null;
-  if (files['objects.json']) {
-    try {
-      objects = parseObjects(JSON.parse(strFromU8(files['objects.json'])), { width: w, height: h, gsd: manifest.gsd });
-    } catch (e) {
-      console.warn('Project objects.json unreadable; 3D objects disabled', e);
-    }
-  }
-  const scene = await buildScene({
+const isPoint = (p: unknown): p is GridPoint => !!p && typeof (p as GridPoint).col === 'number' && typeof (p as GridPoint).row === 'number';
+const points = (v: unknown): GridPoint[] => (Array.isArray(v) ? v.filter(isPoint) : []);
+
+/** Make a project the current workspace. `sample` marks a bundled sample scene. */
+async function adoptProject(bytes: Uint8Array, opts: { sample?: boolean } = {}) {
+  const { manifest, files, image, heights, classes, objects } = readProject(bytes);
+  const outputs: Artefact[] = (manifest.outputs ?? [])
+    .filter((o) => files[o.file])
+    .map((o) => {
+      const blob = new Blob([files[o.file] as BlobPart], { type: mimeOf(o.name) });
+      return { name: o.name, blob, size: blob.size };
+    });
+  let scene = await buildScene({
     name: manifest.name,
     image,
-    heights: { data: arr.data, width: w, height: h },
+    heights,
     classes,
     objects,
     meta: manifest.meta,
     gsd: manifest.gsd,
     gsdSource: manifest.gsdSource,
     inputGeoref: manifest.georef,
-    inputSize: { width: w, height: h },
+    inputSize: { width: heights.width, height: heights.height },
+    artefacts: outputs,
     statusLines: manifest.statusLines,
-    provenance: { ...manifest.provenance, source: 'project' },
+    provenance: { ...manifest.provenance, source: opts.sample ? 'sample' : 'project' },
   });
+
+  // Anchor from the DEM cells saved with the project: same result as when it was saved, and no network needed.
+  const demCache = json<DemCellsCache>(files['dem_cells.json']);
+  let anchored = false;
+  if (demCache) {
+    try {
+      const dem = await import('@/lib/dem');
+      const saved = manifest.anchoring;
+      scene = await dem.anchorScene(scene, { kind: 'cells', cache: demCache }, { structureShare: saved?.structureShare });
+      if (saved && scene.anchoring) scene = { ...scene, anchoring: { ...scene.anchoring, source: saved.source, sourceId: saved.sourceId } };
+      if (saved?.heightRef === 'ndsm') scene = dem.withHeightReference(scene, 'ndsm');
+      anchored = true;
+    } catch (e) {
+      console.warn('Project DEM cells unusable; anchoring again', e);
+    }
+  }
+
+  useTool.getState().clear();
   useScene.getState().setScene(scene);
-  void import('@/features/anchoring/runAnchoring').then((m) => m.autoAnchor());
+  const anchoring = await import('@/features/anchoring/runAnchoring');
+  if (demCache) anchoring.registerBundledDem(scene.id, demCache);
+  if (anchored) useAnchor.getState().set({ status: 'done', message: null, sceneId: scene.id });
+  else anchoring.autoAnchor();
+
   if (manifest.reference && files['reference_m.npy']) {
-    const ref = parseNpy(files['reference_m.npy'].slice().buffer);
+    const ref = parseNpy(buf(files['reference_m.npy']));
     useScene.getState().setReference({ ...manifest.reference, data: ref.data });
   }
+  const st = useScene.getState();
+  st.set({ removeOffset: !!manifest.removeOffset });
+  for (const id of manifest.dismissed ?? []) st.dismiss(id);
+  if (manifest.params) st.setParams(manifest.params);
+
+  // OpenStreetMap layers as they were fetched: shown without asking the Overpass API again
+  const osm = json<OsmFeature[]>(files['osm.json']);
+  if (Array.isArray(osm)) useOsm.setState({ sceneId: scene.id, status: 'ready', features: osm, error: null });
+  const pois = json<Poi[]>(files['pois.json']);
+  if (Array.isArray(pois)) usePoi.setState({ sceneId: scene.id, status: 'ready', pois, error: null });
+
+  useView.getState().reset();
   useView.getState().set(manifest.view as never);
   useCamera.getState().set({ mode: 'orbit', bookmarks: manifest.bookmarks ?? [] });
-  useTool.getState().clear();
+  const probe = manifest.tools?.probe;
+  useTool.getState().set({ probe: isPoint(probe) ? probe : null, measure: points(manifest.tools?.measure).slice(0, 2), profile: points(manifest.tools?.profile) });
+  restoreUseCases(scene.id, pickUseCases(manifest.usecases));
   useUi.getState().set({ projectOpen: false });
+
+  // The original image, staged again so the model can be re-run from this project.
+  const src = manifest.source && files[manifest.source.file];
+  if (manifest.source && src) {
+    const file = new File([src as BlobPart], manifest.source.name, { type: mimeOf(manifest.source.name) });
+    void prepareInput(file)
+      .then((input) => useScene.getState().setInput(input))
+      .catch((e) => console.warn('Project source image unreadable', e));
+  } else {
+    useScene.getState().setInput(null);
+  }
 }
 
-export async function openProject(file: Blob & { name?: string }) {
+export async function openProject(file: Blob & { name?: string }, opts: { sample?: boolean } = {}) {
   try {
-    await adoptProject(new Uint8Array(await file.arrayBuffer()));
-    notifications.show({ title: 'Project opened', message: file.name ?? 'Project', color: 'teal' });
+    await adoptProject(new Uint8Array(await file.arrayBuffer()), opts);
+    if (!opts.sample) notifications.show({ title: 'Project opened', message: file.name ?? 'Project', color: 'teal' });
+    return true;
   } catch (e) {
-    reportError(e, 'Could not open project');
+    reportError(e, opts.sample ? 'Could not load sample' : 'Could not open project');
+    return false;
   }
 }
 

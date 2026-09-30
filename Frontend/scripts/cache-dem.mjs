@@ -3,6 +3,7 @@
 //   node scripts/cache-dem.mjs [public/samples/buildings_large_campus]
 //
 // Mirrors src/lib/dem (Terrain Tiles z=12, 30 m anchor cells, 3x3 sub-samples per cell). Writes dem_cells.json.
+// Run on the loose result folder, then pack it: node scripts/pack-sample.mjs <folder> --clean
 import { readFile, writeFile } from 'node:fs/promises';
 import { inflateSync } from 'node:zlib';
 import { join } from 'node:path';

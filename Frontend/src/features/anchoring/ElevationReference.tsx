@@ -41,6 +41,7 @@ export function ElevationReference({ scene }: { scene: Scene }) {
   const running = mine && anchor.status === 'running';
   const info = productInfo(scene);
   const share = shareDraft ?? a?.structureShare ?? 0;
+  const gcp = a?.sourceId === 'gcp';
 
   return (
     <PanelSection title="Product" hint={info.summary} right={<ProductBadge scene={scene} full />}>
@@ -60,32 +61,42 @@ export function ElevationReference({ scene }: { scene: Scene }) {
             aria-label="Height reference"
           />
           <KeyValueRows
-            rows={[
-              ['DEM', a.source],
-              ['Vertical datum', a.datum === 'unknown' ? 'not stated' : a.datum],
-              ['DEM range', `${a.demMinM.toFixed(1)} – ${a.demMaxM.toFixed(1)} m`],
-              ['Anchor cell', `${a.cellM.toFixed(0)} m (${a.cellPx} px)`],
-              ['DSM vs DEM cells', `${a.meanOffsetM >= 0 ? '+' : ''}${a.meanOffsetM.toFixed(2)} m mean · ${a.cellMeanRmseM.toFixed(2)} m RMS`],
-              ['Fetched', new Date(a.fetchedAt).toLocaleString()],
-            ]}
+            rows={
+              gcp
+                ? [
+                    ['Source', a.source],
+                    ['Ground', `${a.demMinM.toFixed(1)} – ${a.demMaxM.toFixed(1)} m`],
+                    ['Fit at points', `${a.cellMeanRmseM.toFixed(2)} m RMS`],
+                  ]
+                : [
+                    ['DEM', a.source],
+                    ['Vertical datum', a.datum === 'unknown' ? 'not stated' : a.datum],
+                    ['DEM range', `${a.demMinM.toFixed(1)} – ${a.demMaxM.toFixed(1)} m`],
+                    ['Anchor cell', `${a.cellM.toFixed(0)} m (${a.cellPx} px)`],
+                    ['DSM vs DEM cells', `${a.meanOffsetM >= 0 ? '+' : ''}${a.meanOffsetM.toFixed(2)} m mean · ${a.cellMeanRmseM.toFixed(2)} m RMS`],
+                    ['Fetched', new Date(a.fetchedAt).toLocaleString()],
+                  ]
+            }
           />
-          <div>
-            <Group justify="space-between">
-              <Group gap={4}>
-                <Text size="xs" fw={500}>
-                  Structure already in the DEM
+          {!gcp && (
+            <div>
+              <Group justify="space-between">
+                <Group gap={4}>
+                  <Text size="xs" fw={500}>
+                    Structure already in the DEM
+                  </Text>
+                  <InfoHint>
+                    0 %: the DEM is bare terrain and the model’s heights sit on top. 100 %: the DEM is a full surface model, so every 30 m cell is matched to it, which can dig the terrain under
+                    dense buildings. SRTM at 30 m is somewhere in between.
+                  </InfoHint>
+                </Group>
+                <Text size="xs" className="dw-mono">
+                  {Math.round(share * 100)} %
                 </Text>
-                <InfoHint>
-                  0 %: the DEM is bare terrain and the model’s heights sit on top. 100 %: the DEM is a full surface model, so every 30 m cell is matched to it, which can dig the terrain under
-                  dense buildings. SRTM at 30 m is somewhere in between.
-                </InfoHint>
               </Group>
-              <Text size="xs" className="dw-mono">
-                {Math.round(share * 100)} %
-              </Text>
-            </Group>
-            <Slider size="sm" mt={6} min={0} max={1} step={0.05} value={share} onChange={setShare} onChangeEnd={(v) => useScene.getState().updateScene(refuseScene(scene, v))} label={(v) => `${Math.round(v * 100)} %`} aria-label="Share of structure height already in the DEM" />
-          </div>
+              <Slider size="sm" mt={6} min={0} max={1} step={0.05} value={share} onChange={setShare} onChangeEnd={(v) => useScene.getState().updateScene(refuseScene(scene, v))} label={(v) => `${Math.round(v * 100)} %`} aria-label="Share of structure height already in the DEM" />
+            </div>
+          )}
           {a.notes.map((n) => (
             <Text key={n} size="xs" c="dimmed">
               {n}

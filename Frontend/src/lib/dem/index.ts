@@ -191,7 +191,7 @@ export function withHeightReference(scene: Scene, ref: 'dsm' | 'ndsm'): Scene {
   if (!scene.anchoring || !scene.ndsm || !scene.terrain) return scene;
   const wantDsm = ref === 'dsm';
   if ((scene.product === 'DSM') === wantDsm) return scene;
-  if (!wantDsm) return { ...scene, product: 'nDSM', heights: scene.ndsm, stats: computeStats(scene.ndsm.data) };
+  if (!wantDsm) return { ...scene, product: scene.georef ? 'nDSM' : 'rDSM', heights: scene.ndsm, stats: computeStats(scene.ndsm.data) };
   const t = scene.terrain.data;
   const n = scene.ndsm.data;
   const dsm = new Float32Array(t.length);

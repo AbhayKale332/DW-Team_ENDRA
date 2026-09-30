@@ -152,7 +152,7 @@ export type VerticalDatum = 'EGM96' | 'EGM2008' | 'ellipsoid' | 'unknown';
 export interface AnchoringInfo {
   /** Human label of the DEM, e.g. "AWS Terrain Tiles (SRTM-based mosaic)". */
   source: string;
-  sourceId: 'terrain-tiles' | 'local-file' | 'bundled-cache';
+  sourceId: 'terrain-tiles' | 'local-file' | 'bundled-cache' | 'gcp';
   datum: VerticalDatum;
   /** Anchor cell size in metres (the DEM's native resolution, ~30 m). */
   cellM: number;
@@ -173,6 +173,19 @@ export interface AnchoringInfo {
   notes: string[];
 }
 
+/** A ground control point: a scene pixel with known coordinates and/or elevation. */
+export interface GroundControlPoint {
+  id: string;
+  /** Grid pixel, fractional, pixel centres at integers. */
+  col: number;
+  row: number;
+  /** WGS84 degrees; both or neither. Three or more georeference the scene. */
+  lat: number | null;
+  lon: number | null;
+  /** Surface elevation at this pixel, metres. Any makes the heights absolute. */
+  elev: number | null;
+}
+
 export interface Scene {
   id: string;
   name: string;
@@ -187,6 +200,8 @@ export interface Scene {
   /** Bare-earth terrain elevation (absolute), only for DEM-anchored scenes. */
   terrain?: HeightGrid;
   anchoring?: AnchoringInfo;
+  /** Ground control points applied to a scene without its own georeferencing. */
+  gcps?: GroundControlPoint[];
   /** Object classes on the height grid; absent for older backends, samples and imported bundles. */
   classes?: ClassMap | null;
   /** Trees, buildings and water as 3D objects; absent for older backends, samples and imported bundles. */

@@ -3,6 +3,7 @@ import { Line } from '@react-three/drei';
 import { useScene } from '@/store/scene';
 import { useTool, type GridPoint } from '@/store/tool';
 import { useView } from '@/store/view';
+import { useGcp } from '@/features/gcp/gcpStore';
 import { gridToWorld, type TerrainFrame } from '@/lib/pick';
 import { FLAT_SCALE, sceneBase, sceneExtent } from '../terrainState';
 
@@ -47,6 +48,8 @@ export function Markers() {
   const measure = useTool((s) => s.measure);
   const profile = useTool((s) => s.profile);
   const cursor = useTool((s) => s.profileCursor);
+  const gcpScene = useGcp((s) => s.sceneId);
+  const gcps = useGcp((s) => s.points);
 
   const frame = useMemo<TerrainFrame | null>(
     () => (scene ? { grid: scene.heights, gsd: scene.gsd, base: sceneBase(scene), scaleY: mode === 'dsm3d' ? exaggeration : FLAT_SCALE } : null),
@@ -72,6 +75,7 @@ export function Markers() {
   if (!frame) return null;
   return (
     <group name="markers">
+      {gcpScene === scene?.id && gcps.map((p) => <Pin key={p.id} frame={frame} p={p} color="#12b886" size={size} stem={stem} />)}
       {probe && <Pin frame={frame} p={probe} color="#2d6cdf" size={size} stem={stem} />}
       {measure.map((p, i) => (
         <Pin key={`m${i}`} frame={frame} p={p} color={i === 0 ? '#2d6cdf' : '#e5793a'} size={size} stem={stem} />
