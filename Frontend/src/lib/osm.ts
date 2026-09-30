@@ -213,12 +213,14 @@ export function osmSegments(features: OsmFeature[], width: number, height: numbe
   return out;
 }
 
-/** Public Overpass instances are often overloaded: they hang for a minute or answer 504/429, and which one is
- *  fast changes from minute to minute. So: answers are cached in the browser, a mirror is asked in parallel
- *  when the current one is slow, and a failed round is retried once. */
+/** Public Overpass instances are often overloaded: some hang until timed out, others answer 504/429 for a few
+ *  seconds and then 200, and which one is healthy changes from minute to minute. So: answers are cached in the
+ *  browser, a mirror is asked in parallel when the current one is slow, and a mirror that answered "busy" is asked
+ *  again shortly — rather than waiting for the hung ones to time out before retrying. */
 const HEDGE_MS = 6_000; // no answer yet → also ask the next mirror
-const ATTEMPT_TIMEOUT_MS = 60_000; // one mirror gets this long (the query itself allows the server 25 s)
+const ATTEMPT_TIMEOUT_MS = 30_000; // one mirror gets this long (the query itself allows the server 25 s)
 const RETRY_DELAY_MS = 2_500;
+const RETRIES_PER_MIRROR = 2;
 const CACHE_NAME = 'dw-osm-v1';
 const CACHE_TTL_MS = 7 * 24 * 3600 * 1000;
 const SAVED_AT = 'x-dw-saved-at';
@@ -246,57 +248,66 @@ async function writeCache(query: string, json: unknown) {
   }
 }
 
-const sleep = (ms: number, signal?: AbortSignal) =>
-  new Promise<void>((resolve, reject) => {
-    const t = setTimeout(resolve, ms);
-    signal?.addEventListener('abort', () => (clearTimeout(t), reject(signal.reason)), { once: true });
-  });
+/** The mirror answered but is busy right now (asked again shortly), as opposed to not answering or refusing. */
+class BusyError extends Error {}
 
-/** One round over the mirrors: start the first, add the next after HEDGE_MS or as soon as one fails; first answer wins. */
+/** Start the first mirror, add the next after HEDGE_MS or as soon as one fails, ask a busy one again after
+ *  RETRY_DELAY_MS; first answer wins. */
 function fetchFromMirrors(query: string, signal?: AbortSignal): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const attempts: AbortController[] = [];
-    const errors: string[] = [];
-    let next = 0;
-    let pending = 0;
+    const timers: Array<ReturnType<typeof setTimeout>> = [];
+    const errors = new Map<string, string>(); // latest error per mirror
+    const retries = OSM_ENDPOINTS.map(() => 0);
+    const queue = OSM_ENDPOINTS.map((_, i) => i);
+    let pending = 0; // requests in flight or waiting to be asked again
     let done = false;
     let hedge: ReturnType<typeof setTimeout> | undefined;
     const finish = (settle: () => void) => {
       if (done) return;
       done = true;
       clearTimeout(hedge);
+      timers.forEach(clearTimeout);
       signal?.removeEventListener('abort', onAbort);
       attempts.forEach((a) => a.abort());
       settle();
     };
     const onAbort = () => finish(() => reject(signal!.reason));
+    const giveUpIfIdle = () => {
+      if (pending === 0 && !queue.length) finish(() => reject(new Error(`OpenStreetMap (Overpass) is busy — ${[...errors].map(([l, m]) => `${l}: ${m}`).join('; ')}`)));
+    };
     const launch = () => {
       clearTimeout(hedge);
-      if (done || next >= OSM_ENDPOINTS.length) return;
-      const { label, url } = OSM_ENDPOINTS[next++];
+      const i = queue.shift();
+      if (done || i === undefined) return;
+      const { label, url } = OSM_ENDPOINTS[i];
       const ctl = new AbortController();
       attempts.push(ctl);
       pending++;
       const timeout = setTimeout(() => ctl.abort(), ATTEMPT_TIMEOUT_MS);
       fetch(url, { method: 'POST', body: new URLSearchParams({ data: query }), signal: ctl.signal })
         .then(async (r) => {
+          if (r.status === 429 || r.status >= 500) throw new BusyError(`HTTP ${r.status}`);
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           const json = (await r.json()) as { remark?: unknown };
           // an overloaded server can answer 200 with partial or no data and a "runtime error" remark
-          if (typeof json?.remark === 'string' && /runtime error/i.test(json.remark)) throw new Error('query timed out on the server');
+          if (typeof json?.remark === 'string' && /runtime error/i.test(json.remark)) throw new BusyError('query timed out on the server');
           return json;
         })
         .then(
           (json) => finish(() => resolve(json)),
           (e) => {
-            pending--;
-            errors.push(`${label}: ${ctl.signal.aborted ? 'no answer' : e instanceof Error ? e.message : String(e)}`);
-            if (next < OSM_ENDPOINTS.length) launch();
-            else if (pending === 0) finish(() => reject(new Error(`OpenStreetMap (Overpass) is busy — ${errors.join('; ')}`)));
+            if (done) return;
+            errors.set(label, ctl.signal.aborted ? 'no answer' : e instanceof Error ? e.message : String(e));
+            if (e instanceof BusyError && retries[i]++ < RETRIES_PER_MIRROR) {
+              timers.push(setTimeout(() => (pending--, queue.unshift(i), launch()), RETRY_DELAY_MS));
+            } else pending--;
+            if (queue.length) launch();
+            else giveUpIfIdle();
           },
         )
         .finally(() => clearTimeout(timeout));
-      if (next < OSM_ENDPOINTS.length) hedge = setTimeout(launch, HEDGE_MS);
+      if (queue.length) hedge = setTimeout(launch, HEDGE_MS);
     };
     if (signal?.aborted) return reject(signal.reason);
     signal?.addEventListener('abort', onAbort, { once: true });
@@ -304,18 +315,11 @@ function fetchFromMirrors(query: string, signal?: AbortSignal): Promise<unknown>
   });
 }
 
-/** Overpass answer for the query: from the browser cache, else the fastest mirror (one retry round). */
+/** Overpass answer for the query: from the browser cache, else the fastest mirror. */
 export async function fetchOverpass(query: string, signal?: AbortSignal): Promise<unknown> {
   const cached = await readCache(query);
   if (cached !== undefined) return cached;
-  let json: unknown;
-  try {
-    json = await fetchFromMirrors(query, signal);
-  } catch (e) {
-    if (signal?.aborted) throw e;
-    await sleep(RETRY_DELAY_MS, signal);
-    json = await fetchFromMirrors(query, signal);
-  }
+  const json = await fetchFromMirrors(query, signal);
   void writeCache(query, json);
   return json;
 }

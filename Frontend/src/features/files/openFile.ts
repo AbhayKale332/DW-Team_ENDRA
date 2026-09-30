@@ -7,6 +7,8 @@ import { sampleUrl, type SampleDef } from '@/lib/samples';
 import { useTool } from '@/store/tool';
 import { useCamera } from '@/store/camera';
 import { useView } from '@/store/view';
+import { registerBundledOsm } from '@/features/osm/osmStore';
+import { registerBundledPois } from '@/features/poi/poiStore';
 
 /** Show the native file picker. Resolves with the chosen files (empty if cancelled). */
 export function pickFiles(accept: string, multiple = false): Promise<File[]> {
@@ -73,6 +75,7 @@ export async function openFiles(files: File[]) {
 export async function openSample(def: SampleDef) {
   const n = notifications.show({ loading: true, title: 'Loading sample', message: def.name, autoClose: false, withCloseButton: false });
   try {
+<<<<<<< HEAD
     const r = await fetch(sampleUrl(def));
     if (!r.ok) throw new Error(`Could not load ${def.file} (HTTP ${r.status})`);
     const blob = await r.blob();
@@ -80,6 +83,21 @@ export async function openSample(def: SampleDef) {
     if (await openProject(blob, { sample: true }))
       notifications.update({ id: n, loading: false, title: 'Sample loaded', message: def.name, autoClose: 2500, withCloseButton: true, color: 'dwBlue' });
     else notifications.hide(n);
+=======
+    const { scene, reference, demCache, osm, pois } = await loadSample(def);
+    useTool.getState().clear();
+    useCamera.getState().set({ mode: 'orbit' });
+    useView.getState().set({ mode: 'dsm3d' });
+    useScene.getState().setScene(scene);
+    if (osm) registerBundledOsm(scene.id, osm);
+    if (pois) registerBundledPois(scene.id, pois);
+    const anchoring = await import('@/features/anchoring/runAnchoring');
+    if (demCache) anchoring.registerBundledDem(scene.id, demCache);
+    anchoring.autoAnchor();
+    if (reference) useScene.getState().setReference(reference);
+    useUi.getState().set({ projectOpen: false });
+    notifications.update({ id: n, loading: false, title: 'Sample loaded', message: def.name, autoClose: 2500, withCloseButton: true, color: 'dwBlue' });
+>>>>>>> 486e375 (Fix: OSM - Data loading speed optimized)
   } catch (e) {
     notifications.hide(n);
     reportError(e, 'Could not load sample');

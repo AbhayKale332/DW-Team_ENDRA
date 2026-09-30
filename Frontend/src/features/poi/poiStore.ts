@@ -22,6 +22,12 @@ export function poisFor(s: PoiState, scene: Scene | null): Poi[] | null {
 }
 
 let controller: AbortController | null = null;
+/** Overpass answers shipped with a bundled sample (scripts/cache-osm.mjs), so its layer needs no network. */
+const bundled = new Map<string, unknown>();
+
+export function registerBundledPois(sceneId: string, json: unknown) {
+  bundled.set(sceneId, json);
+}
 
 /** Fetch OpenStreetMap facilities for a georeferenced scene and its surroundings once (again after an error).
  *  Sends the surroundings' bounding box to the public Overpass API, only while the layer is switched on. */
@@ -41,7 +47,7 @@ export async function loadPois(scene: Scene) {
   controller = ctl;
   usePoi.setState({ sceneId: scene.id, status: 'loading', pois: [], error: null });
   try {
-    const json = await fetchOverpass(poiQuery(ctx.bbox), ctl.signal);
+    const json = bundled.get(scene.id) ?? (await fetchOverpass(poiQuery(ctx.bbox), ctl.signal));
     if (ctl.signal.aborted || usePoi.getState().sceneId !== scene.id) return;
     const pois = parsePois(json, toGrid, scene.gsd);
     usePoi.setState({ status: 'ready', pois, error: null });

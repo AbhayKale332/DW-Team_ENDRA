@@ -11,7 +11,7 @@ export const OVERPASS_MIRRORS = {
 };
 
 const MAX_BODY = 16 * 1024; // the app's query is well under 1 KB
-const UPSTREAM_TIMEOUT_MS = 55_000; // the query allows the server 25 s; queueing adds the rest
+const UPSTREAM_TIMEOUT_MS = 30_000; // the query allows the server 25 s; the browser gives up on a mirror at 30 s
 
 const text = (status, body) => ({ status, contentType: 'text/plain; charset=utf-8', body });
 

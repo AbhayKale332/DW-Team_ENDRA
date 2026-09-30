@@ -60,21 +60,31 @@ describe('fetchOverpass', () => {
     expect(calls).toEqual([A, B]);
   });
 
-  it('retries one round after every mirror failed', async () => {
+  it('asks a busy mirror again shortly, without waiting for hung ones to time out', async () => {
     vi.useFakeTimers();
-    const calls = stubMirrors({ [A]: [{ status: 504 }, { body: OK }], [B]: [{ status: 429 }] });
+    const calls = stubMirrors({ [A]: [{ status: 504 }, { body: OK }], [B]: { hang: true }, [C]: { hang: true }, [D]: { hang: true } });
     const p = fetchOverpass('q5');
     await vi.advanceTimersByTimeAsync(2_500);
     await expect(p).resolves.toEqual(OK);
-    expect(calls).toEqual([A, B, C, D, A]);
+    expect(calls).toEqual([A, B, A]);
   });
 
-  it('reports the mirrors when the retry fails too', async () => {
+  it('does not ask again a mirror that refused the request', async () => {
     vi.useFakeTimers();
-    stubMirrors({ [A]: [{ status: 504 }, { status: 504 }], [B]: [{ status: 429 }, { status: 429 }] });
+    const calls = stubMirrors({ [A]: { status: 404 }, [B]: { status: 404 }, [C]: { status: 403 }, [D]: { status: 406 } });
+    const p = fetchOverpass('q9');
+    const settled = expect(p).rejects.toThrow(/busy/);
+    await vi.advanceTimersByTimeAsync(10_000);
+    await settled;
+    expect(calls).toEqual([A, B, C, D]);
+  });
+
+  it('reports the mirrors when the retries fail too', async () => {
+    vi.useFakeTimers();
+    stubMirrors({ [A]: { status: 504 }, [B]: { status: 429 } });
     const p = fetchOverpass('q6');
     const settled = expect(p).rejects.toThrow(/busy.*HTTP 504.*HTTP 429/);
-    await vi.advanceTimersByTimeAsync(2_500);
+    await vi.advanceTimersByTimeAsync(5_000);
     await settled;
   });
 
@@ -83,7 +93,7 @@ describe('fetchOverpass', () => {
     stubMirrors({});
     const p = fetchOverpass('q8');
     const settled = expect(p).rejects.toThrow(/overpass-api\.de: HTTP 503.*overpass\.kumi\.systems: HTTP 503/);
-    await vi.advanceTimersByTimeAsync(2_500);
+    await vi.advanceTimersByTimeAsync(5_000);
     await settled;
   });
 

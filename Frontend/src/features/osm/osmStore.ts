@@ -21,6 +21,12 @@ export function osmFeaturesFor(s: OsmState, scene: Scene | null): OsmFeature[] |
 }
 
 let controller: AbortController | null = null;
+/** Overpass answers shipped with a bundled sample (scripts/cache-osm.mjs), so its overlay needs no network. */
+const bundled = new Map<string, unknown>();
+
+export function registerBundledOsm(sceneId: string, json: unknown) {
+  bundled.set(sceneId, json);
+}
 
 /** Fetch OpenStreetMap data for a georeferenced scene once (again after an error). The request sends the
  *  scene's bounding box to the public Overpass API — only ever called when the user switches the overlay on. */
@@ -42,7 +48,7 @@ export async function loadOsm(scene: Scene) {
   controller = ctl;
   useOsm.setState({ sceneId: scene.id, status: 'loading', features: [], error: null });
   try {
-    const json = await fetchOverpass(overpassQuery(bbox), ctl.signal);
+    const json = bundled.get(scene.id) ?? (await fetchOverpass(overpassQuery(bbox), ctl.signal));
     if (ctl.signal.aborted || useOsm.getState().sceneId !== scene.id) return;
     const features = parseOverpass(json, toGrid);
     useOsm.setState({ status: 'ready', features, error: null });

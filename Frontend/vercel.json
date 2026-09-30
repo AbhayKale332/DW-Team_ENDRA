@@ -1,5 +1,9 @@
 {
   "rewrites": [
-    { "source": "/hf-space/:proxyPath*", "destination": "/api/hf-space-proxy" }
-  ]
+    { "source": "/hf-space/:proxyPath*", "destination": "/api/hf-space-proxy" },
+    { "source": "/overpass/:mirror", "destination": "/api/overpass" }
+  ],
+  "functions": {
+    "api/overpass.mjs": { "maxDuration": 60 }
+  }
 }

@@ -17,7 +17,11 @@
     "serve": "node server/serve.mjs",
     "make-sample": "node scripts/sample-from-space.mjs",
     "cache-dem": "node scripts/cache-dem.mjs",
+<<<<<<< HEAD
     "pack-sample": "node scripts/pack-sample.mjs"
+=======
+    "cache-osm": "node scripts/cache-osm.mjs"
+>>>>>>> 486e375 (Fix: OSM - Data loading speed optimized)
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",
