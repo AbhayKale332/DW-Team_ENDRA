@@ -16,12 +16,13 @@ Requires Node 22.12 or later (see `.nvmrc`).
 | Path | Contents |
 |---|---|
 | `src/content/docs/` | Pages (MDX). The sidebar order is set in `astro.config.mjs` |
-| `src/components/` | `Chart` (ECharts), `DataTable`, `Stat`/`StatGrid`, `Figure`, `ImageGrid`, `Math` (KaTeX), `VersionTimeline`, `Swatches`, `PrelimBadge` |
+| `src/components/` | `Chart` (ECharts), `DataTable`, `Stat`/`StatGrid`, `Figure`, `ImageGrid`, `Math` (KaTeX), `VersionTimeline`, `Swatches`, `PrelimBadge`, `CampusViewer` (interactive three.js mini viewer) |
 | `src/components/diagrams/` | Hand-drawn, theme-aware SVG diagrams |
 | `src/data/metrics.json` | Every charted number, with source paths. Generated, do not edit |
 | `src/assets/` | Figures and gallery renders |
 | `scripts/extract_metrics.py` | Rebuilds `metrics.json` from `Model_Traning/**/metrics.json`, the MVS3DM summary and the GSD measurements |
 | `scripts/make_gallery.py` | Renders gallery images from model output folders |
+| `scripts/make_campus_sample.py` | Packs the web app's campus sample into `public/samples/campus/` for the mini viewer |
 
 Flowcharts use Mermaid fenced blocks (` ```mermaid `). Styling follows the site theme through `src/styles/theme.css`.
 

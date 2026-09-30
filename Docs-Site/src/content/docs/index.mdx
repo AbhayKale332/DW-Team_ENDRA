@@ -19,13 +19,14 @@ import Stat from '../../components/Stat.astro';
 import StatGrid from '../../components/StatGrid.astro';
 import Diagram from '../../components/Diagram.astro';
 import Figure from '../../components/Figure.astro';
+import CampusViewer from '../../components/CampusViewer.astro';
 import PipelineDiagram from '../../components/diagrams/PipelineDiagram.astro';
 import mumbai from '../../assets/figures/sample_mumbai.png';
 import infosys from '../../assets/figures/cartosat-infosys-bhubaneswar.png';
 
-<Figure src={infosys} alt="3D view of the Infosys campus in Bhubaneswar reconstructed from a Cartosat-2S GeoTIFF, with extracted buildings, OpenStreetMap roads and a hover card showing a 17 m building">
-	**Infosys campus, Bhubaneswar**, reconstructed from a single **Cartosat-2S** GeoTIFF (0.6 m, georeferenced). The predicted heights drive the 3D terrain and the extracted buildings, with OpenStreetMap roads overlaid. The hover card reads a 17.0 m building (about 5 floors) with a 94 × 111 m footprint at 20.341947° N, 85.804942° E. [View on Google Maps](https://maps.app.goo.gl/qtUwHxFjdgVSF9fE8) · [Source imagery: Bhoonidhi sample products](https://bhoonidhi.nrsc.gov.in/bhoonidhi/help/sampleProducts.html)
-</Figure>
+<CampusViewer fallback={infosys}>
+	**Try it: Infosys campus, Bhubaneswar.** A single **Cartosat-2S** GeoTIFF (0.6 m, georeferenced) with DepthWizard's predicted heights, the same sample that ships with the web app. Drag to orbit, right-drag to pan, scroll to zoom, and hover over a building to read its height and footprint. Switch layers to see the height map or the model's land-cover classes. [View on Google Maps](https://maps.app.goo.gl/qtUwHxFjdgVSF9fE8) · [Source imagery: Bhoonidhi sample products](https://bhoonidhi.nrsc.gov.in/bhoonidhi/help/sampleProducts.html)
+</CampusViewer>
 
 ## At a glance
 
