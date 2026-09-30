@@ -1,0 +1,53 @@
+---
+title: Motivation & use cases
+description: Why single-view height estimation matters, and the two kinds of input DepthWizard accepts.
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import PipelineDiagram from '../../../components/diagrams/PipelineDiagram.astro';
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+Surface models are usually built from stereo pairs, multi-view photogrammetry or LiDAR. All three need special acquisitions, careful processing and, for LiDAR, expensive flights. Most archives hold something much simpler: **one nadir image of a place**.
+
+DepthWizard estimates the height of every pixel in that single image, in metres. It then turns the result into a 3D scene you can walk through, measure and export into GIS tools.
+
+## Why metric height from one image is possible
+
+Monocular depth models for ground-level photos can only recover *relative* depth, because distance and object size cannot be separated. Nadir imagery is different: the **ground sample distance (GSD)** fixes how many metres one pixel covers. With the scale known, a network can learn height above ground directly in metres. DepthWizard does exactly this. It predicts a normalised DSM (nDSM) at a canonical 0.5 m GSD, and every input is resampled to that resolution first.
+
+## Two kinds of input
+
+| Input | What is known | Output |
+|---|---|---|
+| **PNG / JPG** (screenshots, exports, scans) | Pixels only. GSD comes from the user, or is assumed to be 0.5 m | **Relative DSM (rDSM)**: heights above ground. The metric scale is only as good as the GSD |
+| **GeoTIFF** (Cartosat-2S/2E, WorldView, aerial orthophotos) | CRS, pixel size and location | **nDSM + absolute DSM** in metres above a vertical datum, anchored to Copernicus GLO-30 or another DEM |
+
+<Diagram caption="Both input types share the same model. Only the georeferenced path adds terrain.">
+	<PipelineDiagram />
+</Diagram>
+
+The pipeline supports **Cartosat-2S** imagery (0.6 m PAN, 1.6 m MX, 9 × 9 km swath) directly. It reads multi-band products (RGB = bands 3, 2, 1) and can simulate pan-sharpening during training so the model sees Cartosat-like colour.
+
+## Use cases
+
+<CardGrid>
+	<Card title="Disaster response" icon="warning">
+		Estimate building heights and flood depth over a damaged area from whatever image is available. The app's [flood scenario](/guide/scenarios/) raises a water level over the scene and ranks buildings by risk.
+	</Card>
+	<Card title="Urban planning" icon="analytics">
+		Measure the heights of structures and trees, compute slope and export GLB/OBJ meshes for design tools.
+	</Card>
+	<Card title="Telecom planning" icon="rss">
+		Place towers and check line-of-sight coverage over the predicted surface ([Telecom scenario](/guide/scenarios/#telecom-coverage)).
+	</Card>
+	<Card title="Mapping & GIS" icon="database">
+		Export Float32 GeoTIFFs (nDSM, DSM, DTM, uncertainty) with a compound vertical CRS, ready for QGIS or ArcGIS.
+	</Card>
+</CardGrid>
+
+## Design goals
+
+1. **Metric, not relative.** Heights come out in metres wherever the GSD is known, with no per-scene fitting.
+2. **One inference path.** The CLI, the FastAPI service, the hosted Space and the evaluation scripts all call the same `predict_scene` function (`infer/engine.py`), so reported metrics describe what users actually get.
+3. **Honest geodesy.** Absolute elevations name their datum, and the terrain step never adds building heights twice ([DEM double counting](/geo/absolute-dsm/#the-double-counting-problem)).
+4. **Runs anywhere.** The model runs in PyTorch or ONNX Runtime, on GPU or CPU, and the viewer runs in any WebGL2 browser.

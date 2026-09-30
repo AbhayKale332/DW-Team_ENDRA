@@ -1,0 +1,23 @@
+---
+import katex from 'katex';
+interface Props {
+	tex: string;
+	block?: boolean;
+}
+const { tex, block = false } = Astro.props;
+const html = katex.renderToString(tex, { displayMode: block, throwOnError: true, output: 'html' });
+---
+
+{block ? <div class="katex-display-wrap" set:html={html} /> : <span set:html={html} />}
+
+<style>
+	.katex-display-wrap {
+		margin: 1.1rem 0;
+		padding: 0.9rem 1rem;
+		background: var(--dw-panel);
+		border: 1px solid var(--dw-line);
+		border-radius: var(--dw-radius);
+		overflow-x: auto;
+		overflow-y: hidden;
+	}
+</style>

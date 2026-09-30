@@ -1,0 +1,64 @@
+---
+title: Layers & visualisation
+description: Drape layers, colormaps, exaggeration, lighting and 3D objects in the Inspector's Layers tab.
+---
+
+import Swatches from '../../../components/Swatches.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+Everything about how the scene *looks* lives in **Inspector → Layers**. None of these settings change the underlying heights.
+
+## Drape layer
+
+The drape is the texture painted on the terrain mesh.
+
+| Layer | Shows |
+|---|---|
+| **Optical + height tint** | The input image with a semi-transparent height colormap on top (default) |
+| **Optical** | The input image only |
+| **Height** | The colormap only |
+| **Hillshade** | Shaded relief from the current sun direction |
+| **Slope** | Terrain steepness in degrees, pale (flat) to dark (steep), with an adjustable limit |
+| **Object classes** | Head C's land-cover classes |
+| **Reference** | A loaded reference raster ([Validation](/guide/validation/)) |
+| **Error** | Prediction − reference, blue (under) to red (over) |
+
+### Object classes
+
+<Swatches kind="classes" />
+
+## Colormaps
+
+<Swatches kind="colormaps" />
+
+**Colour range** sets which heights map to the ends of the colormap: *2–98 %* (robust to outliers, the default), *Full* (min to max) or *Custom*. **Height-tint opacity** controls how strongly the tint covers the optical image, and **relief shading** adds hillshade to any layer.
+
+## Geometry
+
+| Control | Range | Notes |
+|---|---|---|
+| **Vertical exaggeration** | 0.2–8× | 1× is true scale |
+| **Mesh detail** | Fast / Balanced / Full | Vertex budget; use *Fast* on laptops |
+| **Wireframe** | on / off | Shows mesh triangles |
+
+## Lighting
+
+| Control | Notes |
+|---|---|
+| **Shadows** | Real-time shadows from the sun |
+| **Ambient occlusion** | Contact darkening in corners and alleys (N8AO); disabled automatically at low fps |
+| **Sun azimuth / elevation** | Direction of the light for shading and shadows |
+
+## 3D objects
+
+DepthWizard extracts **buildings**, **trees** and **water bodies** from the classes and heights and renders them as 3D objects over the terrain. Toggle each class, with its count, from the tool palette or **Tools → 3D objects**. <kbd>O</kbd> turns all objects off, and pressing it again restores your selection. **Hover details** shows each object's type and height on mouse-over.
+
+## Surroundings (georeferenced scenes)
+
+| Layer | Source |
+|---|---|
+| **Surrounding basemap** | Map tiles around the scene, with a choice of provider |
+| **OpenStreetMap overlay** | Roads and building footprints via the Overpass relay |
+| **Facilities** | Points of interest by category (hospitals, schools and so on) |
+
+<Aside type="tip">Turn on the **Raw** switch in the header to hide objects and ambient occlusion and see the model's surface exactly as returned. This is useful when judging accuracy.</Aside>

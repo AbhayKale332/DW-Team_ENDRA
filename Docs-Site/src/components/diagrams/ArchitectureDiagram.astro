@@ -1,0 +1,95 @@
+---
+import Markers from './Markers.astro';
+const m = 'ar';
+const rows = [
+	{ y: 120, blk: 'Blocks 1–6', tap: 'tap @ 6', re: '96 ch · ConvT 4× → 1/4', fu: 'Fusion 1' },
+	{ y: 190, blk: 'Blocks 7–12', tap: 'tap @ 12', re: '192 ch · ConvT 2× → 1/8', fu: 'Fusion 2' },
+	{ y: 260, blk: 'Blocks 13–18', tap: 'tap @ 18', re: '384 ch · identity → 1/16', fu: 'Fusion 3' },
+	{ y: 330, blk: 'Blocks 19–24', tap: 'tap @ 24', re: '768 ch · stride-2 → 1/32', fu: 'Fusion 4' },
+];
+---
+
+<svg class="dw-svg" viewBox="0 0 880 472" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="DepthWizard network architecture">
+	<Markers id={m} />
+
+	<text x="432" y="22" text-anchor="middle" class="t-title">Reassemble</text>
+	<text x="605" y="22" text-anchor="middle" class="t-title">DPT decoder</text>
+	<text x="770" y="22" text-anchor="middle" class="t-title">Heads</text>
+
+	<!-- Input -->
+	<rect x="20" y="205" width="112" height="70" rx="8" class="box" />
+	<text x="76" y="232" text-anchor="middle" class="t-b">Input tile</text>
+	<text x="76" y="249" text-anchor="middle" class="t-dim">512 × 512 RGB</text>
+	<text x="76" y="263" text-anchor="middle" class="t-dim">at 0.5 m GSD</text>
+	<path d="M132 240 H146 V91 H173" class="edge" marker-end={`url(#${m})`} />
+
+	<!-- Encoder -->
+	<rect x="160" y="30" width="160" height="366" rx="10" class="blue" />
+	<text x="240" y="50" text-anchor="middle" class="t-b">DINOv3 ViT-L/16</text>
+	<text x="240" y="64" text-anchor="middle" class="t-dim">SAT-493M · 24 blocks · d=1024</text>
+	<rect x="175" y="76" width="130" height="30" rx="6" class="box" />
+	<text x="240" y="95" text-anchor="middle" class="t-sm">Patch embed 16 × 16</text>
+	<path d="M240 106 V118" class="edge" marker-end={`url(#${m})`} />
+	{
+		rows.map((r, i) => (
+			<g>
+				<rect x="175" y={r.y} width="130" height="52" rx="6" class="box" />
+				<text x="240" y={r.y + 23} text-anchor="middle" class="t-sm t-b">{r.blk}</text>
+				<text x="240" y={r.y + 39} text-anchor="middle" class="t-dim">32 × 32 tokens</text>
+				{i < 3 && <path d={`M240 ${r.y + 52} V${r.y + 68}`} class="edge" marker-end={`url(#${m})`} />}
+				<path d={`M305 ${r.y + 26} H348`} class="edge-blue" marker-end={`url(#${m}-blue)`} />
+				<text x="326" y={r.y + 20} text-anchor="middle" class="t-dim" style="font-size:9px">{r.tap}</text>
+				<rect x="350" y={r.y} width="165" height="52" rx="6" class="box" />
+				<text x="432" y={r.y + 23} text-anchor="middle" class="t-sm">{r.re}</text>
+				<text x="432" y={r.y + 39} text-anchor="middle" class="t-dim">3×3 conv → 256 ch</text>
+				<path d={`M515 ${r.y + 26} H543`} class="edge" marker-end={`url(#${m})`} />
+				<rect x="545" y={r.y} width="120" height="52" rx="6" class="box" />
+				<text x="605" y={r.y + 23} text-anchor="middle" class="t-sm t-b">{r.fu}</text>
+				<text x="605" y={r.y + 39} text-anchor="middle" class="t-dim">RefineNet · GN(8)</text>
+				{i > 0 && <path d={`M590 ${r.y} V${r.y - 16}`} class="edge" marker-end={`url(#${m})`} />}
+			</g>
+		))
+	}
+	<text x="240" y="408" text-anchor="middle" class="t-dim">frozen → unfrozen with layer-wise LR decay</text>
+
+	<!-- Feature bus -->
+	<path d="M665 146 H690" class="edge" />
+	<path d="M690 60 V384" class="edge" />
+	<text x="684" y="104" text-anchor="end" class="t-dim" style="font-size:9.5px">F · 256 ch</text>
+	<text x="684" y="116" text-anchor="end" class="t-dim" style="font-size:9.5px">@ 1/2 res</text>
+
+	<!-- Heads -->
+	<path d="M690 64 H708" class="edge" marker-end={`url(#${m})`} />
+	<rect x="710" y="40" width="120" height="48" rx="6" class="box" />
+	<text x="770" y="60" text-anchor="middle" class="t-sm t-b">Head A · regression</text>
+	<text x="770" y="76" text-anchor="middle" class="t-dim">softplus → a</text>
+
+	<path d="M690 134 H708" class="edge" marker-end={`url(#${m})`} />
+	<rect x="710" y="110" width="120" height="48" rx="6" class="box" />
+	<text x="770" y="130" text-anchor="middle" class="t-sm t-b">Head B · adaptive bins</text>
+	<text x="770" y="146" text-anchor="middle" class="t-dim">K=96, 0–120 m → b</text>
+
+	<path d="M690 224 H708" class="edge" marker-end={`url(#${m})`} />
+	<rect x="710" y="200" width="120" height="48" rx="6" class="violet" />
+	<text x="770" y="220" text-anchor="middle" class="t-sm t-b">Learned gate α</text>
+	<text x="770" y="236" text-anchor="middle" class="t-dim">αa + (1−α)b</text>
+	<path d="M830 64 H860 V216 H832" class="edge" marker-end={`url(#${m})`} />
+	<path d="M830 134 H850 V232 H832" class="edge" marker-end={`url(#${m})`} />
+
+	<path d="M770 248 V266" class="edge-green" marker-end={`url(#${m}-green)`} />
+	<rect x="710" y="268" width="120" height="44" rx="6" class="green" />
+	<text x="770" y="287" text-anchor="middle" class="t-sm t-b">Height (m)</text>
+	<text x="770" y="302" text-anchor="middle" class="t-dim">+ σ from bin spread</text>
+
+	<path d="M690 354 H708" class="edge" marker-end={`url(#${m})`} />
+	<rect x="710" y="330" width="120" height="48" rx="6" class="box" />
+	<text x="770" y="350" text-anchor="middle" class="t-sm t-b">Head C · segmentation</text>
+	<text x="770" y="366" text-anchor="middle" class="t-dim">7 classes + ignore</text>
+
+	<!-- Detail branch -->
+	<path d="M76 275 V440 H348" class="edge-orange" stroke-dasharray="5 4" marker-end={`url(#${m}-orange)`} />
+	<rect x="350" y="418" width="315" height="44" rx="6" class="orange" />
+	<text x="507" y="437" text-anchor="middle" class="t-sm t-b">v5 detail branch</text>
+	<text x="507" y="453" text-anchor="middle" class="t-dim">RGB stem → 64 ch @ 1/2 · inject into F · ConvexUp2x</text>
+	<path d="M665 440 H690 V386" class="edge-orange" stroke-dasharray="5 4" marker-end={`url(#${m}-orange)`} />
+</svg>

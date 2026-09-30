@@ -1,0 +1,33 @@
+---
+interface Props {
+	text?: string;
+}
+const { text = 'Preliminary · not test-evaluated' } = Astro.props;
+---
+
+<span class="prelim">{text}</span>
+
+<style>
+	.prelim {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		font-size: 0.7rem;
+		font-weight: 600;
+		letter-spacing: 0.02em;
+		padding: 0.12rem 0.5rem;
+		border-radius: 999px;
+		color: var(--dw-orange);
+		background: var(--dw-orange-soft);
+		border: 1px solid color-mix(in srgb, var(--dw-orange) 35%, transparent);
+		vertical-align: middle;
+		white-space: nowrap;
+	}
+	.prelim::before {
+		content: '';
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: currentColor;
+	}
+</style>

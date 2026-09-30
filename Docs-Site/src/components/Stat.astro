@@ -1,0 +1,54 @@
+---
+interface Props {
+	value: string;
+	unit?: string;
+	label: string;
+	note?: string;
+}
+const { value, unit, label, note } = Astro.props;
+---
+
+<div class="stat">
+	<div class="label">{label}</div>
+	<div class="value">{value}{unit && <span class="unit">{unit}</span>}</div>
+	{note && <div class="note">{note}</div>}
+</div>
+
+<style>
+	.stat {
+		border: 1px solid var(--dw-line);
+		border-radius: var(--dw-radius);
+		background: var(--dw-surface);
+		padding: 0.9rem 1rem 0.85rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		min-width: 0;
+	}
+	.label {
+		font-size: 0.72rem;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--dw-dim);
+		font-weight: 600;
+	}
+	.value {
+		font-size: 1.65rem;
+		font-weight: 650;
+		letter-spacing: -0.03em;
+		color: var(--dw-ink);
+		font-variant-numeric: tabular-nums;
+		line-height: 1.25;
+	}
+	.unit {
+		font-size: 0.95rem;
+		font-weight: 500;
+		color: var(--dw-dim);
+		margin-left: 0.2rem;
+	}
+	.note {
+		font-size: 0.78rem;
+		color: var(--dw-faint);
+		line-height: 1.35;
+	}
+</style>

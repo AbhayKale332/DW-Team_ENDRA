@@ -1,0 +1,55 @@
+---
+title: Troubleshooting & FAQ
+description: Status pill states, error messages and what to do about them, plus common questions about accuracy and inputs.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Model status
+
+| Pill | Meaning | What to do |
+|---|---|---|
+| **Model online** | The Space is awake and reachable | Nothing |
+| **Waking up** | The Space was idle and is starting | Wait about a minute, then run |
+| **Unreachable** | The proxy or Space cannot be reached | Check your connection; if you self-host the frontend, check that the server and `HF_TOKEN` are set |
+| **Offline demo** | The offline provider is selected in Settings | Switch the provider back to *Hugging Face Space* |
+
+## Error messages
+
+| Message | Cause | Fix |
+|---|---|---|
+| **GPU quota used up** | The ZeroGPU allowance of the account behind `HF_TOKEN` is exhausted for today | Retry later, turn TTA off, or open a sample scene |
+| **Model service unavailable** | Space sleeping, building or paused | Retry after about a minute |
+| **Access denied** | Missing or invalid token | Set a valid `HF_TOKEN` with read access and restart the server |
+| **Connection problem** | Network or proxy failure | Check the connection and retry |
+| **Inference failed** | The model could not process the image | Check the file and the declared GSD, then retry |
+| **Unsupported input** | Not a PNG / JPG / (Geo)TIFF RGB image | Convert to one of these formats |
+| **No image received** | Run started without an upload | Open an image first |
+
+## FAQ
+
+**My buildings are twice as tall as they should be.**
+The resolution is probably wrong. A 1.0 m/px image processed as 0.5 m/px doubles every height. Set the real **Resolution (m/pixel)**, or use a GeoTIFF. See [GSD & scale](/geo/scale-recovery/).
+
+**The result says rDSM. Is it wrong?**
+No. It means the GSD was assumed (0.5 m), so the metric scale is not guaranteed. Supply the resolution to get an nDSM.
+
+**Trees look flat or too low.**
+Canopy is the hardest class; NEON forest RMSE is 4.11 m even for the v5 final run. Hover over trees to read heights, and treat canopy height as approximate.
+
+**There is height on flat ground (a "bumpy" field).**
+The model over-predicts flat ground slightly (bias +0.4 to +1.0 m on validation). If a result shows *very little flat ground* (far fewer pixels below 1 m than expected), the GSD is probably wrong or the sensor is unusual.
+
+**Can I use a satellite image with clouds or haze?**
+The model was not trained on cloudy imagery, and clouds or haze degrade the result. Crop cloudy areas out first.
+
+**Is the absolute DSM accurate to a survey?**
+Not yet validated on real survey data. See [Absolute DSM → Limits](/geo/absolute-dsm/#outputs). Treat absolute elevations as DEM-accuracy terrain plus model-accuracy structures.
+
+**The 3D view is slow.**
+Set **Mesh detail** to *Fast*, turn off shadows and ambient occlusion, or close other GPU-heavy tabs. Watch the fps read-out in the status bar.
+
+**Where is my data sent?**
+The image goes to the model Space through the proxy. Georeferenced scenes also request terrain tiles and, if enabled, OpenStreetMap data for their footprint. Projects and recent files stay in your browser.
+
+<Aside>Still stuck? Open an issue on [GitHub](https://github.com/AbhayKale332/DepthWizard/issues) with the error card's message and a description of the input.</Aside>

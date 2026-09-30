@@ -1,0 +1,41 @@
+---
+interface Props {
+	caption?: string;
+	wide?: boolean;
+}
+const { caption } = Astro.props;
+---
+
+<figure class="dw-diagram not-content">
+	<div class="canvas"><slot /></div>
+	{caption && <figcaption>{caption}</figcaption>}
+</figure>
+
+<style>
+	.dw-diagram {
+		margin: 1.5rem 0;
+		border: 1px solid var(--dw-line);
+		border-radius: var(--dw-radius);
+		background: var(--dw-panel);
+		overflow: hidden;
+	}
+	.canvas {
+		padding: 0.9rem 0.5rem;
+		overflow-x: auto;
+	}
+	.canvas :global(svg) {
+		display: block;
+		width: 100%;
+		height: auto;
+		min-width: 560px;
+		margin: 0 auto;
+	}
+	figcaption {
+		font-size: 0.8rem;
+		color: var(--dw-dim);
+		padding: 0.65rem 1rem;
+		border-top: 1px solid var(--dw-line);
+		background: var(--dw-surface);
+		line-height: 1.5;
+	}
+</style>

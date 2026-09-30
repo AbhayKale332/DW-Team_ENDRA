@@ -1,0 +1,86 @@
+---
+title: Design findings
+description: Five measured problems and how they changed the model, from padding leakage to DEM double counting.
+---
+
+import Chart from '../../../components/Chart.astro';
+import Stat from '../../../components/Stat.astro';
+import StatGrid from '../../../components/StatGrid.astro';
+import Diagram from '../../../components/Diagram.astro';
+import DoubleCountDiagram from '../../../components/diagrams/DoubleCountDiagram.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+These findings came from **measuring** failed or disappointing runs. Each one led to a specific change in a later version.
+
+## Padding leakage under scale augmentation
+
+v2 zoomed random crops to simulate other GSDs, then **padded** them back to 512 px with zeros.
+
+<StatGrid>
+	<Stat label="Samples padded" value="76.5" unit="%" />
+	<Stat label="> half padding" value="49.1" unit="%" />
+	<Stat label="Real image per sample" value="58.8" unit="%" note="on average" />
+	<Stat label="Supervised px affected" value="~41" unit="%" />
+</StatGrid>
+
+The labels under the padding were ground, so the network learned that *featureless* means *flat*. **Fix (v3):** choose the crop in source pixels so it never needs padding, and reflect-pad at inference.
+
+## Cross-sensor radiometry
+
+On a tile from another sensor (Inria, Austin), v2 predicted a "crumpled mountain range": only **28.3 %** of pixels below 1 m, against 56.4 % in-domain (ground truth 58.2 %), with a median prediction of 4.04 m. The network had tied height to absolute brightness and contrast. **Fix (v3):** per-scene 2–98 % stretch and photometric jitter in training.
+
+## Encoder unfreezing that never happened
+
+v2's schedule planned to unfreeze the encoder, but the block lookup failed (`cannot locate transformer blocks on the encoder`) and the run crashed at epoch 21. Its 3.07 m came entirely from a frozen encoder. **Fix (v3):** find blocks structurally, probe which blocks receive gradients, and unfreeze all 24. This gave the largest single-version gain: 3.07 → 2.72 m.
+
+## Stratum weighting as a trade-off
+
+v4 raised the stratum balancer's β from 0.5 to 0.7 to help tall buildings. Once v4-modal's errors were **re-weighted onto v3's validation height distribution**, the like-for-like gap was 0.764 m (the headline gap was 1.026 m, but a quarter of that came from v4's harder validation set). Almost all of it was flat ground:
+
+<Chart
+	height={320}
+	caption="Share of the v4-modal vs v3 MSE gap per height band, under v3's stratum mix. The 0–2 m band accounts for 85.5 %; v4 was slightly better on the two tallest bands."
+	source="Model_Traning/V4_modal/v3VSv4.md §3"
+	option={{
+		tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+		grid: { left: 56, right: 20, top: 24, bottom: 40 },
+		xAxis: { type: 'category', data: ['0–2 m', '2–5 m', '5–10 m', '10–20 m', '20+ m'] },
+		yAxis: { type: 'value', name: 'share of gap (%)' },
+		series: [
+			{
+				type: 'bar',
+				barWidth: '50%',
+				data: [85.5, 8.5, 10.6, { value: -3.7, itemStyle: { color: '#1f9a63' } }, { value: -0.9, itemStyle: { color: '#1f9a63' } }],
+				label: { show: true, position: 'top', formatter: '{c}%', fontSize: 11 },
+			},
+		],
+	}}
+/>
+
+| Band | v3 RMSE | v4-modal RMSE | v3 bias | v4-modal bias |
+|---|---|---|---|---|
+| 0–2 m | **1.565** | 2.968 | +0.415 | +0.985 |
+| 2–5 m | **2.651** | 3.294 | +0.572 | +0.842 |
+| 5–10 m | **2.837** | 3.337 | −0.359 | −0.028 |
+| 10–20 m | 4.795 | **4.586** | −1.375 | −1.056 |
+| 20+ m | 5.638 | **5.553** | −2.499 | −2.348 |
+
+Visually, v4 flattened tree canopy to zero height ([Gallery](/results/gallery/#v3-vs-v4)). **Fix (v5):** revert β, the clip, soft bins, the entropy term and top-16 unfreezing together; then add forest data (NEON) and select checkpoints on forested and sparse error.
+
+## Validation sets that were not the same
+
+Both v3 and v4 logged `val: 400 tiles from gamus`, but from different packings: v3 from the gated HF snapshot (3837 train tiles), v4 from a Kaggle PNG mirror, taking the first 400 of 859. v4's set had **2.1× the tall-pixel fraction**. The distribution-free balanced RMSE agrees with the re-weighted comparison (3.497 vs 3.948 m). **Fix (v5):** a seeded random validation draw, with the protocol recorded in each run.
+
+The validation split is also **87.5 % urban** tiles, against 57.6 % in the test split. Validation numbers therefore favour urban performance.
+
+## DEM double counting
+
+The obvious way to make an absolute DSM is to add the predicted nDSM to a public DEM. But 30 m DEMs such as SRTM and Copernicus are *surface* models: they already contain buildings and canopy, blurred over each cell.
+
+<Diagram caption="On a synthetic 30 m tower whose true top is at 135.0 m, DEM + nDSM gives 165.0 m. Fitting a bare-earth DTM through ground pixels only, then adding the nDSM, gives 134.4 m.">
+	<DoubleCountDiagram />
+</Diagram>
+
+**Fix (v4, refined in v5):** fit terrain through ground pixels only, or anchor so that each 30 m cell averages to the DEM ([Absolute DSM](/geo/absolute-dsm/)).
+
+<Aside>Hilly terrain has not been evaluated: GAMUS is flat, urban US imagery with essentially no hilly tiles. See [Limitations](/reference/limitations/).</Aside>

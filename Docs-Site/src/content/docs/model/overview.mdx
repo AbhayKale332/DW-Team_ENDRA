@@ -1,0 +1,67 @@
+---
+title: Architecture overview
+description: The DepthWizard network, from a 512 px RGB tile to metric height, class labels and per-pixel uncertainty.
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import ArchitectureDiagram from '../../../components/diagrams/ArchitectureDiagram.astro';
+import Stat from '../../../components/Stat.astro';
+import StatGrid from '../../../components/StatGrid.astro';
+import Eq from '../../../components/Math.astro';
+
+DepthWizard is a **dense regression network**. It maps a 512 × 512 RGB tile at 0.5 m GSD to a height-above-ground map in metres. It has four parts:
+
+- a satellite-pretrained **Vision Transformer encoder**,
+- a **DPT decoder** that rebuilds a multi-scale feature pyramid,
+- **three task heads** (direct regression, adaptive bins and segmentation), combined by a learned per-pixel gate,
+- a light **detail branch**, added in v5 to recover sharp edges.
+
+<Diagram caption="The v5 network. Tokens from four depths of the encoder are reassembled into a 1/4–1/32 pyramid and fused top-down by RefineNet blocks into a 256-channel feature map F at half resolution. Heads A and B each predict height, and the gate α blends them per pixel. Head C labels land cover; its ground mask is later used to fit terrain. The dashed orange path is the v5 detail branch.">
+	<ArchitectureDiagram />
+</Diagram>
+
+<StatGrid>
+	<Stat label="Encoder params" value="303.1" unit="M" note="all 24 blocks trainable" />
+	<Stat label="Decoder + heads" value="20.6" unit="M" note="logged with encoder frozen" />
+	<Stat label="Input" value="512²" unit="px" note="RGB at 0.5 m GSD" />
+	<Stat label="Outputs" value="3" note="height · classes · σ" />
+</StatGrid>
+
+## Data flow and tensor shapes
+
+| Stage | Output | Shape (batch 1) |
+|---|---|---|
+| Input tile | normalised RGB | 3 × 512 × 512 |
+| Patch embed (16 × 16) | tokens | 1024 × 32 × 32 |
+| Taps after blocks 6 / 12 / 18 / 24 | 4 token maps (class and register tokens dropped) | 4 × (1024 × 32 × 32) |
+| Reassemble | 96 / 192 / 384 / 768 ch at 1/4, 1/8, 1/16, 1/32 | 96×128², 192×64², 384×32², 768×16² |
+| 3 × 3 projection | 256 ch at each scale | 256 × (128², 64², 32², 16²) |
+| RefineNet fusion ×4 | feature map **F** | 256 × 256 × 256 (1/2 res.) |
+| Head A | height *a* (softplus) | 1 × 512 × 512 |
+| Head B | bin probabilities → height *b*, σ | 96 × … → 1 × 512 × 512 |
+| Gate | α ∈ (0, 1) | 1 × 512 × 512 |
+| Head C | class logits | 8 × 512 × 512 (7 classes + ignore) |
+
+The final height is the gated blend of the two height estimates:
+
+<Eq block tex="\hat h = \alpha \, a + (1-\alpha)\, b, \qquad \alpha = \sigma\big(g([F, a, b])\big)" />
+
+Here *g* is a small conv block (258 → 64 → 1 channels). Head B's bin distribution also gives a per-pixel **standard deviation**, which is written out as the uncertainty map `ndsm_std_m`.
+
+## Why this design
+
+- **A satellite-native encoder.** DINOv3 pretrained on 493 M satellite images (SAT-493M) already models nadir texture, shadows and roof shapes. Replacing it with Depth Anything V2 (natural images) was tested in an ablation and scored worse on validation: 3.43 m vs 2.61 m, both with TTA ([Benchmarks](/results/benchmarks/)).
+- **Two height heads.** Direct regression is smooth and accurate on low objects. Adaptive bins handle the long tail of tall structures better. The gate learns where to trust each one.
+- **Joint segmentation.** Head C costs little and supplies the **ground mask** that the georeferencing step uses to fit a bare-earth DTM ([Absolute DSM](/geo/absolute-dsm/)).
+- **Detail branch (v5).** Transformer features at 1/16 resolution give over-smoothed maps: a gradient ratio of 0.23 against LiDAR, where 1.0 would be perfectly sharp. A shallow RGB stem at full and half resolution adds edges back, and a learned convex 2× upsampler replaces bilinear upsampling. Both are zero-initialised, so v4 checkpoints load unchanged.
+
+## Weights
+
+The trained v5 weights are published on Kaggle: **[kaggle.com/models/abhaydkale232/depthwizard-v5](https://www.kaggle.com/models/abhaydkale232/depthwizard-v5)**. Load them with the [CLI or FastAPI service](/model/inference/#command-line). PyTorch checkpoints embed their preprocessing recipe (ONNX exports keep it in the sidecar `depthwizard.onnx.json`), so no extra configuration is needed.
+
+## Pages in this section
+
+- [Encoder](/model/encoder/): DINOv3 SAT-493M, freezing and layer-wise LR decay.
+- [Decoder & heads](/model/decoder-heads/): reassemble, fusion, adaptive bins, gate, segmentation and the detail branch.
+- [Loss functions](/model/losses/): every term, its weight and the stratum balancer.
+- [Inference engine](/model/inference/): tiling, blending, TTA and large scenes.

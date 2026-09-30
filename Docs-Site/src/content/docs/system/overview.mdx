@@ -1,0 +1,52 @@
+---
+title: System overview
+description: How the web app, proxy, GPU inference Space and optional self-hosted service fit together.
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import HostedTopology from '../../../components/diagrams/HostedTopology.astro';
+import SelfHostedTopology from '../../../components/diagrams/SelfHostedTopology.astro';
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+DepthWizard can be deployed two ways. Both run the **same inference engine**.
+
+## Hosted path: what the web app uses
+
+<Diagram caption="The browser only talks to its own origin. A thin proxy adds the Hugging Face token on the server side and streams responses from a private Gradio Space running on ZeroGPU. OpenStreetMap overlays go through an allow-listed Overpass relay, and elevation tiles for DEM anchoring are fetched directly from AWS open data.">
+	<HostedTopology />
+</Diagram>
+
+| Component | Technology | Responsibility |
+|---|---|---|
+| **Web app** | React 19, TypeScript, Vite 8, Mantine 9, three.js / React Three Fiber | Upload, 3D viewer, analysis, validation, scenarios, export. Heavy work runs in Web Workers |
+| **Proxy** | Node (`server/serve.mjs`) or Vercel functions (`api/*.js`) | Same-origin routes `/hf-space/*` and `/overpass/*`. Keeps `HF_TOKEN` off the client |
+| **Inference Space** | Gradio on Hugging Face ZeroGPU (private) | Upload, queue, GPU inference (`@spaces.GPU`, 45 s, or 120 s with TTA), result files |
+| **Overpass mirrors** | OpenStreetMap | Roads, buildings and facilities for georeferenced scenes |
+| **Terrarium tiles** | AWS open data | Coarse terrain for in-browser DEM anchoring |
+
+There is no database, job queue or file store in this path. The Gradio queue handles scheduling, results are fetched as files, and projects are saved client-side (`.dwproj` files and IndexedDB).
+
+## Self-hosted path: FastAPI service
+
+<Diagram caption="The FastAPI service runs jobs in the background under a model lock, writes each product to a job directory and serves results, reports and a bundled three.js viewer. It runs on ONNX Runtime (CUDA or CPU) or on a PyTorch checkpoint.">
+	<SelfHostedTopology />
+</Diagram>
+
+Use it for batch processing, air-gapped machines, very large scenes (windowed mode above 40 MP), absolute DSMs with a choice of DEM, and validation against a reference GeoTIFF on the server.
+
+## Comparison
+
+| | Hosted (Space + proxy) | Self-hosted (FastAPI) |
+|---|---|---|
+| GPU | ZeroGPU quota of the token's account | Your hardware, or CPU with ONNX |
+| Input limit | 512 MB upload in the app | Limited by disk and RAM; windowed above 40 MP |
+| Absolute DSM | In-browser anchoring to Terrarium tiles or a DEM file | Server-side, Copernicus / SRTM / NASADEM / CartoDEM / GCPs |
+| Outputs | `ndsm_m.npy`, `meta.json`, `terrain.glb`, previews | Full GeoTIFF set, NPY, GLB/OBJ, HTML report |
+| Auth | `HF_TOKEN` in the proxy | None built in (put it behind your own gateway) |
+
+<CardGrid>
+	<LinkCard title="Hosted request lifecycle" href="/system/hosted-path/" description="Sequence diagram from upload to rendered mesh." />
+	<LinkCard title="Self-hosted service" href="/system/self-hosted/" description="Job state machine, runtime options and directory layout." />
+	<LinkCard title="API reference" href="/system/api-reference/" description="Gradio /predict and every FastAPI endpoint." />
+	<LinkCard title="Deployment" href="/system/deployment/" description="Environment variables, Docker, Vercel and the Space." />
+</CardGrid>

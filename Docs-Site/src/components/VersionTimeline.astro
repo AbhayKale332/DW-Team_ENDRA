@@ -1,0 +1,136 @@
+---
+interface Item {
+	v: string;
+	date: string;
+	title: string;
+	metric: string;
+	note?: string;
+	tone?: 'best' | 'warn' | 'prelim';
+}
+interface Props {
+	items: Item[];
+}
+const { items } = Astro.props;
+---
+
+<ol class="tl not-content" style={`--n:${items.length}`}>
+	{
+		items.map((it) => (
+			<li class:list={['item', it.tone && `t-${it.tone}`]}>
+				<div class="dot" />
+				<div class="head">
+					<span class="v">{it.v}</span>
+					<span class="date">{it.date}</span>
+				</div>
+				<div class="title">{it.title}</div>
+				<div class="metric">{it.metric}</div>
+				{it.note && <div class="note">{it.note}</div>}
+			</li>
+		))
+	}
+</ol>
+
+<style>
+	.tl {
+		list-style: none;
+		padding: 0;
+		margin: 1.75rem 0;
+		display: grid;
+		grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+		gap: 0;
+		position: relative;
+	}
+	.tl::before {
+		content: '';
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 5px;
+		height: 1.5px;
+		background: var(--dw-line);
+	}
+	.item {
+		position: relative;
+		padding: 1.25rem 0.9rem 0 0;
+		margin: 0;
+	}
+	.dot {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 11px;
+		height: 11px;
+		border-radius: 50%;
+		background: var(--dw-surface);
+		border: 2px solid var(--dw-blue);
+	}
+	.t-best .dot {
+		background: var(--dw-green);
+		border-color: var(--dw-green);
+	}
+	.t-warn .dot {
+		border-color: var(--dw-orange);
+	}
+	.t-prelim .dot {
+		background: var(--dw-orange-soft);
+		border-color: var(--dw-orange);
+		border-style: dashed;
+	}
+	.head {
+		display: flex;
+		align-items: baseline;
+		gap: 0.5rem;
+	}
+	.v {
+		font-weight: 700;
+		font-size: 1.05rem;
+		letter-spacing: -0.02em;
+		color: var(--dw-ink);
+	}
+	.date {
+		font-size: 0.72rem;
+		color: var(--dw-faint);
+	}
+	.title {
+		font-size: 0.82rem;
+		color: var(--dw-dim);
+		line-height: 1.45;
+		margin-top: 0.3rem;
+	}
+	.metric {
+		font-family: var(--sl-font-mono);
+		font-size: 0.78rem;
+		color: var(--dw-ink);
+		margin-top: 0.45rem;
+		font-variant-numeric: tabular-nums;
+	}
+	.t-best .metric {
+		color: var(--dw-green);
+	}
+	.note {
+		font-size: 0.72rem;
+		color: var(--dw-faint);
+		margin-top: 0.2rem;
+	}
+	@media (max-width: 50rem) {
+		.tl {
+			grid-template-columns: 1fr;
+			padding-left: 1.25rem;
+		}
+		.tl::before {
+			left: 5px;
+			right: auto;
+			top: 0;
+			bottom: 0;
+			width: 1.5px;
+			height: auto;
+		}
+		.item {
+			padding: 0 0 1.25rem 0.5rem;
+		}
+		.dot {
+			left: -1.25rem;
+			top: 0.3rem;
+		}
+	}
+</style>

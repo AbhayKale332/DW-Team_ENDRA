@@ -1,0 +1,104 @@
+---
+/** Colormap and class-colour swatches, copied from Frontend/src/theme/{colormaps,classes}.ts. */
+interface Props {
+	kind: 'colormaps' | 'classes';
+}
+const { kind } = Astro.props;
+type Stop = [number, number, number];
+const MAPS: { id: string; label: string; cvd?: boolean; stops: Stop[] }[] = [
+	{ id: 'turbo', label: 'Turbo', stops: [[48, 18, 59], [70, 107, 227], [40, 187, 226], [61, 231, 154], [163, 244, 78], [231, 215, 53], [253, 152, 39], [232, 79, 13], [122, 4, 3]] },
+	{ id: 'terrain', label: 'Terrain', stops: [[22, 110, 58], [46, 160, 67], [120, 198, 61], [214, 222, 64], [250, 190, 50], [244, 122, 36], [220, 50, 32], [160, 20, 30]] },
+	{ id: 'viridis', label: 'Viridis', cvd: true, stops: [[68, 1, 84], [72, 40, 120], [62, 74, 137], [49, 104, 142], [38, 130, 142], [31, 158, 137], [53, 183, 121], [109, 205, 89], [180, 222, 44], [253, 231, 37]] },
+	{ id: 'cividis', label: 'Cividis', cvd: true, stops: [[0, 34, 78], [18, 53, 112], [59, 73, 108], [87, 92, 109], [112, 113, 115], [138, 134, 120], [165, 156, 116], [195, 179, 105], [225, 204, 85], [254, 232, 56]] },
+	{ id: 'grey', label: 'Greyscale', cvd: true, stops: [[20, 20, 20], [235, 235, 235]] },
+];
+const grad = (s: Stop[]) => `linear-gradient(to right, ${s.map((c, i) => `rgb(${c.join(' ')}) ${((i / (s.length - 1)) * 100).toFixed(1)}%`).join(', ')})`;
+const CLASSES: [string, string][] = [
+	['Ground', '#c8b58a'],
+	['Low vegetation', '#9ccc65'],
+	['Building', '#e05a47'],
+	['Water', '#3a8fd9'],
+	['Road', '#5f6368'],
+	['Tree', '#2e7d32'],
+	['Other', '#9aa0a6'],
+];
+---
+
+{
+	kind === 'colormaps' ? (
+		<div class="maps not-content">
+			{MAPS.map((m) => (
+				<div class="row">
+					<span class="name">
+						{m.label}
+						{m.cvd && <span class="cvd">colour-blind safe</span>}
+					</span>
+					<span class="bar" style={`background:${grad(m.stops)}`} />
+				</div>
+			))}
+		</div>
+	) : (
+		<div class="classes not-content">
+			{CLASSES.map(([n, c]) => (
+				<span class="chip">
+					<span class="dot" style={`background:${c}`} />
+					{n}
+				</span>
+			))}
+		</div>
+	)
+}
+
+<style>
+	.maps {
+		display: grid;
+		gap: 0.55rem;
+		margin: 1.25rem 0;
+		padding: 1rem;
+		border: 1px solid var(--dw-line);
+		border-radius: var(--dw-radius);
+		background: var(--dw-surface);
+	}
+	.row {
+		display: grid;
+		grid-template-columns: 11rem 1fr;
+		align-items: center;
+		gap: 0.75rem;
+	}
+	.name {
+		font-size: 0.85rem;
+		font-weight: 500;
+		display: flex;
+		flex-direction: column;
+	}
+	.cvd {
+		font-size: 0.68rem;
+		color: var(--dw-green);
+		font-weight: 600;
+	}
+	.bar {
+		height: 14px;
+		border-radius: 3px;
+	}
+	.classes {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		margin: 1rem 0;
+	}
+	.chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		font-size: 0.8rem;
+		padding: 0.2rem 0.6rem;
+		border: 1px solid var(--dw-line);
+		border-radius: 999px;
+		background: var(--dw-surface);
+	}
+	.dot {
+		width: 10px;
+		height: 10px;
+		border-radius: 3px;
+	}
+</style>

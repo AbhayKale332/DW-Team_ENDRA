@@ -1,0 +1,45 @@
+---
+title: Limitations & roadmap
+description: What DepthWizard cannot do yet, which evaluations are still open, and what comes next.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+This page lists the known gaps, so results can be read in context.
+
+## Known limitations
+
+| Area | Limitation | Evidence |
+|---|---|---|
+| **Tall structures** | Systematically under-predicted; 20+ m pixels are under by about 4.8 m on GAMUS test | [Error analysis](/results/error-analysis/) |
+| **Tree canopy** | The hardest class; NEON forest RMSE is 4.11 m after the final run | [Benchmarks](/results/benchmarks/#v5-runs) |
+| **Edge sharpness** | Maps are smoother than LiDAR (gradient ratio 0.23 on MVS3DM before the final run) | [Metrics](/results/metrics/#sharpness-metrics-v5) |
+| **Cross-sensor shift** | RMSE rises from 3.32 m (GAMUS test) to 4.97 m on DFC23 | [Benchmarks](/results/benchmarks/) |
+| **GSD dependence** | A wrong resolution scales all heights; plain images fall back to an assumed 0.5 m | [GSD & scale](/geo/scale-recovery/) |
+| **Terrain detail** | Absolute DSMs inherit the smoothing of 30 m DEMs | [Absolute DSM](/geo/absolute-dsm/) |
+| **Clouds, haze, strong off-nadir views** | Not represented in training; results degrade | — |
+| **Self-hosted service** | No authentication; job state is lost on restart | [Self-hosted](/system/self-hosted/) |
+| **Frontend build** | `src/lib/` is excluded by the root `.gitignore`, so a fresh clone does not build | [Frontend architecture](/system/frontend-architecture/) |
+
+## Open evaluations
+
+These have **not been measured yet**, and no numbers for them appear on this site:
+
+- **v5 final run on held-out test splits** (NEON / MVS3DM / GAMUS test), and an ONNX export of it.
+- **IM2ELEVATION baseline** on GAMUS under the same protocol.
+- **Hilly-terrain split**: GAMUS has essentially no hilly tiles.
+- **Absolute DSM on a real GeoTIFF** against LiDAR or surveyed GCPs; only a synthetic check exists.
+- **Scene-level qualitative results with ground truth** for the georeferenced Cartosat examples.
+
+<Aside type="note" title="Comparability">
+GAMUS numbers before the v5 final run use the nominal 0.33 m GSD; the final run uses the measured 0.25 m. v3 and v4-era validation sets also differ. Where this matters, the pages say so.
+</Aside>
+
+## Roadmap
+
+1. Evaluate `v5_final_forest` on all held-out test splits, then export and parity-check it to ONNX.
+2. Run the IM2ELEVATION baseline and a hilly-terrain evaluation.
+3. Validate absolute DSMs on real imagery against LiDAR and GCPs.
+4. Unlabelled Indian imagery for the mean-teacher consistency term, which is already implemented.
+5. Wire the web app to the self-hosted service as a third inference provider (the `depthwizard-serve` provider id is reserved in the frontend).
+6. Add CI for build, tests and deployment.

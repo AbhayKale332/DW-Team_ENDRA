@@ -1,0 +1,45 @@
+---
+import Markers from './Markers.astro';
+const m = 'sh';
+---
+
+<svg class="dw-svg" viewBox="0 0 880 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Self-hosted FastAPI service topology">
+	<Markers id={m} />
+	<rect x="20" y="70" width="150" height="90" rx="8" class="box" />
+	<text x="95" y="98" text-anchor="middle" class="t-b">Client</text>
+	<text x="95" y="116" text-anchor="middle" class="t-dim">static UI at /</text>
+	<text x="95" y="131" text-anchor="middle" class="t-dim">three.js viewer</text>
+	<text x="95" y="146" text-anchor="middle" class="t-dim">curl / scripts</text>
+
+	<rect x="220" y="40" width="200" height="150" rx="10" class="violet" />
+	<text x="320" y="64" text-anchor="middle" class="t-b">FastAPI · uvicorn</text>
+	<text x="320" y="80" text-anchor="middle" class="t-dim">serve/app.py</text>
+	<text x="236" y="106" class="mono">POST /api/predict</text>
+	<text x="236" y="122" class="mono">GET  /api/job/{"{id}"}</text>
+	<text x="236" y="138" class="mono">GET  /api/result/{"{id}"}/{"{file}"}</text>
+	<text x="236" y="154" class="mono">POST /api/reference/{"{id}"}</text>
+	<text x="236" y="170" class="mono">GET  /api/report/{"{id}"}</text>
+	<path d="M170 115 H218" class="edge" marker-end={`url(#${m})`} marker-start={`url(#${m})`} />
+
+	<rect x="470" y="40" width="180" height="70" rx="8" class="box" />
+	<text x="560" y="64" text-anchor="middle" class="t-b">Job runner</text>
+	<text x="560" y="81" text-anchor="middle" class="t-dim">BackgroundTasks · model lock</text>
+	<text x="560" y="96" text-anchor="middle" class="t-dim">windowed mode &gt; 40 MP</text>
+	<path d="M420 75 H468" class="edge" marker-end={`url(#${m})`} />
+
+	<rect x="470" y="130" width="180" height="60" rx="8" class="blue" />
+	<text x="560" y="154" text-anchor="middle" class="t-b">Runtime</text>
+	<text x="560" y="171" text-anchor="middle" class="t-dim">ONNX Runtime (CUDA/CPU) or PyTorch</text>
+	<path d="M560 110 V128" class="edge" marker-end={`url(#${m})`} />
+
+	<rect x="700" y="40" width="160" height="70" rx="8" class="box" />
+	<text x="780" y="64" text-anchor="middle" class="t-b">Jobs directory</text>
+	<text x="780" y="81" text-anchor="middle" class="t-dim">DW_JOBS_DIR</text>
+	<text x="780" y="96" text-anchor="middle" class="t-dim">GeoTIFF · NPY · GLB · meta</text>
+	<path d="M650 75 H698" class="edge" marker-end={`url(#${m})`} />
+
+	<rect x="700" y="130" width="160" height="60" rx="8" class="orange" />
+	<text x="780" y="154" text-anchor="middle" class="t-b">DEM sources</text>
+	<text x="780" y="171" text-anchor="middle" class="t-dim">Copernicus GLO-30 · SRTM · cache</text>
+	<path d="M650 160 H698" class="edge-dash" marker-end={`url(#${m})`} />
+</svg>

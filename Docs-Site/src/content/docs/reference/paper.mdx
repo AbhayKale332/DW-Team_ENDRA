@@ -1,0 +1,50 @@
+---
+title: Research paper
+description: The paper behind DepthWizard, covering its contributions, structure and how to cite it.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+**Fine-Tuning a Satellite-Pretrained DINOv3 for Single-View Metric Height Estimation from PNG/JPEG and Georeferenced Imagery**
+Abhay Kale, Akash Chaudhari, Somesh Padsalge. Department of AI & Data Science, Jawaharlal Nehru Engineering College, Chhatrapati Sambhaji Nagar.
+
+## Summary
+
+The paper fine-tunes a DINOv3 ViT-L/16 encoder, pretrained on 493 M satellite images, to predict metric nDSM at a canonical 0.5 m GSD. A DPT decoder feeds regression, adaptive-bin and semantic heads, joined by a learned gate and trained with a height-stratum-balanced loss. The best configuration reaches a validation RMSE of 2.61 m (r = 0.92) on GAMUS. A later configuration scores 3.32 m on the 2,861-tile GAMUS test split and 4.97 m on out-of-domain DFC23. The paper also shows that 85.5 % of a later regression came from the 0–2 m band, explains why adding a DEM to a predicted nDSM double counts buildings, and describes the ONNX export and browser-based 3D viewer.
+
+## Structure
+
+1. Introduction
+2. Related work: monocular depth estimation; height from remote sensing; foundation encoders and datasets
+3. Method: problem formulation, architecture, objective, optimisation, georeferenced calibration, inference
+4. Experimental setup: datasets, model versions, metrics
+5. Results: validation across versions, error by height stratum, held-out and cross-domain evaluation, absolute DSM recovery, qualitative results
+6. Analysis of design findings: padding leakage, cross-sensor radiometry, encoder unfreezing, stratum weighting, DEM double counting
+7. System and visualisation
+8. Discussion and limitations
+9. Conclusion and future work
+
+These docs expand on every section. See [Architecture](/model/overview/), [Training](/training/recipe/), [Benchmarks](/results/benchmarks/) and [Design findings](/training/findings/).
+
+## Related work compared
+
+| Family | Works |
+|---|---|
+| Monocular depth | Eigen et al. (SiLog), AdaBins, DPT, Depth Anything V1/V2, Marigold |
+| Height from remote sensing | IM2HEIGHT, IM2ELEVATION, HTC-DC Net |
+| Foundation encoders | ViT, DINOv2, DINOv3 |
+| Datasets & DEMs | GAMUS, SynRS3D, DFC23, SRTM, Copernicus DEM |
+
+## Cite
+
+```bibtex
+@misc{kale2026depthwizard,
+  title  = {Fine-Tuning a Satellite-Pretrained {DINOv3} for Single-View Metric Height
+            Estimation from {PNG/JPEG} and Georeferenced Imagery},
+  author = {Kale, Abhay and Chaudhari, Akash and Padsalge, Somesh},
+  year   = {2026},
+  note   = {Department of AI \& Data Science, Jawaharlal Nehru Engineering College},
+}
+```
+
+<Aside>The manuscript is in preparation. Some of its results tables still contain pending rows (IM2ELEVATION, hilly split, real-data DSM), which these docs leave out until they are measured.</Aside>

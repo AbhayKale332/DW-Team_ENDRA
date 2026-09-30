@@ -1,0 +1,77 @@
+---
+title: Encoder
+description: DINOv3 ViT-L/16 pretrained on SAT-493M, how it is tapped, frozen and fine-tuned.
+---
+
+import Chart from '../../../components/Chart.astro';
+import Eq from '../../../components/Math.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+export const blocks = Array.from({ length: 24 }, (_, i) => i + 1);
+export const m90 = blocks.map((d) => +Math.pow(0.9, 24 - d).toFixed(4));
+export const m80 = blocks.map((d) => +Math.pow(0.8, 24 - d).toFixed(4));
+
+The encoder is **DINOv3 ViT-L/16** (`facebook/dinov3-vitl16-pretrain-sat493m`), a Vision Transformer that Meta pretrained with self-supervision on **493 million satellite images**.
+
+| Property | Value |
+|---|---|
+| Blocks | 24 transformer blocks |
+| Hidden size | 1024 |
+| Patch size | 16 × 16 → a 32 × 32 token grid for a 512 px tile |
+| Parameters | 303.1 M |
+| Feature taps | outputs of blocks 6, 12, 18 and 24 (class and register tokens dropped) |
+| Normalisation | mean (0.430, 0.411, 0.296), std (0.213, 0.156, 0.143) |
+
+## Why a satellite-pretrained encoder
+
+Nadir imagery looks nothing like the ground-level photos most depth models are trained on: there is no horizon or perspective, and height cues come from shadows, roof shape and parallax. Starting from a satellite-native representation removes most of that domain gap.
+
+The project compared encoders directly. **Depth Anything V2 (Base)** with its own pretrained DPT neck (`DAV2_V1`) was trained under the same protocol:
+
+| Encoder | Val RMSE (TTA) | GAMUS test RMSE (TTA) |
+|---|---|---|
+| DINOv3 SAT-493M (v3) | **2.605 m** | 3.565 m |
+| DINOv3 SAT-493M (v4-modal) | 3.631 m | **3.321 m** |
+| Depth Anything V2 Base | 3.432 m | 3.396 m |
+
+DINOv3 gives the best result on each split. DAv2 lands between the two DINOv3 runs, and the gap between those two runs comes from training choices, not from the encoder ([Design findings](/training/findings/)).
+
+## Freezing and unfreezing
+
+For the first `freeze_epochs` epochs (default 2), the encoder is frozen and only the decoder and heads train. This keeps randomly initialised heads from sending large gradients into pretrained weights. After that:
+
+| Run | Trainable encoder blocks | Trainable encoder params |
+|---|---|---|
+| v1, v2 | none (frozen throughout) | 0 |
+| v3 | all 24 | 303.1 M |
+| v4 and v5 Kaggle runs | top 16 | 201.6 M (about 222 M trainable in total) |
+| v5 final run | all 24, from step 0 (warm start) | 303.1 M |
+
+When the encoder unfreezes, v5 ramps its learning rate in linearly over one epoch (`unfreeze_warmup_epochs = 1.0`) and keeps the decoder's optimiser state. Before this change, the sudden jump in encoder LR destabilised Head B's bin widths.
+
+<Aside type="caution" title="The v2 unfreeze bug">
+v2 planned to unfreeze the encoder at epoch 21, but crashed with `AttributeError: cannot locate transformer blocks on the encoder`. Its encoder was never trained. v3 finds the blocks structurally and uses a gradient probe to detect blocks that never receive a gradient.
+</Aside>
+
+## Layer-wise learning-rate decay
+
+Lower blocks hold more generic features, so they get smaller learning rates:
+
+<Eq block tex="\text{lr}_d = \text{encoder\_lr} \cdot \text{llrd}^{\,24-d}, \qquad d = 1,\dots,24" />
+
+<Chart
+	height={300}
+	caption="LR multiplier per encoder block. With llrd = 0.80 (v3, v4-Kaggle) the bottom block trains at 0.5 % of the top LR and effectively does not move. With 0.90 (v4-modal, v5 default and final run) every unfrozen block keeps a usable LR."
+	source="Model_Traning/v5/config.py (llrd)"
+	option={{
+		legend: { top: 0 },
+		xAxis: { type: 'category', data: blocks, name: 'block', nameLocation: 'middle', nameGap: 28 },
+		yAxis: { type: 'value', name: 'multiplier', max: 1 },
+		series: [
+			{ name: 'llrd = 0.90 (v4-modal, v5 final)', type: 'line', data: m90, symbol: 'circle', symbolSize: 5, smooth: false },
+			{ name: 'llrd = 0.80 (v3, v4-Kaggle)', type: 'line', data: m80, symbol: 'circle', symbolSize: 5, lineStyle: { type: 'dashed' } },
+		],
+	}}
+/>
+
+Default learning rates are `encoder_lr = 6e-5` for the top block and `3e-4` for the decoder and heads. The v5 final run halves both (3e-5 / 1.5e-4) because it starts from a trained checkpoint.

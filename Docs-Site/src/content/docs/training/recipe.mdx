@@ -1,0 +1,105 @@
+---
+title: Training recipe
+description: Optimiser, learning-rate schedule, precision, batch sizing and the hardware behind each run.
+---
+
+import Chart from '../../../components/Chart.astro';
+import Eq from '../../../components/Math.astro';
+import Stat from '../../../components/Stat.astro';
+import StatGrid from '../../../components/StatGrid.astro';
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+export const prog = Array.from({ length: 101 }, (_, i) => i / 100);
+export const lrScale = (p) => {
+	const floor = 0.01;
+	if (p < 0.05) return floor + (1 - floor) * (p / 0.05);
+	const q = (p - 0.05) / 0.95;
+	return floor + (1 - floor) * 0.5 * (1 + Math.cos(Math.PI * q));
+};
+export const dec = prog.map((p) => +(3e-4 * lrScale(p)).toExponential(3));
+export const enc = prog.map((p) => (p < 2 / 26 ? 0 : +(6e-5 * lrScale(p)).toExponential(3)));
+
+## Optimisation
+
+| Setting | Value |
+|---|---|
+| Optimiser | AdamW, β = (0.9, 0.999) |
+| Weight decay | 0.05 (none on norms and biases) |
+| Gradient clipping | global norm 1.0 |
+| LR: decoder + heads | 3e-4 |
+| LR: top encoder block | 6e-5, decayed by `llrd` per block below it |
+| Schedule | 5 % linear warmup from 1 % of the LR, then cosine to 1 % |
+| Weight EMA | decay 0.9995, warm-up `min(d, (1+n)/(10+n))`; `best.pt` stores EMA weights |
+| Crops per epoch | 12,000 (36,000 on the final Modal run) |
+| Epochs | 40 by default, and a wall-clock cap (`max_minutes`) |
+
+### Learning-rate schedule
+
+The schedule is driven by **stage progress** = max(epoch fraction, wall-clock fraction), not by a step count. If a run hits its time cap, it still finishes its anneal instead of stopping with the LR high. It also cannot fall out of sync with the real step count, which happened with v2's precomputed `OneCycleLR`.
+
+<Eq block tex="s(p) = \begin{cases} f + (1-f)\,\dfrac{p}{0.05} & p < 0.05 \\[6pt] f + (1-f)\,\tfrac12\!\left(1 + \cos \pi\,\dfrac{p-0.05}{0.95}\right) & \text{otherwise} \end{cases}, \quad f = 0.01" />
+
+<Chart
+	height={300}
+	caption="Learning rate over a run with default settings, for a 26-epoch run with 2 frozen epochs. The encoder LR is zero while it is frozen. v5 also ramps the encoder in linearly over one epoch after unfreezing (not shown)."
+	source="Model_Traning/v5/train.py (lr_scale), config.py"
+	option={{
+		legend: { top: 0 },
+		xAxis: { type: 'category', data: prog.map((p) => `${Math.round(p * 100)}%`), name: 'progress', nameLocation: 'middle', nameGap: 28, axisLabel: { interval: 19 } },
+		yAxis: { type: 'value', name: 'LR', axisLabel: { formatter: '{value}' } },
+		series: [
+			{ name: 'decoder + heads', type: 'line', data: dec, symbol: 'none', areaStyle: { opacity: 0.08 } },
+			{ name: 'top encoder block', type: 'line', data: enc, symbol: 'none', areaStyle: { opacity: 0.08 } },
+		],
+	}}
+/>
+
+## Precision and batch sizing
+
+| Hardware | Precision | Micro-batch × accum | Notes |
+|---|---|---|---|
+| H100 80 GB | bf16 autocast | 16 × 2 (v3, final) or 24 × 1 (v4-modal) | no gradient checkpointing |
+| 2 × T4 16 GB (Kaggle) | fp16 + GradScaler | global 32 via DDP | encoder gradient checkpointing, about 1.8–1.9 img/s |
+
+The H100 batch size was sized from the v3 run's own measurements. Micro-batch 16 used 42 GB at 44.7 img/s, and micro-batch 32 used 74 GB at 48.0 img/s (7 % faster, and it ran out of memory at epoch 7). The GPU was compute-bound at 99–100 % utilisation either way.
+
+<Aside type="caution" title="fp16 on T4">
+The first v4 Kaggle run skipped 100 % of optimiser steps from epoch 7 onwards because of fp16 overflow: its validation RMSE stayed frozen at 3.947 m. The fix was a floored GradScaler with a lower initial scale (`_floor_scale` in `train.py`).
+</Aside>
+
+## Runs and hardware
+
+| Run | GPU | Epochs | Wall-clock | Throughput |
+|---|---|---|---|---|
+| v1 | Kaggle 2 × T4 | 12 | 28 min | — |
+| v2 | H100 80 GB (Lightning AI)* | 20 of 30 (crashed) | — | — |
+| v3 | H100 (Lightning AI), bf16 | 26 | 153 min total, peak VRAM 80,345 MiB | — |
+| v4-Kaggle | 2 × T4, fp16 | 12 of 40 (time limit) | 480 min | 1.8–1.9 img/s |
+| v4-2 | 2 × T4, fp16 | 13 of 16 (time limit) | 480 min | 1.8–1.9 img/s |
+| v4-modal | H100 (Modal), bf16 | 30 | 119 min training | — |
+| DAv2 ablation | fp16, batch 6 × 2, tile 518 | 40 | 674 min | — |
+| **v5 final** | H100 (Modal), bf16 | 7 (best of 7) | 106 min training | **40.7 img/s**, 46.7 GB peak |
+
+\*The paper lists v2 on an RTX PRO 6000. The run's own `run.log` records an H100 80 GB.
+
+## The v5 final run
+
+<StatGrid>
+	<Stat label="Best selection score" value="2.481" unit="m" note="forested + sparse RMSE on NEON & MVS3DM val" />
+	<Stat label="MVS3DM val" value="1.545" unit="m" note="start checkpoint: 1.615 m" />
+	<Stat label="GPU utilisation" value="88.5" unit="%" note="mean over 459 samples" />
+	<Stat label="Training time" value="106" unit="min" note="two sessions, full-state resume" />
+</StatGrid>
+
+<Steps>
+
+1. **Warm start** from `resume-v4-1.6/best.pt`, the Kaggle v5 run that first added MVS3DM.
+2. **Data**: MVS3DM, NEON, GAMUS, US3D and SynRS3D g05/g1. DFC23 and India were dropped because their labels put trees at 0 m.
+3. **All 24 encoder blocks trainable from step 0**, with the encoder LR ramped in over epoch 1. LRs are half the defaults (1.5e-4 / 3e-5), llrd 0.90.
+4. **Sharpness**: `w_grad` 1.0, `w_normal` 0.5. The balancer stays at β 0.5 / c 5.
+5. **Selection**: `best.pt` is chosen on forested + sparse RMSE over the NEON and MVS3DM *validation* sets (`select_on`), not on global RMSE, which urban ground dominates.
+6. Budget extended from 90 to 106 min mid-run. The cosine was held at 71 % on resume instead of restarting.
+
+</Steps>
+
+Per-epoch results are on the [Benchmarks](/results/benchmarks/#v5-runs) page. The run is **not yet evaluated on held-out test splits**.
