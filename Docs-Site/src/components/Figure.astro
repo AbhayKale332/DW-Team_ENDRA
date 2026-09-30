@@ -14,9 +14,10 @@ const { src, alt, caption, credit, width } = Astro.props;
 <figure class="dw-figure not-content">
 	<Image src={src} alt={alt} width={width} widths={[480, 800, 1200]} sizes="(max-width: 50rem) 100vw, 48rem" />
 	{
-		(caption || credit) && (
+		(caption || credit || Astro.slots.has('default')) && (
 			<figcaption>
 				{caption}
+				<slot />
 				{credit && <span class="credit">{credit}</span>}
 			</figcaption>
 		)
@@ -39,6 +40,12 @@ const { src, alt, caption, credit, width } = Astro.props;
 		color: var(--dw-dim);
 		margin-top: 0.55rem;
 		line-height: 1.5;
+	}
+	figcaption :global(p) {
+		margin: 0;
+	}
+	figcaption :global(a) {
+		color: var(--sl-color-text-accent);
 	}
 	.credit {
 		display: block;

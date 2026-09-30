@@ -21,8 +21,11 @@ import Diagram from '../../components/Diagram.astro';
 import Figure from '../../components/Figure.astro';
 import PipelineDiagram from '../../components/diagrams/PipelineDiagram.astro';
 import mumbai from '../../assets/figures/sample_mumbai.png';
+import infosys from '../../assets/figures/cartosat-infosys-bhubaneswar.png';
 
-<Figure src={mumbai} alt="Input image, predicted height map and textured 3D render of a high-rise district" caption="From left to right: the input image, the predicted height map (0 to 112.4 m) and the textured 3D render in the viewer. This is a non-georeferenced screenshot processed at an assumed 0.5 m GSD." credit="Imagery © Google Earth." />
+<Figure src={infosys} alt="3D view of the Infosys campus in Bhubaneswar reconstructed from a Cartosat-2S GeoTIFF, with extracted buildings, OpenStreetMap roads and a hover card showing a 17 m building">
+	**Infosys campus, Bhubaneswar**, reconstructed from a single **Cartosat-2S** GeoTIFF (0.6 m, georeferenced). The predicted heights drive the 3D terrain and the extracted buildings, with OpenStreetMap roads overlaid. The hover card reads a 17.0 m building (about 5 floors) with a 94 × 111 m footprint at 20.341947° N, 85.804942° E. [View on Google Maps](https://maps.app.goo.gl/qtUwHxFjdgVSF9fE8) · [Source imagery: Bhoonidhi sample products](https://bhoonidhi.nrsc.gov.in/bhoonidhi/help/sampleProducts.html)
+</Figure>
 
 ## At a glance
 
@@ -32,6 +35,10 @@ import mumbai from '../../assets/figures/sample_mumbai.png';
 	<Stat label="Cross-domain RMSE" value="4.97" unit="m" note="DFC23, a different sensor and continent" />
 	<Stat label="Encoder" value="303" unit="M" note="DINOv3 ViT-L/16 pretrained on 493 M satellite images" />
 </StatGrid>
+
+## Works on plain screenshots too
+
+<Figure src={mumbai} alt="Input image, predicted height map and textured 3D render of a high-rise district" caption="Without georeferencing, a screenshot is processed at an assumed 0.5 m GSD and gives a relative DSM. From left to right: the input image, the predicted height map (0 to 112.4 m) and the textured 3D render." credit="Imagery © Google Earth." />
 
 ## How it works
 
