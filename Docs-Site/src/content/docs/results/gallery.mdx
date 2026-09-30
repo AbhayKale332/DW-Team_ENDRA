@@ -1,0 +1,62 @@
+---
+title: Gallery
+description: Qualitative results on Google Earth screenshots, Cartosat GeoTIFFs and a synthetic test scene.
+---
+
+import Figure from '../../../components/Figure.astro';
+import ImageGrid from '../../../components/ImageGrid.astro';
+import mumbai from '../../../assets/figures/sample_mumbai.png';
+import stadium from '../../../assets/figures/sample_stadium.png';
+import v3v4 from '../../../assets/figures/qual_v3_v4.jpg';
+import viewer from '../../../assets/figures/viewer-sample-3d.png';
+import c_rgb from '../../../assets/gallery/carto_rgb.jpg';
+import c_ndsm from '../../../assets/gallery/carto_ndsm.jpg';
+import c_seg from '../../../assets/gallery/carto_seg.png';
+import c_dsm from '../../../assets/gallery/carto_dsm.jpg';
+import k_rgb from '../../../assets/gallery/campus_rgb.jpg';
+import k_ndsm from '../../../assets/gallery/campus_ndsm.jpg';
+
+## Non-georeferenced screenshots
+
+Plain screenshots with no metadata, processed at an assumed 0.5 m GSD. The output is an rDSM, and its metric scale is only as good as that assumption.
+
+<Figure src={mumbai} alt="High-rise district: input, height map, 3D render" caption="High-rise district (v3). Colour scale 0–112.4 m. Each panel shows the input, the predicted height map and a textured 3D render from the viewer." credit="Imagery © Google Earth." />
+
+<Figure src={stadium} alt="Stadium and domed hall: input, height map, 3D render" caption="Stadium and domed hall (v3). Colour scale 0–18.7 m. The curved roof and the stands are recovered as smooth surfaces." credit="Imagery © Google Earth." />
+
+## v3 vs v4
+
+<Figure src={v3v4} alt="Same scene predicted by v3 and v4-modal" caption="Same scene, same 0.5 m GSD. Left: input. Centre: v3 height map (0–30.8 m) and 3D render. Right: v4-modal (0–59.3 m), which flattens the surrounding tree canopy to zero height. This was the visual symptom of v4's flat-ground trade-off; see Design findings." credit="Imagery © Google Earth." />
+
+## Cartosat-2E, georeferenced (absolute DSM)
+
+A 1024 × 1024 px Cartosat-2E crop at 0.6 m (EPSG:32644, village and scrubland), processed by v5 with `absolute` enabled. The nDSM maxes out at 11.8 m and 92.3 % of pixels are below 1 m, as expected for a sparse rural scene. The DSM combines the DEM-anchored terrain with the nDSM, in metres above EGM2008.
+
+<ImageGrid
+	cols={4}
+	items={[
+		{ src: c_rgb, label: 'Input (bands 3-2-1)' },
+		{ src: c_ndsm, label: 'nDSM 0–3.5 m (p98)' },
+		{ src: c_seg, label: 'Classes' },
+		{ src: c_dsm, label: 'DSM 365–380 m' },
+	]}
+	caption="Classes use the app palette: tan = ground, light green = low vegetation, red = building, blue = water, dark grey = road, light grey = other, dark green = tree. Job 88e63fd3329e."
+/>
+
+## Cartosat-2S campus sample
+
+The sample scene bundled with the web app (**File → Sample scenes**): a large campus with detached buildings.
+
+<ImageGrid
+	cols={2}
+	items={[
+		{ src: k_rgb, label: 'Input' },
+		{ src: k_ndsm, label: 'nDSM 0–18.4 m (p98)' },
+	]}
+/>
+
+## Synthetic test scene
+
+A synthetic city with exact block heights of 24, 11, 38, 8, 17, 6, 30 and 13.5 m, used to test the viewer and the evaluation code end to end.
+
+<Figure src={viewer} alt="Synthetic scene height map and shaded 3D render" caption="Height map (left) and shaded 3D render (right) in the standalone three.js viewer (Model_Traning/v5/viewer)." />

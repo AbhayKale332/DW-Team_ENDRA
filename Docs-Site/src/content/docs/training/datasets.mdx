@@ -1,0 +1,87 @@
+---
+title: Datasets
+description: Training and evaluation sources, tile counts, label quirks, and a measured correction to GAMUS's pixel size.
+---
+
+import Chart from '../../../components/Chart.astro';
+import DataTable from '../../../components/DataTable.astro';
+import metrics from '../../../data/metrics.json';
+import { Aside } from '@astrojs/starlight/components';
+
+export const gsd = metrics.gsd.rows.filter((r) => r.city !== 'ALL');
+
+All sources are packed into sharded tile stores at a fixed GSD (`prepare_data.py`, `tools/pack_*.py`). Each store records its GSD, so the loader knows the real pixel size of every tile.
+
+## Sources
+
+| Source | Sensor / type | GSD | Tiles (train / val / test) | Label | Role |
+|---|---|---|---|---|---|
+| **GAMUS** | US aerial, RGB (DC, NYC, PHL) | 0.33 m nominal, **0.25 m measured** | 5004 / 859 / 2861 | nDSM + 7 classes | main train, val and test |
+| **SynRS3D** | synthetic cities | 0.05–1.0 m in three families | 12,536 train | nDSM + classes | pretraining and diversity |
+| **DFC23 Track 2** | SuperView-1 satellite | 0.5 m | 1395 / 246 | nDSM | out-of-domain val (v4) |
+| **India (labelled)** | DFC23 New Delhi scenes | 0.5 m | 81 / 35 | nDSM | near-domain val |
+| **US3D (DFC19)** | WorldView-3 + LiDAR | 0.32 m measured | 2492 / 291, split by location | nDSM | v5 |
+| **MVS3DM (IARPA)** | WorldView-3 + LiDAR, San Fernando, Argentina | 0.5 m, 512 px | train / val / test, split by location | nDSM (with trees) | v5, plus the LiDAR benchmark |
+| **NEON** | aerial forest-canopy LiDAR | 0.5 m, 1024 px | 1846 / 118 / 232 | canopy height (buildings masked) | v5 final: forests |
+
+SynRS3D is split into GSD families, each its own store: `g005` (0.05–0.30 m), `g05` (0.30–0.60 m) and `g1` (0.60–1.00 m).
+
+<Chart
+	height={320}
+	caption="Training tiles per source (v4/v5 packing). MVS3DM is omitted because its per-split counts are not recorded in the repository."
+	source="Research-Paper/main.tex Table I; Model_Traning/v5/US3D_AND_GSD_NOTES.md; lightning/AFTER_NEON_UPLOAD.md"
+	option={{
+		grid: { left: 110, right: 30, top: 16, bottom: 36 },
+		tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+		xAxis: { type: 'value', name: 'tiles', nameLocation: 'middle', nameGap: 26 },
+		yAxis: { type: 'category', data: ['India', 'DFC23', 'NEON', 'US3D', 'GAMUS', 'SynRS3D'], inverse: false },
+		series: [{ type: 'bar', horizontal: true, data: [81, 1395, 1846, 2492, 5004, 12536], barWidth: '55%', label: { show: true, position: 'right', fontSize: 11 } }],
+	}}
+/>
+
+## Label quirks that shaped training
+
+- **Trees at 0 m.** DFC23 and the India scenes label about 97 % of green pixels below 1 m. In effect they teach "a tree is ground". v5 first masked them with an excess-green index, and the final run dropped both sources.
+- **Stereo spikes.** In DFC23, heights above 100 m are usually matching errors and can be marked invalid (`max_valid_height_m`).
+- **LiDAR spikes.** MVS3DM and NEON rasters are despiked (|z − median₅| > 25 m → NoData) before packing.
+- **Coarse labels.** NEON's 1 m rasters on 0.5 m pixels are scored on 2 × 2 blocks ([coarse-label term](/model/losses/#coarse-label-and-consistency-terms-v5)).
+- **Validation drift.** v3 and v4 both printed `val: 400 tiles from gamus`, but from different packings, and v4's set had 2.1× more tall pixels. v5 draws a seeded random 400 (seed 42) to make validation comparable ([Design findings](/training/findings/#validation-sets-that-were-not-the-same)).
+
+## Measuring the real GSD
+
+Height in metres depends on knowing metres per pixel, so the stored GSDs were checked against **regulation-size sports fields** visible in the imagery:
+
+- tennis courts, 23.77 × 10.97 m
+- American football fields, 109.73 × 48.77 m
+- soccer penalty areas, 40.23 × 16.46 m
+
+Sub-pixel line peaks were located on whiteness profiles. A measurement was kept only when an internal check (service line, yard lines, goal area) *and* the object's two axes each agreed within 5 %.
+
+<Chart
+	height={320}
+	caption="Measured GSD per city (bars: median; grey ticks: interquartile range) against the nominal value stored with the data (wide tick). GAMUS measures about 0.25 m in every city, about 23 % finer than the 0.33 m it was stored with."
+	source="gsd_measurements/summary.csv"
+	option={{
+		legend: { top: 0 },
+		tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+		xAxis: { type: 'category', data: gsd.map((r) => `${r.dataset.toUpperCase()} · ${r.city}`) },
+		yAxis: { type: 'value', name: 'm / px', min: 0.2, max: 0.36, interval: 0.04 },
+		series: [
+			{ name: 'measured median', type: 'bar', data: gsd.map((r) => r.median), barWidth: '42%' },
+			{ name: 'IQR (25th / 75th pct.)', type: 'scatter', data: gsd.map((r) => r.p25), symbol: 'rect', symbolSize: [22, 2], itemStyle: { color: '#8a949e' } },
+			{ name: 'IQR (25th / 75th pct.)', type: 'scatter', data: gsd.map((r) => r.p75), symbol: 'rect', symbolSize: [22, 2], itemStyle: { color: '#8a949e' } },
+			{ name: 'nominal (stored)', type: 'scatter', data: gsd.map((r) => (r.dataset === 'gamus' ? 0.33 : 0.3)), symbol: 'rect', symbolSize: [60, 3] },
+		],
+	}}
+/>
+
+<DataTable
+	headers={['Dataset', 'City', 'Kept / tried', 'Median (m)', 'IQR (m)']}
+	rows={metrics.gsd.rows.map((r) => [r.dataset.toUpperCase(), r.city, `${r.n_kept} / ${r.n_tried}`, r.median, `${r.p25.toFixed(4)}–${r.p75.toFixed(4)}`])}
+	digits={4}
+	source="gsd_measurements/summary.csv"
+/>
+
+<Aside type="caution" title="Impact on reported numbers">
+All GAMUS results before the v5 final run used the nominal 0.33 m. The v5 final run evaluates GAMUS at the corrected 0.25 m, so its GAMUS numbers are **not comparable** with earlier versions. Off-nadir US3D views can also be anisotropic: one view measured 0.344 × 0.378 m and was dropped.
+</Aside>

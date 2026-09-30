@@ -1,0 +1,47 @@
+---
+title: Your first estimate
+description: Step by step from an image to a 3D height model.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+<Steps>
+
+1. **Check the model status.** The pill in the header should say *Model online*. If it says *waking up*, the GPU Space is starting; wait about a minute. If it says *unreachable*, see [Troubleshooting](/guide/troubleshooting/).
+
+2. **Open an image.** Drag a file anywhere onto the window, click the drop zone in the Project panel, or use **File → Load / Open** (<kbd>Ctrl</kbd>+<kbd>O</kbd>).
+
+   | Format | Notes |
+   |---|---|
+   | GeoTIFF | Preferred. CRS and pixel size are read automatically, and absolute DSMs are possible |
+   | PNG / JPG | Fine for screenshots. Set the resolution yourself |
+   | `.dwproj`, `.zip`, `.npy` | Reopen a saved project or a result bundle without running inference |
+
+   Want to try it first? **File → Sample scenes** loads a bundled Cartosat-2S campus scene.
+
+3. **Set the resolution.** In **Resolution (m/pixel)**, choose *Auto* (from the file), *0.3*, *0.5*, *0.6* or *1.0*, or *Custom* (0.05–30). The card shows where the value came from.
+
+   <Aside type="caution">If no resolution is known, the model assumes **0.5 m/px** and labels the result **rDSM**. A wrong value scales every height; see [GSD & scale](/geo/scale-recovery/#what-a-wrong-gsd-does).</Aside>
+
+4. **Choose quality.** *Higher quality (TTA)* averages 8 rotated and flipped copies of every tile. It is slightly more accurate, takes 1–2 min instead of 15–45 s, and uses more GPU quota.
+
+5. **Click _Estimate heights_.** An overlay shows the stages: *Connecting → Uploading → Waiting in queue → Estimating heights (GPU) → Downloading results → Building 3D mesh*, with elapsed time. The previous result stays visible underneath, and you can **Cancel** at any time.
+
+6. **Read the result.** The Project panel summarises the new result:
+
+   | Field | Meaning |
+   |---|---|
+   | Height range | Minimum and maximum height above ground |
+   | Mean / median | Typical height; the median is usually near 0 m on open land |
+   | Share below 1 m | Share of flat pixels. Nadir urban scenes usually have 40–70 % |
+   | Grid · source | Output size and where the GSD came from |
+
+7. **Explore.** Orbit with the mouse, switch views with <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>, and hover for heights. Continue with [Navigating in 3D](/guide/navigation/).
+
+</Steps>
+
+## What happens to georeferenced scenes
+
+If the image is georeferenced and **auto-anchor** is on (Inspector → Info), DepthWizard fetches coarse terrain tiles right after the run and converts the result to an **absolute DSM**. The product chip changes from *nDSM* to *DSM*. See [Elevation anchoring](/guide/anchoring/).
+
+<Aside type="tip">Large images are resampled to the model's working size before upload; a notice in the Project panel tells you when this happens. For full-resolution results on very large scenes, use the [self-hosted service](/system/self-hosted/), which processes scenes above 40 MP in windows.</Aside>

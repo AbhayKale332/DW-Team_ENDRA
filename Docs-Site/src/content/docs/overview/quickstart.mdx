@@ -1,0 +1,86 @@
+---
+title: Quickstart
+description: Use the hosted app, run the web app locally, or self-host the inference service.
+---
+
+import { Tabs, TabItem, Steps, Aside } from '@astrojs/starlight/components';
+
+There are three ways to run DepthWizard, depending on what you need.
+
+<Tabs syncKey="qs">
+<TabItem label="Use the web app">
+
+<Steps>
+
+1. Open the DepthWizard web app. The **model status pill** in the header should read *Model online*. If it says *waking up*, the GPU Space is starting, which takes about a minute.
+
+2. Drag a **PNG, JPG or GeoTIFF** onto the window, or use **File → Load / Open** (<kbd>Ctrl</kbd>+<kbd>O</kbd>).
+
+3. Check **Resolution (m/pixel)** in the Project panel. GeoTIFFs fill it in automatically. For plain images, pick the real pixel size if you know it; otherwise the model assumes 0.5 m/px.
+
+4. Click **Estimate heights**. A run usually takes 15–45 s, or 1–2 min with *Higher quality (TTA)*.
+
+5. Orbit the 3D scene, switch views with <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>, and export from **File → Export**.
+
+</Steps>
+
+Continue with the [User guide](/guide/first-estimate/).
+
+</TabItem>
+<TabItem label="Run the frontend locally">
+
+The frontend is a Vite + React app. A small Node proxy forwards model calls to the private GPU Space and adds your Hugging Face token on the server side.
+
+```bash title="Frontend/"
+cp .env.example .env          # set HF_TOKEN (read access to the Space)
+npm install
+npm run dev                   # http://localhost:5173 — Vite dev server with proxy
+```
+
+For a production build served by the bundled Node server:
+
+```bash
+npm run build
+npm run serve                 # node server/serve.mjs, port 8080 by default
+```
+
+Or run it with Docker:
+
+```bash
+docker build -t depthwizard-frontend .
+docker run -e HF_TOKEN=hf_xxx -p 8080:8080 depthwizard-frontend
+```
+
+</TabItem>
+<TabItem label="Self-host the model">
+
+The FastAPI service in `Model_Traning/v5` runs the same inference engine, on PyTorch or ONNX Runtime.
+
+```bash title="Model_Traning/v5/"
+pip install -r requirements.txt
+
+# GPU, PyTorch checkpoint
+python -m serve.app --ckpt outputs/v5/best.pt --port 8000
+
+# CPU-friendly, ONNX graph (keep depthwizard.onnx.data next to the .onnx)
+python -m serve.app --onnx outputs/v4/depthwizard.onnx
+```
+
+Then submit a job:
+
+```bash
+curl -F file=@scene.tif -F absolute=true http://localhost:8000/api/predict
+# → {"job":"3f9c2a1b7d4e","status_url":"/api/job/3f9c2a1b7d4e","view_url":"/view/3f9c2a1b7d4e"}
+```
+
+Or use the command-line tool directly, without the server:
+
+```bash
+python -m infer.predict scene.tif --ckpt outputs/v5/best.pt --absolute --tta
+python -m infer.predict scene.png --ckpt outputs/v5/best.pt --gsd 0.5
+```
+
+See the [Self-hosted service](/system/self-hosted/) and [API reference](/system/api-reference/) pages.
+
+</TabItem>
+</Tabs>

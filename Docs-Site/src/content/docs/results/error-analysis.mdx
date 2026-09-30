@@ -1,0 +1,99 @@
+---
+title: Error analysis
+description: Where the model is wrong, broken down by height band, landscape and domain.
+---
+
+import Chart from '../../../components/Chart.astro';
+import DataTable from '../../../components/DataTable.astro';
+import metrics from '../../../data/metrics.json';
+import { Aside } from '@astrojs/starlight/components';
+
+export const S = metrics.strata;
+export const rows = Object.keys(S.rows);
+export const T = metrics.test_v4modal;
+
+Global RMSE averages over very different pixels. This page breaks error down to show *where* the model struggles.
+
+## By height band
+
+<Chart
+	height={340}
+	caption="RMSE per height band, with TTA. Error grows with height for every model. Tall structures are rare and have the largest absolute errors."
+	source={S.source.join(' · ')}
+	option={{
+		legend: { top: 0 },
+		tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+		grid: { left: 50, right: 20, top: 40, bottom: 40 },
+		xAxis: { type: 'category', data: ['0–2 m', '2–5 m', '5–10 m', '10–20 m', '20+ m'] },
+		yAxis: { type: 'value', name: 'RMSE (m)' },
+		series: rows.map((r) => ({ name: r, type: 'bar', data: S.order.map((s) => S.rows[r][s].rmse) })),
+	}}
+/>
+
+<Chart
+	height={340}
+	caption="Bias per height band, with TTA. Every model over-predicts low objects and under-predicts tall ones; the sign flips between the 2–5 m and 5–10 m bands. This is regression towards the mean in a long-tailed target. On the test split, the 20+ m band is under-predicted by 4.78 m."
+	source={S.source.join(' · ')}
+	option={{
+		legend: { top: 0 },
+		tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+		grid: { left: 50, right: 20, top: 40, bottom: 40 },
+		xAxis: { type: 'category', data: ['0–2 m', '2–5 m', '5–10 m', '10–20 m', '20+ m'] },
+		yAxis: { type: 'value', name: 'bias (m)' },
+		series: rows.map((r) => ({ name: r, type: 'bar', data: S.order.map((s) => S.rows[r][s].bias), markLine: undefined })),
+	}}
+/>
+
+<DataTable
+	headers={['Evaluation', ...S.order.map((s) => s.replace('m', ' m'))]}
+	rows={rows.map((r) => [r, ...S.order.map((s) => S.rows[r][s].rmse)])}
+	caption="RMSE (m) per height band, TTA."
+	source={S.source.join(' · ')}
+/>
+
+### Tall and flat bias
+
+| Model / split | Tall bias (> 15 m) | Flat bias (< 1 m) |
+|---|---|---|
+| v3 · val | −2.12 m | +0.38 m |
+| v4-modal · val | −1.96 m | +0.96 m |
+| v2 · val (post-mortem) | −5.3 m (structures > 15 m) | flat ground within 0.48 m |
+
+v3 has the best flat-ground behaviour. v4 traded flat ground for tall structures, which is the trade-off analysed in [Design findings](/training/findings/#stratum-weighting-as-a-trade-off).
+
+## By landscape and domain
+
+<Chart
+	height={320}
+	caption="v4-modal RMSE by landscape on the GAMUS test split (TTA), and on two other domains. Sparse scenes are easiest. Urban and forested scenes are equally hard. The out-of-domain satellite set is hardest."
+	source="Model_Traning/V4_modal/Output/metrics.json; Research-Paper/main.tex"
+	option={{
+		tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+		grid: { left: 50, right: 20, top: 24, bottom: 56 },
+		xAxis: { type: 'category', data: ['GAMUS · sparse', 'GAMUS · urban', 'GAMUS · forested', 'India val', 'DFC23 (OOD)'], axisLabel: { interval: 0, fontSize: 10.5 } },
+		yAxis: { type: 'value', name: 'RMSE (m)' },
+		series: [
+			{
+				type: 'bar',
+				barWidth: '50%',
+				data: [T.landscape_tta.sparse, T.landscape_tta.urban, T.landscape_tta.forested, T.india.rmse, { value: T.dfc23.rmse, itemStyle: { color: '#e5793a' } }],
+				label: { show: true, position: 'top', fontSize: 11 },
+			},
+		],
+	}}
+/>
+
+On DFC23, structures above 15 m reach 7.97 m RMSE. A different sensor and continent shift both the colour statistics and the building typology.
+
+## Error sources, summarised
+
+| Source of error | Evidence | Mitigation |
+|---|---|---|
+| **Regression to the mean** on rare tall structures | Bias −2 to −5 m above 15 m | stratum balancer; adaptive-bin head; more tall data (US3D, MVS3DM) |
+| **Phantom height** on flat ground | Flat bias +0.4 to +1.0 m | flatness loss; β = 0.5 |
+| **Canopy** under-estimated or flattened | NEON forest 4.11 m; v4 flattened trees | NEON data; forest-weighted sampling and selection |
+| **Over-smoothing** at edges | Gradient ratio 0.23 on MVS3DM | detail branch; stronger gradient and normal losses |
+| **Sensor shift** | DFC23 4.97 m vs GAMUS 3.32 m | per-scene stretch; photometric and Cartosat augmentation |
+| **Wrong GSD** | Heights scale with the GSD error | read GSD from the GeoTIFF; warn when it is assumed |
+
+<Aside type="caution">A dedicated **hilly-terrain** evaluation has not been run. The landscape classifier supports a *hilly* class, but GAMUS has almost no hilly tiles.</Aside>

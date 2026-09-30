@@ -1,0 +1,158 @@
+---
+title: Benchmarks
+description: Validation curves, held-out and cross-domain test results, and the same-protocol comparison of v3, v4 and the Depth Anything V2 backbone.
+---
+
+import Chart from '../../../components/Chart.astro';
+import DataTable from '../../../components/DataTable.astro';
+import Stat from '../../../components/Stat.astro';
+import StatGrid from '../../../components/StatGrid.astro';
+import PrelimBadge from '../../../components/PrelimBadge.astro';
+import metrics from '../../../data/metrics.json';
+import { Aside } from '@astrojs/starlight/components';
+
+export const C = metrics.val_curves.series;
+export const V = metrics.val_final.runs;
+export const T = metrics.test_v4modal;
+export const P = metrics.same_protocol;
+export const F = metrics.v5_final;
+export const names = { v3: 'v3', 'v4-kaggle': 'v4-Kaggle', 'v4-2': 'v4-2', 'v4-modal': 'v4-modal', dav2: 'DAv2' };
+
+## Headline: held-out and cross-domain
+
+These are the most trustworthy numbers: **v4-modal** on data never used for training or checkpoint selection.
+
+<StatGrid>
+	<Stat label="GAMUS test · TTA" value={T.tta.rmse.toFixed(2)} unit="m" note={`2,861 tiles · MAE ${T.tta.mae.toFixed(2)} m · r ${T.tta.r.toFixed(2)}`} />
+	<Stat label="DFC23 · out-of-domain" value={T.dfc23.rmse.toFixed(2)} unit="m" note={`SuperView-1 satellite · r ${T.dfc23.r}`} />
+	<Stat label="India · near-domain" value={T.india.rmse.toFixed(2)} unit="m" note={`35 tiles · r ${T.india.r}`} />
+	<Stat label="MVS3DM · 30 m cells" value="1.35" unit="m" note="v5 vs LiDAR, 8 held-out sites" />
+</StatGrid>
+
+<DataTable
+	headers={['Split (tiles)', 'RMSE', 'MAE', 'r', 'δ1', 'Balanced RMSE']}
+	rows={[
+		['GAMUS test · plain (2861)', T.plain.rmse, T.plain.mae, T.plain.r, T.plain.d1, T.plain.bal],
+		['GAMUS test · TTA (2861)', T.tta.rmse, T.tta.mae, T.tta.r, T.tta.d1, T.tta.bal],
+		['GAMUS test · sliding+TTA (400)', T.sliding.rmse, T.sliding.mae, T.sliding.r, T.sliding.d1, T.sliding.bal],
+		['DFC23 val · OOD (246)', T.dfc23.rmse, T.dfc23.mae, T.dfc23.r, T.dfc23.d1, T.dfc23.bal],
+		['India val · near-domain (35)', T.india.rmse, T.india.mae, T.india.r, T.india.d1, T.india.bal],
+	]}
+	caption="v4-modal on held-out and cross-domain data. Heights in metres."
+	source="Model_Traning/V4_modal/Output/metrics.json; Research-Paper/main.tex Table IV"
+/>
+
+## Validation curves
+
+<Chart
+	height={380}
+	caption="GAMUS validation RMSE per epoch, single pass. v1 and v2 used an earlier validation subset; v4 runs use a harder 400-tile prefix; v5 a seeded random 400. The two Kaggle v4 runs stopped at the 8-hour session limit."
+	source="src/data/metrics.json ← run metrics.json histories; v1/v2 from Research-Paper/scripts/make_figures.py"
+	option={{
+		legend: { top: 0, type: 'scroll' },
+		tooltip: { trigger: 'axis' },
+		grid: { left: 50, right: 20, top: 46, bottom: 44 },
+		xAxis: { type: 'value', name: 'epoch', nameLocation: 'middle', nameGap: 26, min: 0, max: 40 },
+		yAxis: { type: 'value', name: 'RMSE (m)', min: 2.5, max: 5.5 },
+		series: [
+			{ name: 'v1', type: 'line', data: C.v1, symbolSize: 5 },
+			{ name: 'v2', type: 'line', data: C.v2, symbolSize: 5 },
+			{ name: 'v3', type: 'line', data: C.v3, symbolSize: 5, lineStyle: { width: 3 } },
+			{ name: 'v4-Kaggle', type: 'line', data: C['v4-kaggle'], symbolSize: 5 },
+			{ name: 'v4-2', type: 'line', data: C['v4-2'], symbolSize: 5 },
+			{ name: 'v4-modal', type: 'line', data: C['v4-modal'], symbolSize: 4 },
+			{ name: 'DAv2', type: 'line', data: C.dav2, symbolSize: 4, lineStyle: { type: 'dashed' } },
+			{ name: 'v5 (Kaggle probe)', type: 'line', data: C['v5-probe'], symbolSize: 4 },
+		],
+	}}
+/>
+
+## Final validation evaluation
+
+<Chart
+	height={340}
+	caption="Final GAMUS validation RMSE under the three protocols. TTA helps every run; sliding-window inference costs a little because it includes tile seams and scene edges."
+	source="src/data/metrics.json ← final_plain / final_tta / final_sliding_tta"
+	option={{
+		legend: { top: 0 },
+		tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+		grid: { left: 50, right: 20, top: 40, bottom: 40 },
+		xAxis: { type: 'category', data: Object.keys(names).map((k) => names[k]) },
+		yAxis: { type: 'value', name: 'RMSE (m)', min: 2, max: 4, interval: 0.5 },
+		series: [
+			{ name: 'plain', type: 'bar', data: Object.keys(names).map((k) => V[k].plain.rmse) },
+			{ name: 'TTA', type: 'bar', data: Object.keys(names).map((k) => V[k].tta.rmse) },
+			{ name: 'sliding + TTA', type: 'bar', data: Object.keys(names).map((k) => V[k].sliding.rmse) },
+		],
+	}}
+/>
+
+<DataTable
+	headers={['Run', 'RMSE', 'MAE', 'r', 'δ1', 'Bal. RMSE', 'RMSE (TTA)', 'RMSE (sliding)']}
+	rows={Object.keys(names).map((k) => [names[k], V[k].plain.rmse, V[k].plain.mae, V[k].plain.r, V[k].plain.d1, V[k].plain.bal, V[k].tta.rmse, V[k].sliding.rmse])}
+	bestCols={[1, 2, 5, 6, 7]}
+	caption="GAMUS validation, 400 tiles. RMSE through Bal. RMSE are single-pass. Validation sets differ between v3 and the v4-era runs (see Design findings)."
+	source="Model_Traning/{Logs/v3 (2), V4_Kaggle/outputs/*, V4_modal/Output, DAV2_V1/outputs/dav2-v1}/metrics.json"
+/>
+
+## Same-protocol test comparison
+
+To remove validation-set differences, v3, v4-modal and the DAv2 ablation were scored with **one protocol on the same held-out tiles** (`eval_test.py --compare`).
+
+<Chart
+	height={320}
+	caption="Held-out RMSE under an identical protocol. v4-modal is best on GAMUS test with single-pass and TTA inference, and by far the best on India (v3 never trained on it). DAv2 edges ahead on sliding-window inference."
+	source="Model_Traning/v3/outputs/v3_vs_v4_vs_dav2.md"
+	option={{
+		legend: { top: 0 },
+		tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+		grid: { left: 50, right: 20, top: 40, bottom: 56 },
+		xAxis: { type: 'category', data: Object.keys(P.rows), axisLabel: { interval: 0, fontSize: 10.5 } },
+		yAxis: { type: 'value', name: 'RMSE (m)' },
+		series: P.columns.map((c, i) => ({ name: c, type: 'bar', data: Object.values(P.rows).map((r) => r[i]) })),
+	}}
+/>
+
+<DataTable
+	headers={['Split · protocol', ...P.columns]}
+	rows={Object.entries(P.rows).map(([k, v]) => [k, ...v])}
+	bestRow
+	source="Model_Traning/v3/outputs/v3_vs_v4_vs_dav2.md"
+/>
+
+<Aside type="note">On GAMUS **validation**, v3 beats v4-modal (2.61 vs 3.63 m with TTA). On GAMUS **test**, v4-modal beats v3 (3.32 vs 3.57 m). The validation split is 87.5 % urban against 57.6 % in test, and the two runs saw different validation packings. That is why held-out test results are the headline here.</Aside>
+
+## v5 runs
+
+v5 was trained as a chain of warm-started runs ([lineage](/training/versions/#checkpoint-lineage)). None has yet been scored on the held-out test splits. <PrelimBadge />
+
+| Run | Primary val RMSE | Notes |
+|---|---|---|
+| with_dfc | 2.988 m (GAMUS) | DFC23 val 5.391 m |
+| without_dfc | 2.909 m (GAMUS) | |
+| without_dfc / resume | 2.863 m (GAMUS) | |
+| warm_start / Resume (`v5_probe_v4init`) | **2.804 m** (GAMUS) | DFC23 4.878 m, India 2.767 m; source of the ONNX export |
+| resume-v2 | 2.888 m (GAMUS) | adds US3D |
+| resume-v3 | 2.865 m (GAMUS) | |
+| resume-v4-1.6 | 1.615 m (MVS3DM) | GAMUS 2.864 m, US3D 3.964 m, gradient ratio 0.23 |
+| **v5_final_forest** | **2.481 m** selection score | MVS3DM 1.545 m, NEON forest 4.11 m |
+
+<Chart
+	height={340}
+	caption="v5 final run, per epoch, on validation sets. The selection score (forested + sparse RMSE on NEON and MVS3DM) fell from 2.717 to 2.481 m, and NEON forest RMSE from 4.61 to 4.11 m. GAMUS urban held within 0.04 m. GAMUS here uses 200 tiles at the corrected 0.25 m GSD, so it is not comparable with earlier GAMUS numbers."
+	source="Model_Traning/V4_modal/FINAL_RUN_RESULTS.md"
+	option={{
+		legend: { top: 0 },
+		tooltip: { trigger: 'axis' },
+		grid: { left: 50, right: 20, top: 46, bottom: 40 },
+		xAxis: { type: 'category', data: F.epochs, name: 'epoch', nameLocation: 'middle', nameGap: 26 },
+		yAxis: { type: 'value', name: 'RMSE (m)', min: 1 },
+		series: [
+			{ name: 'selection score', type: 'line', data: F.select, lineStyle: { width: 3 } },
+			{ name: 'MVS3DM', type: 'line', data: F.mvs3dm },
+			{ name: 'NEON forest', type: 'line', data: F.neon_forest },
+			{ name: 'GAMUS urban', type: 'line', data: F.gamus_urban },
+			{ name: 'US3D', type: 'line', data: F.us3d },
+		],
+	}}
+/>

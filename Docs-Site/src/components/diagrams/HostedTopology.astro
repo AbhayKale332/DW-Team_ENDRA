@@ -1,0 +1,60 @@
+---
+import Markers from './Markers.astro';
+const m = 'ht';
+---
+
+<svg class="dw-svg" viewBox="0 0 880 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Hosted deployment topology">
+	<Markers id={m} />
+	<!-- Browser -->
+	<rect x="20" y="30" width="230" height="270" rx="10" class="group" />
+	<text x="36" y="52" class="t-title">Browser</text>
+	<rect x="36" y="64" width="198" height="62" rx="6" class="blue" />
+	<text x="135" y="88" text-anchor="middle" class="t-b">React 19 SPA</text>
+	<text x="135" y="106" text-anchor="middle" class="t-dim">Mantine UI · zustand state</text>
+	<rect x="36" y="138" width="198" height="50" rx="6" class="box" />
+	<text x="135" y="159" text-anchor="middle" class="t-sm t-b">three.js / R3F viewport</text>
+	<text x="135" y="175" text-anchor="middle" class="t-dim">mesh · shaders · post-FX</text>
+	<rect x="36" y="198" width="198" height="42" rx="6" class="box" />
+	<text x="135" y="216" text-anchor="middle" class="t-sm t-b">Web Workers (comlink)</text>
+	<text x="135" y="231" text-anchor="middle" class="t-dim">terrain mesh · analysis</text>
+	<rect x="36" y="250" width="198" height="36" rx="6" class="box" />
+	<text x="135" y="273" text-anchor="middle" class="t-sm">IndexedDB · recent projects</text>
+
+	<!-- Proxy -->
+	<rect x="320" y="60" width="220" height="150" rx="10" class="violet" />
+	<text x="430" y="84" text-anchor="middle" class="t-b">Same-origin proxy</text>
+	<text x="430" y="100" text-anchor="middle" class="t-dim">server/serve.mjs · or Vercel functions</text>
+	<rect x="336" y="114" width="188" height="38" rx="6" class="box" />
+	<text x="430" y="131" text-anchor="middle" class="t-sm mono">/hf-space/*</text>
+	<text x="430" y="145" text-anchor="middle" class="t-dim">injects HF_TOKEN · streams SSE</text>
+	<rect x="336" y="160" width="188" height="38" rx="6" class="box" />
+	<text x="430" y="177" text-anchor="middle" class="t-sm mono">/overpass/&lt;mirror&gt;</text>
+	<text x="430" y="191" text-anchor="middle" class="t-dim">allow-listed · ≤16 KB · 55 s</text>
+
+	<path d="M250 110 H318" class="edge" marker-end={`url(#${m})`} marker-start={`url(#${m})`} />
+	<text x="284" y="102" text-anchor="middle" class="t-dim">fetch</text>
+
+	<!-- HF Space -->
+	<rect x="610" y="30" width="250" height="120" rx="10" class="blue" />
+	<text x="735" y="54" text-anchor="middle" class="t-b">Hugging Face Space</text>
+	<text x="735" y="70" text-anchor="middle" class="t-dim">Gradio · ZeroGPU (private)</text>
+	<text x="626" y="94" class="mono">POST /gradio_api/upload</text>
+	<text x="626" y="110" class="mono">POST /gradio_api/call/predict</text>
+	<text x="626" y="126" class="mono">GET  …/predict/{"{id}"}  (SSE)</text>
+	<text x="626" y="142" class="mono">GET  /gradio_api/file=…</text>
+	<path d="M524 133 H570 V90 H608" class="edge-blue" marker-end={`url(#${m}-blue)`} />
+	<text x="566" y="82" text-anchor="end" class="t-dim">Bearer token</text>
+
+	<!-- Overpass -->
+	<rect x="610" y="170" width="250" height="52" rx="8" class="box" />
+	<text x="735" y="192" text-anchor="middle" class="t-sm t-b">Overpass API mirrors</text>
+	<text x="735" y="208" text-anchor="middle" class="t-dim">OpenStreetMap roads · buildings · POIs</text>
+	<path d="M524 179 H570 V196 H608" class="edge" marker-end={`url(#${m})`} />
+
+	<!-- Terrarium -->
+	<rect x="610" y="240" width="250" height="60" rx="8" class="orange" />
+	<text x="735" y="263" text-anchor="middle" class="t-sm t-b">Terrarium elevation tiles</text>
+	<text x="735" y="279" text-anchor="middle" class="t-dim">AWS open data · DEM anchoring</text>
+	<text x="735" y="292" text-anchor="middle" class="t-dim">fetched directly by the browser</text>
+	<path d="M234 268 H608" class="edge-dash" marker-end={`url(#${m})`} />
+</svg>

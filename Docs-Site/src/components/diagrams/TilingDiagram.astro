@@ -1,0 +1,49 @@
+---
+import Markers from './Markers.astro';
+const m = 'tl';
+// Hann weights for three overlapping windows along x (window 160 px wide, stride 120 in diagram units)
+const W = 150;
+const S = 112;
+const x0 = 450;
+const base = 230;
+const amp = 110;
+const wins = [0, 1, 2];
+const hann = (k: number) => {
+	const pts: string[] = [];
+	for (let i = 0; i <= 40; i++) {
+		const t = i / 40;
+		const x = x0 + k * S + t * W;
+		const y = base - amp * Math.sin(Math.PI * t) ** 2;
+		pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+	}
+	return pts.join(' ');
+};
+---
+
+<svg class="dw-svg" viewBox="0 0 820 295" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Sliding-window tiling with Hann blending">
+	<Markers id={m} />
+	<!-- Scene with windows -->
+	<text x="30" y="24" class="t-title">Scene resampled to 0.5 m</text>
+	<rect x="30" y="36" width="340" height="232" rx="4" class="box" />
+	<rect x="42" y="46" width="120" height="120" class="blue" style="fill-opacity:.6" />
+	<rect x="132" y="46" width="120" height="120" class="violet" style="fill-opacity:.6" />
+	<rect x="222" y="46" width="120" height="120" class="blue" style="fill-opacity:.6" />
+	<rect x="42" y="136" width="120" height="120" class="group" />
+	<rect x="132" y="136" width="120" height="120" class="group" />
+	<rect x="222" y="136" width="120" height="120" class="group" />
+	<text x="87" y="100" text-anchor="middle" class="t-sm t-b">512 px</text>
+	<path d="M42 182 H132" class="edge" marker-start={`url(#${m})`} marker-end={`url(#${m})`} />
+	<text x="87" y="198" text-anchor="middle" class="t-dim">stride 384 px</text>
+	<text x="147" y="126" text-anchor="middle" class="t-dim" style="font-size:9.5px">25 %</text>
+	<text x="362" y="285" text-anchor="end" class="t-dim">edges: reflect-padded, never zero</text>
+
+	<!-- Hann weights -->
+	<text x="470" y="24" class="t-title">Per-window Hann weight</text>
+	<path d={`M${x0 - 10} ${base} H${x0 + 2 * S + W + 10}`} class="edge" />
+	{wins.map((k) => <polyline points={hann(k)} class={k === 1 ? 'edge-orange' : 'edge-blue'} />)}
+	<text x={x0} y={base + 18} class="t-dim">window 1</text>
+	<text x={x0 + S + W / 2} y={base + 18} text-anchor="middle" class="t-dim">window 2</text>
+	<text x={x0 + 2 * S + W} y={base + 18} text-anchor="end" class="t-dim">window 3</text>
+	<text x={x0} y="58" class="t-sm">h(x) = Σ wᵢ(x)·hᵢ(x) / Σ wᵢ(x)</text>
+	<text x={x0} y="76" class="t-dim">seams vanish because weights fall to 0 at tile borders</text>
+</svg>

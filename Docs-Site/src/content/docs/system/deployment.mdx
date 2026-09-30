@@ -1,0 +1,113 @@
+---
+title: Deployment & configuration
+description: Environment variables and deployment recipes for the web app (Vercel, Docker, Node), the model Space and the FastAPI service.
+---
+
+import { Tabs, TabItem, Aside, Steps } from '@astrojs/starlight/components';
+
+## Environment variables
+
+### Web app and proxy
+
+| Variable | Required | Where | Purpose |
+|---|---|---|---|
+| `HF_TOKEN` | ✓ | server only | Hugging Face token with **read** access to the private Space. Never prefix it with `VITE_`, or Vite embeds it in the browser bundle |
+| `VITE_SPACE_ID` | — | build | Space id (`owner/name`); default `akashch1512/SingleViewHeigthEstimation` |
+| `HF_SPACE_URL` | — | server | Override the Space URL derived from `VITE_SPACE_ID` |
+| `PORT` | — | server | Port for `npm run serve` (default 8080) |
+| `OVERPASS_USER_AGENT` | — | server | User-Agent for the Overpass relay |
+
+### FastAPI service
+
+| Variable | Purpose |
+|---|---|
+| `DW_CKPT` | PyTorch checkpoint to load at import |
+| `DW_ONNX` | ONNX graph to load at import (takes precedence over the checkpoint) |
+| `DW_JOBS_DIR` | Job output directory (default `outputs/jobs`) |
+
+## Deploy the web app
+
+<Tabs>
+<TabItem label="Vercel">
+
+`Frontend/vercel.json` maps the proxy routes onto serverless functions:
+
+```json title="Frontend/vercel.json"
+{
+  "rewrites": [
+    { "source": "/hf-space/:path*", "destination": "/api/hf-space?__path=:path*" },
+    { "source": "/overpass/:mirror", "destination": "/api/overpass?__mirror=:mirror" }
+  ],
+  "functions": {
+    "api/hf-space.js": { "maxDuration": 300 },
+    "api/overpass.js": { "maxDuration": 60 }
+  }
+}
+```
+
+<Steps>
+
+1. Import the repository in Vercel and set **Root Directory** to `Frontend`.
+2. Add `HF_TOKEN` (and optionally `VITE_SPACE_ID`) as environment variables.
+3. Deploy. The build runs `npm run build` and serves `dist/`.
+
+</Steps>
+
+</TabItem>
+<TabItem label="Docker">
+
+```dockerfile title="Frontend/Dockerfile (summary)"
+FROM node:22-alpine AS build     # npm ci && vite build
+FROM node:22-alpine              # copies dist/ + server/, runs as user "node"
+ENV NODE_ENV=production PORT=8080
+CMD ["node", "server/serve.mjs"]
+```
+
+```bash
+docker build -t depthwizard-frontend Frontend/
+docker run -e HF_TOKEN=hf_xxx -p 8080:8080 depthwizard-frontend
+```
+
+</TabItem>
+<TabItem label="Node">
+
+```bash
+cd Frontend
+npm ci && npm run build
+HF_TOKEN=hf_xxx PORT=8080 npm run serve
+```
+
+</TabItem>
+</Tabs>
+
+## The model Space
+
+The hosted model is a **private Gradio Space on ZeroGPU**. Each call reserves a GPU slot (`@spaces.GPU`) for 45 s, or 120 s with TTA. GPU time is billed against the daily ZeroGPU quota of the account that owns `HF_TOKEN`. When it runs out, the app shows *GPU quota used up*.
+
+## Deploy the FastAPI service
+
+```bash
+cd Model_Traning/v5
+pip install -r requirements.txt
+python -m geo.dem --prime scene.tif                      # optional: cache DEMs for offline use
+DW_ONNX=/models/depthwizard.onnx uvicorn serve.app:app --host 0.0.0.0 --port 8000
+```
+
+<Aside type="caution">The service has no authentication. Run it behind a reverse proxy that handles TLS and access control, and give `DW_JOBS_DIR` enough disk: a georeferenced 1024² job with absolute products and meshes takes about 80 MB.</Aside>
+
+## Deploy these docs
+
+The docs site is a static Astro Starlight build in `Docs-Site/`:
+
+```bash
+cd Docs-Site
+npm install
+npm run dev       # http://localhost:4321
+npm run build     # → dist/  (fails on broken internal links)
+```
+
+On Vercel, set **Root Directory** to `Docs-Site`. The included `vercel.json` selects the Astro framework preset. Node 22.12 or later is required.
+
+## CI
+
+The repository has one GitHub Actions workflow, `pr-agent.yml`, an automated PR reviewer. It has no build, test or deploy workflows yet.

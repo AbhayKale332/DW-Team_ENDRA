@@ -1,0 +1,166 @@
+---
+/**
+ * ECharts figure. `option` is a plain (JSON-serialisable) ECharts option;
+ * colours, fonts and axis styling are applied client-side from the active
+ * light/dark theme, so options only describe the data.
+ */
+interface Props {
+	option: Record<string, unknown>;
+	height?: number;
+	caption?: string;
+	source?: string;
+}
+const { option, height = 340, caption, source } = Astro.props;
+---
+
+<figure class="dw-chart-fig not-content">
+	<div class="dw-chart" data-option={JSON.stringify(option)} style={`height:${height}px`} role="img" aria-label={caption ?? 'Chart'}></div>
+	{
+		(caption || source) && (
+			<figcaption>
+				{caption && <span>{caption}</span>}
+				{source && <span class="src">Source: <code>{source}</code></span>}
+			</figcaption>
+		)
+	}
+</figure>
+
+<style>
+	.dw-chart-fig {
+		margin: 1.5rem 0;
+		border: 1px solid var(--dw-line);
+		border-radius: var(--dw-radius);
+		background: var(--dw-surface);
+		padding: 1rem 0.75rem 0.75rem;
+	}
+	.dw-chart {
+		width: 100%;
+	}
+	figcaption {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		padding: 0.6rem 0.5rem 0.1rem;
+		border-top: 1px solid var(--dw-line);
+		margin-top: 0.5rem;
+		font-size: 0.8rem;
+		color: var(--dw-dim);
+	}
+	.src {
+		font-size: 0.72rem;
+		color: var(--dw-faint);
+	}
+	.src code {
+		font-size: 0.7rem;
+		background: none;
+		padding: 0;
+	}
+</style>
+
+<script>
+	type Opt = Record<string, any>;
+
+	const PALETTE = {
+		light: ['#2d6cdf', '#e5793a', '#6a4cf0', '#1f9a63', '#c99400', '#d65a8a', '#5b6572', '#18a3b8'],
+		dark: ['#5b97f7', '#f08a4b', '#9a86f7', '#3fb27f', '#e0b23a', '#e67aa3', '#a2acb7', '#3cc0d2'],
+	};
+
+	function isDark() {
+		return document.documentElement.dataset.theme !== 'light';
+	}
+
+	function themed(raw: Opt): Opt {
+		const dark = isDark();
+		const ink = dark ? '#d7dde4' : '#252c34';
+		const dim = dark ? '#8f99a4' : '#5b6572';
+		const line = dark ? '#2a323b' : '#e3e7ec';
+		const axisLine = dark ? '#3a434d' : '#c5ccd4';
+		const opt: Opt = structuredClone(raw);
+		opt.color ??= dark ? PALETTE.dark : PALETTE.light;
+		opt.backgroundColor = 'transparent';
+		opt.textStyle = { fontFamily: 'Inter, system-ui, sans-serif', color: ink, ...(opt.textStyle ?? {}) };
+		opt.animationDuration ??= 600;
+		const legend = opt.legend;
+		if (legend) {
+			for (const l of Array.isArray(legend) ? legend : [legend]) {
+				l.textStyle = { color: dim, fontSize: 12, ...(l.textStyle ?? {}) };
+				l.itemWidth ??= 14;
+				l.itemHeight ??= 8;
+				l.icon ??= 'roundRect';
+			}
+		}
+		opt.tooltip = {
+			backgroundColor: dark ? '#161b21' : '#ffffff',
+			borderColor: line,
+			textStyle: { color: ink, fontSize: 12 },
+			extraCssText: 'box-shadow:0 4px 16px rgb(15 23 42 / 12%);border-radius:6px;',
+			...(opt.tooltip ?? { trigger: 'axis' }),
+		};
+		const styleAxis = (a: Opt) => {
+			a.axisLine = { ...(a.axisLine ?? {}), lineStyle: { color: axisLine, ...(a.axisLine?.lineStyle ?? {}) } };
+			a.axisTick = { show: false, ...(a.axisTick ?? {}) };
+			a.axisLabel = { color: dim, fontSize: 11, ...(a.axisLabel ?? {}) };
+			a.splitLine = { ...(a.splitLine ?? {}), lineStyle: { color: line, ...(a.splitLine?.lineStyle ?? {}) } };
+			a.nameTextStyle = { color: dim, fontSize: 11, ...(a.nameTextStyle ?? {}) };
+		};
+		for (const key of ['xAxis', 'yAxis', 'radiusAxis', 'angleAxis']) {
+			const ax = opt[key];
+			if (!ax) continue;
+			(Array.isArray(ax) ? ax : [ax]).forEach(styleAxis);
+		}
+		opt.grid ??= { left: 56, right: 24, top: 44, bottom: 44, containLabel: false };
+		if (Array.isArray(opt.series)) {
+			for (const s of opt.series) {
+				if (s.type === 'pie') {
+					s.itemStyle = { borderColor: dark ? '#12161b' : '#ffffff', borderWidth: 2, ...(s.itemStyle ?? {}) };
+					s.label = { color: ink, ...(s.label ?? {}) };
+				}
+				if (s.type === 'bar') {
+					s.itemStyle = { borderRadius: s.horizontal ? [0, 3, 3, 0] : [3, 3, 0, 0], ...(s.itemStyle ?? {}) };
+				}
+				if (s.markLine) {
+					s.markLine.lineStyle = { color: dim, ...(s.markLine.lineStyle ?? {}) };
+					s.markLine.label = { color: dim, ...(s.markLine.label ?? {}) };
+				}
+			}
+		}
+		return opt;
+	}
+
+	async function init() {
+		const els = Array.from(document.querySelectorAll<HTMLElement>('.dw-chart'));
+		if (!els.length) return;
+		const echarts = await import('echarts');
+		const charts = new Map<HTMLElement, any>();
+		const render = (el: HTMLElement) => {
+			const raw = JSON.parse(el.dataset.option || '{}');
+			let c = charts.get(el);
+			if (c) c.dispose();
+			c = echarts.init(el, undefined, { renderer: 'svg' });
+			c.setOption(themed(raw));
+			charts.set(el, c);
+		};
+		const io = new IntersectionObserver(
+			(entries) => {
+				for (const e of entries) {
+					if (e.isIntersecting) {
+						render(e.target as HTMLElement);
+						io.unobserve(e.target);
+					}
+				}
+			},
+			{ rootMargin: '200px' },
+		);
+		els.forEach((el) => io.observe(el));
+		new MutationObserver(() => charts.forEach((_c, el) => render(el))).observe(document.documentElement, {
+			attributes: true,
+			attributeFilter: ['data-theme'],
+		});
+		const ro = new ResizeObserver((entries) => {
+			for (const e of entries) charts.get(e.target as HTMLElement)?.resize();
+		});
+		els.forEach((el) => ro.observe(el));
+	}
+
+	init();
+</script>

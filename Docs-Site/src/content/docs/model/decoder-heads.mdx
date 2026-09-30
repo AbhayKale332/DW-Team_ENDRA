@@ -1,0 +1,88 @@
+---
+title: Decoder & heads
+description: DPT reassemble and fusion, the regression, adaptive-bin and segmentation heads, the gate and the v5 detail branch.
+---
+
+import Eq from '../../../components/Math.astro';
+import Diagram from '../../../components/Diagram.astro';
+import ArchitectureDiagram from '../../../components/diagrams/ArchitectureDiagram.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+Source: `Model_Traning/v5/models/dpt.py` and `heads.py`.
+
+<Diagram caption="Decoder and heads. See the Architecture overview for the full walkthrough.">
+	<ArchitectureDiagram />
+</Diagram>
+
+## DPT decoder
+
+The Dense Prediction Transformer (DPT) decoder turns four same-resolution token maps into a feature pyramid, then fuses it top-down.
+
+**Reassemble.** Each of the four taps goes through a 1 × 1 conv, is resampled, then projected to 256 channels (`decoder_dim`) by a 3 × 3 conv:
+
+| Tap | Channels | Resample | Scale |
+|---|---|---|---|
+| Block 6 | 96 | ConvTranspose 4× | 1/4 (128²) |
+| Block 12 | 192 | ConvTranspose 2× | 1/8 (64²) |
+| Block 18 | 384 | identity | 1/16 (32²) |
+| Block 24 | 768 | stride-2 conv | 1/32 (16²) |
+
+**Fusion.** Four RefineNet-style blocks, each built from residual conv units with GroupNorm(8), merge the pyramid from coarse to fine. Each block upsamples its input and adds the next finer scale; the deepest block has no skip input. The result, **F**, has 256 channels at half the input resolution.
+
+## Shared head block
+
+Every head starts with the same block: `3×3 conv 256→128 → GroupNorm → ReLU → 1×1 conv → output`.
+
+## Head A: direct regression
+
+A single-channel regression with a **softplus** output, so heights are non-negative with a smooth gradient. v2 used ReLU, which can kill gradients. The last bias starts at −2, so initial predictions sit near 0 m, where most pixels are.
+
+## Head B: adaptive bins
+
+Head B follows the AdaBins idea: it predicts a *per-image* set of bin widths and a *per-pixel* distribution over those bins.
+
+1. A pooled, RMS-normalised copy of F feeds a `Linear(256 → 96)`, which gives width logits *z* (computed in fp32 and clamped to ±15).
+2. The widths are a floored softmax over the height range [h<sub>min</sub>, h<sub>max</sub>] = [0, 120 m]:
+
+<Eq block tex="w_k = (h_{\max}-h_{\min})\,\frac{\operatorname{softmax}(z)_k + 0.05/K}{1 + 0.05}, \qquad K = 96" />
+
+3. Bin centres *c<sub>k</sub>* are the midpoints of the cumulative widths. Each pixel gets probabilities *p<sub>k</sub>* from a 1 × 1 conv and a softmax.
+4. The height is the expected value of that distribution, and its spread is the uncertainty:
+
+<Eq block tex="b = \sum_k c_k\,p_k, \qquad \sigma_b = \sqrt{\textstyle\sum_k c_k^2\,p_k - b^2}" />
+
+The width floor (0.05/K) stops any bin from collapsing to zero width, which caused unstable training in early runs.
+
+## Gated fusion
+
+<Eq block tex="\alpha = \sigma\!\left(\mathrm{conv}_{64\to1}\,\mathrm{ReLU}\,\mathrm{GN}\,\mathrm{conv}_{258\to64}\,[F, a, b]\right), \qquad \hat h = \alpha a + (1-\alpha)\,b" />
+
+The gate sees the features plus both candidate heights (256 + 1 + 1 = 258 channels), so it can learn, for example, to trust the bins on tall buildings and the regression on flat ground.
+
+## Head C: segmentation
+
+An 8-channel classifier: 7 land-cover classes plus an **ignore** channel (id 7) for unlabelled pixels.
+
+| id | Class | Counts as flat ground in the losses? |
+|---|---|---|
+| 0 | other | — |
+| 1 | ground | ✓ |
+| 2 | low vegetation | ✓ |
+| 3 | building | — |
+| 4 | water | ✓ |
+| 5 | road | ✓ |
+| 6 | tree | — |
+
+Its predictions give the **ground mask** for DTM fitting, colour the *Object classes* layer in the viewer, and drive the building/tree/water object extraction.
+
+<Aside type="note">v5 corrected the class-id mapping used in v1–v4 after an audit found the per-class table was wrong ("bridges 16 %, ground 0.1 %"). Confirm class ids with `tools/audit_labels.py --classes` before relying on them for a new dataset.</Aside>
+
+## v5 detail branch
+
+Enabled with `detail_branch = true`, `detail_dim = 64`.
+
+- **DetailStem**: a small conv stem on the raw RGB, producing 32 channels at full resolution and 64 at half resolution (stride 2).
+- **Inject**: a 1 × 1 conv (320 → 256) adds these edge features to F before the heads.
+- **ConvexUp2x**: a learned 2× upsampler, as in RAFT. For each output sub-pixel it predicts softmax weights over the 3 × 3 low-resolution neighbourhood (a 448 → 128 → 36 conv stack) and takes the convex combination.
+
+All new layers are **zero-initialised**, so at step 0 the network behaves exactly like v4 (ConvexUp2x starts as bilinear upsampling) and v4 checkpoints load without surgery.

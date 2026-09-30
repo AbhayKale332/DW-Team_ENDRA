@@ -1,0 +1,68 @@
+---
+title: DepthWizard
+description: Single-view metric height estimation and 3D flythrough from aerial and satellite imagery.
+template: splash
+hero:
+  title: Height from a single image.
+  tagline: DepthWizard turns one aerial or satellite image into a metric surface model, then lets you fly through it, validate it and export it. It works on a plain PNG, a JPG or a georeferenced GeoTIFF.
+  actions:
+    - text: Get started
+      link: /overview/quickstart/
+      icon: right-arrow
+    - text: How the model works
+      link: /model/overview/
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import Stat from '../../components/Stat.astro';
+import StatGrid from '../../components/StatGrid.astro';
+import Diagram from '../../components/Diagram.astro';
+import Figure from '../../components/Figure.astro';
+import PipelineDiagram from '../../components/diagrams/PipelineDiagram.astro';
+import mumbai from '../../assets/figures/sample_mumbai.png';
+
+<Figure src={mumbai} alt="Input image, predicted height map and textured 3D render of a high-rise district" caption="From left to right: the input image, the predicted height map (0 to 112.4 m) and the textured 3D render in the viewer. This is a non-georeferenced screenshot processed at an assumed 0.5 m GSD." credit="Imagery © Google Earth." />
+
+## At a glance
+
+<StatGrid>
+	<Stat label="GAMUS test RMSE" value="3.32" unit="m" note="2,861 held-out tiles · TTA · r = 0.89" />
+	<Stat label="LiDAR · 30 m cells" value="1.35" unit="m" note="WorldView-3 vs airborne LiDAR, 8 sites" />
+	<Stat label="Cross-domain RMSE" value="4.97" unit="m" note="DFC23, a different sensor and continent" />
+	<Stat label="Encoder" value="303" unit="M" note="DINOv3 ViT-L/16 pretrained on 493 M satellite images" />
+</StatGrid>
+
+## How it works
+
+<Diagram caption="The pipeline end to end. Every input goes through the same height model. Georeferenced inputs are then anchored to a public DEM to produce an absolute surface model in metres. Plain images produce a relative model whose scale comes from an assumed 0.5 m ground sample distance.">
+	<PipelineDiagram />
+</Diagram>
+
+## Explore the docs
+
+<CardGrid>
+	<LinkCard title="Model architecture" description="Satellite-pretrained DINOv3 encoder, DPT decoder, and regression, adaptive-bin and segmentation heads blended by a learned gate." href="/model/overview/" />
+	<LinkCard title="Training & fine-tuning" description="Datasets, augmentation, the optimisation recipe, and the five model versions with what each one changed." href="/training/versions/" />
+	<LinkCard title="Evaluation & results" description="Benchmarks on held-out and cross-domain data, error by height band and landscape, and LiDAR validation." href="/results/benchmarks/" />
+	<LinkCard title="Georeferencing" description="How a predicted height map becomes an absolute DSM without counting buildings twice." href="/geo/absolute-dsm/" />
+	<LinkCard title="System architecture" description="Hosted proxy + GPU Space, the self-hosted FastAPI service, API reference and deployment." href="/system/overview/" />
+	<LinkCard title="User guide" description="Upload an image, estimate heights, fly through the scene, validate against a reference and export." href="/guide/first-estimate/" />
+</CardGrid>
+
+## Who should read what
+
+<CardGrid>
+	<Card title="Reviewing results" icon="approve-check-circle">
+		Start with [Benchmarks](/results/benchmarks/), [Error analysis](/results/error-analysis/) and [Limitations](/reference/limitations/). Every number on this site links back to the run artefact it came from.
+	</Card>
+	<Card title="Building on it" icon="code-branch">
+		Read the [Architecture](/model/overview/), [Training recipe](/training/recipe/) and [API reference](/system/api-reference/), then [self-host the service](/system/self-hosted/).
+	</Card>
+	<Card title="Using the app" icon="laptop">
+		Go to the [User guide](/guide/interface/). A first height estimate takes about a minute.
+	</Card>
+	<Card title="GIS workflows" icon="setting">
+		See [Concepts](/overview/concepts/), [Absolute DSM](/geo/absolute-dsm/) and [Output formats](/system/outputs/) for datums, CRSs and GeoTIFF products.
+	</Card>
+</CardGrid>

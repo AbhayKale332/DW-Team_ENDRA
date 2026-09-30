@@ -1,0 +1,180 @@
+---
+title: API reference
+description: The Gradio /predict endpoint used by the web app, and every endpoint of the self-hosted FastAPI service.
+---
+
+import { Tabs, TabItem, Aside, Badge } from '@astrojs/starlight/components';
+
+<Tabs syncKey="api">
+<TabItem label="Gradio Space">
+
+## `/predict`
+
+The web app calls this through the `/hf-space` proxy. It can also be called with `gradio_client`, which needs a token with read access because the Space is private.
+
+```python
+from gradio_client import Client, handle_file
+
+client = Client("akashch1512/SingleViewHeigthEstimation", hf_token="hf_…")
+result = client.predict(
+    image_path=handle_file("scene.tif"),
+    gsd=0.5,          # m/px; 0 = read from file or assume
+    tta=False,        # 8-view test-time augmentation
+    api_name="/predict",
+)
+```
+
+### Parameters
+
+| Name | Type | Default | Description |
+|---|---|---|---|
+| `image_path` | filepath | required | PNG, JPG or (Geo)TIFF |
+| `gsd` | float | 0.5 | Resolution in m/px. The web app sends `0` for "auto" |
+| `tta` | bool | false | Higher quality (slower). Reserves 120 s of GPU instead of 45 s |
+
+### Returns: a tuple of 6
+
+| # | Type | Content |
+|---|---|---|
+| 0 | gallery | height colormap and hillshade previews |
+| 1 | filepath | 16-bit height PNG |
+| 2 | str (HTML) | embedded viewer |
+| 3 | list[filepath] | downloads: `*_result.zip`, `ndsm_m.npy`, `meta.json`, `terrain.glb`, previews |
+| 4 | str (Markdown) | status / stats (also carries error text) |
+| 5 | str (Markdown) | warnings (e.g. little flat ground, assumed GSD) |
+
+### Raw HTTP (what the app does)
+
+```bash
+BASE=http://localhost:8080/hf-space      # proxy adds the token
+
+# 1. upload
+curl -s -F files=@scene.tif $BASE/gradio_api/upload
+# → ["/tmp/gradio/…/scene.tif"]
+
+# 2. start
+curl -s -H 'Content-Type: application/json' \
+  -d '{"data":[{"path":"/tmp/gradio/…/scene.tif","meta":{"_type":"gradio.FileData"}},0,false]}' \
+  $BASE/gradio_api/call/predict
+# → {"event_id":"a1b2c3…"}
+
+# 3. stream (SSE): heartbeat / generating … then complete or error
+curl -N $BASE/gradio_api/call/predict/a1b2c3…
+```
+
+</TabItem>
+<TabItem label="FastAPI service">
+
+Base URL: `http://<host>:8000`. All request bodies are `multipart/form-data`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| <Badge text="GET" variant="note" /> | `/api/health` | Model and runtime status |
+| <Badge text="POST" variant="success" /> | `/api/predict` | Submit a scene, returns a job id |
+| <Badge text="GET" variant="note" /> | `/api/job/{id}` | Job stage, progress, result |
+| <Badge text="GET" variant="note" /> | `/api/jobs` | All jobs, newest first |
+| <Badge text="POST" variant="success" /> | `/api/reference/{id}` | Validate against a reference DSM/nDSM |
+| <Badge text="POST" variant="success" /> | `/api/aoi/{id}` | Full-resolution crop as its own product |
+| <Badge text="GET" variant="note" /> | `/api/result/{id}/{file}` | Download any output file |
+| <Badge text="GET" variant="note" /> | `/api/report/{id}` | Self-contained HTML report |
+| <Badge text="GET" variant="note" /> | `/view/{id}` | Redirect to the 3D viewer |
+
+### `GET /api/health`
+
+```json
+{
+  "ok": true,
+  "runtime": "torch",
+  "checkpoint": "outputs/v5/best.pt",
+  "device": "cuda",
+  "preproc": { "encoder_model_id": "facebook/dinov3-vitl16-pretrain-sat493m", "canonical_gsd_m": 0.5, "tile_size": 512, "…": "…" },
+  "jobs": 3
+}
+```
+
+### `POST /api/predict`
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `file` | file(s) | required | One image, a product `.zip`, or several files (e.g. `BAND1..4.tif` + `BAND_META.txt`) |
+| `gsd` | float | `0` | m/px; `0` = from GeoTIFF, else assume 0.5 |
+| `tta` | bool | `false` | 8-view D4 TTA |
+| `absolute` | bool | `false` | Also write DTM + absolute DSM (georeferenced only) |
+| `dem_source` | str | `copernicus30` | `copernicus30`, `srtmgl1`, `nasadem`, `terrain_tiles` |
+| `dsm_mode` | str | `dem_anchored` | or `dtm_plus_ndsm` |
+| `detail_gain` | float | `1.0` | λ in the DEM-anchored formula |
+| `bands` | str | `""` | e.g. `3,2,1` for RGB from a 4-band product |
+| `max_side` | int | `0` | Downscale the longest side; `0` = auto (windowed above 40 MP) |
+
+```bash
+curl -F file=@scene.tif -F absolute=true -F tta=true http://localhost:8000/api/predict
+```
+
+```json
+{ "job": "88e63fd3329e", "status_url": "/api/job/88e63fd3329e", "view_url": "/view/88e63fd3329e" }
+```
+
+Returns `503` if no model is loaded.
+
+### `GET /api/job/{id}`
+
+```json
+{
+  "id": "88e63fd3329e",
+  "stage": "done",
+  "progress": 1.0,
+  "filename": "scene.tif",
+  "scene": { "w": 1024, "h": 1024, "gsd_m": 0.6, "georeferenced": true },
+  "result": { "…": "meta payload" },
+  "files": ["dsm_m.tif", "dtm_m.tif", "meta.json", "ndsm_m.tif", "…"],
+  "started": 1759150000.1,
+  "finished": 1759150031.7
+}
+```
+
+`stage` ∈ `queued`, `reading`, `predicting`, `predicting (windowed)`, `terrain`, `writing`, `done`, `error`. Returns `404` for unknown ids.
+
+### `POST /api/reference/{id}`
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `file` | file | required | Reference GeoTIFF |
+| `kind` | str | `auto` | `auto`, `dsm` or `ndsm` |
+| `datum` | str | `""` | `EGM96`, `EGM2008` or `WGS84` |
+
+The reference is reprojected onto the prediction grid, datum-converted and scored. The response mirrors `validation.json`:
+
+```json
+{
+  "kind": "ndsm",
+  "placement": "reprojected",
+  "overlap_frac": 0.971,
+  "per_pixel":           { "n": 4883500, "rmse_m": 2.555, "mae_m": 1.431, "bias_m": 0.165, "pearson_r": 0.759 },
+  "per_pixel_confident": { "n": 2439523, "rmse_m": 0.897, "threshold_m": 1.585, "…": "…" },
+  "per_cell":            { "n": 528, "rmse_m": 0.890, "cell_m": 30.0, "…": "…" },
+  "median_err_on_ground_m": 0.0
+}
+```
+
+`422` if the file cannot be read, or `kind` / `datum` is invalid.
+
+### `POST /api/aoi/{id}`
+
+Form fields `row`, `col`, `h`, `w` (in viewer pixels) and `max_px` (default 2048, clamped to 64–4096). Returns:
+
+```json
+{ "base": "/api/result/<id>/<aoi_dir>", "shape": [h, w], "decimation": 1, "window_full_res": [ … ] }
+```
+
+### `GET /api/result/{id}/{file}`
+
+Any file in the job directory, including files inside AOI subdirectories.
+
+### `GET /api/report/{id}`
+
+Builds and returns `report.html`, a self-contained page with the figures from `viz/figures.py` (hillshade and height maps, plus error plots when ground truth is present) and the scene metadata.
+
+</TabItem>
+</Tabs>
+
+<Aside type="caution">The FastAPI service enforces no upload size limit or authentication. Large uploads are bounded only by disk and memory. `runtime` is `torch` or `onnx`; with ONNX, `device` reports `cpu` even when ONNX Runtime uses its CUDA provider.</Aside>

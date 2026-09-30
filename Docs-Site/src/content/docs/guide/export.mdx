@@ -1,0 +1,36 @@
+---
+title: Export & projects
+description: Save projects, reopen results, and export meshes, images and georeferenced rasters.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Projects
+
+| Action | How |
+|---|---|
+| **Save project** | **File → Save Project** (<kbd>Ctrl</kbd>+<kbd>S</kbd>) writes a `.dwproj` file with the result, the image and your settings |
+| **Open project** | **File → Load / Open** (<kbd>Ctrl</kbd>+<kbd>O</kbd>), or drag the `.dwproj` onto the window |
+| **Recent** | **File → Recent** lists recent projects with thumbnails, stored in your browser (IndexedDB) |
+| **New project** | **File → New Project** (<kbd>Alt</kbd>+<kbd>N</kbd>); asks first if there are unsaved changes |
+| **Open a result bundle** | Drop a `.zip` or `.npy` from the CLI or the FastAPI service to view it without running inference again |
+
+## Export formats
+
+**File → Export**:
+
+| Group | Format | Use it for |
+|---|---|---|
+| **3D object** | GLB | Web viewers, Blender, game engines (textured, single file) |
+| | OBJ | A zip with MTL + texture, for broad DCC-tool support |
+| | PLY | Point / mesh processing (CloudCompare, MeshLab) |
+| | STL | 3D printing (geometry only) |
+| | Server `terrain.glb` | The mesh produced by the model service, when present |
+| **Heatmap** | PNG, JPG | Reports and slides; uses the current colormap |
+| **Elevation data** | **GeoTIFF Float32** (<kbd>Ctrl</kbd>+<kbd>E</kbd>) | GIS: heights in metres, with CRS if georeferenced |
+| | GeoTIFF nDSM, GeoTIFF DTM | After [anchoring](/guide/anchoring/): the separate terrain and height layers |
+| | NumPy `.npy` | Python analysis |
+| | 16-bit PNG | Compact height maps ([encoding](/system/outputs/#ndsm16png-encoding)) |
+| **Screenshot** | PNG | The current viewport |
+
+<Aside type="tip">Exports use the current **height reference**: above ground or absolute elevation. Check the product chip (rDSM / nDSM / DSM) before exporting. The validation report is exported from the [Validation](/guide/validation/#export-a-report) tab.</Aside>

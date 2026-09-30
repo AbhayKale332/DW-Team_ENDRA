@@ -1,0 +1,59 @@
+---
+import Markers from './Markers.astro';
+const m = 'pl';
+---
+
+<svg class="dw-svg" viewBox="0 0 880 310" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="DepthWizard end-to-end pipeline">
+	<Markers id={m} />
+	<!-- Row 1 -->
+	<rect x="20" y="30" width="150" height="76" rx="8" class="box" />
+	<text x="95" y="60" text-anchor="middle" class="t-b">Input image</text>
+	<text x="95" y="78" text-anchor="middle" class="t-dim">PNG · JPG · GeoTIFF</text>
+	<text x="95" y="93" text-anchor="middle" class="t-dim">Cartosat · WorldView · aerial</text>
+
+	<rect x="215" y="30" width="170" height="76" rx="8" class="box" />
+	<text x="300" y="56" text-anchor="middle" class="t-b">Preprocess</text>
+	<text x="300" y="74" text-anchor="middle" class="t-dim">resolve GSD · 2–98 % stretch</text>
+	<text x="300" y="89" text-anchor="middle" class="t-dim">resample to 0.5 m · 512 px tiles</text>
+
+	<rect x="430" y="30" width="190" height="76" rx="8" class="blue" />
+	<text x="525" y="56" text-anchor="middle" class="t-b">Height model</text>
+	<text x="525" y="74" text-anchor="middle" class="t-dim">DINOv3 ViT-L/16 + DPT</text>
+	<text x="525" y="89" text-anchor="middle" class="t-dim">height · classes · uncertainty</text>
+
+	<rect x="665" y="30" width="195" height="76" rx="8" class="box" />
+	<text x="762" y="56" text-anchor="middle" class="t-b">Blend &amp; restore grid</text>
+	<text x="762" y="74" text-anchor="middle" class="t-dim">Hann-weighted tile blend</text>
+	<text x="762" y="89" text-anchor="middle" class="t-dim">→ nDSM, metres above ground</text>
+
+	<path d="M170 68 H213" class="edge" marker-end={`url(#${m})`} />
+	<path d="M385 68 H428" class="edge" marker-end={`url(#${m})`} />
+	<path d="M620 68 H663" class="edge" marker-end={`url(#${m})`} />
+	<path d="M762 106 V165" class="edge" marker-end={`url(#${m})`} />
+
+	<!-- Decision -->
+	<polygon points="762,167 832,205 762,243 692,205" class="box" />
+	<text x="762" y="202" text-anchor="middle" class="t-b t-sm">Georeferenced?</text>
+	<text x="762" y="216" text-anchor="middle" class="t-dim">(GeoTIFF / DEM)</text>
+
+	<path d="M692 205 H666" class="edge" />
+	<path d="M666 205 V168 H642" class="edge-orange" marker-end={`url(#${m}-orange)`} />
+	<path d="M666 205 V262 H642" class="edge-green" marker-end={`url(#${m}-green)`} />
+	<text x="672" y="160" class="t-dim">yes</text>
+	<text x="672" y="282" class="t-dim">no</text>
+
+	<rect x="440" y="140" width="200" height="56" rx="8" class="orange" />
+	<text x="540" y="163" text-anchor="middle" class="t-b">Absolute DSM</text>
+	<text x="540" y="181" text-anchor="middle" class="t-dim">DEM-anchored · metres (EGM2008)</text>
+
+	<rect x="440" y="234" width="200" height="56" rx="8" class="green" />
+	<text x="540" y="257" text-anchor="middle" class="t-b">Relative DSM (rDSM)</text>
+	<text x="540" y="275" text-anchor="middle" class="t-dim">scale from assumed 0.5 m GSD</text>
+
+	<path d="M440 168 H400 V212 H362" class="edge" marker-end={`url(#${m})`} />
+	<path d="M440 262 H400 V212" class="edge" />
+
+	<rect x="60" y="180" width="300" height="64" rx="8" class="violet" />
+	<text x="210" y="205" text-anchor="middle" class="t-b">3D viewer · validation · export</text>
+	<text x="210" y="224" text-anchor="middle" class="t-dim">GLB · OBJ · PLY · STL · GeoTIFF · NPY</text>
+</svg>

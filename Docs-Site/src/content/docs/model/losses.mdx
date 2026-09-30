@@ -1,0 +1,83 @@
+---
+title: Loss functions
+description: The multi-term training objective, per-version weights and the height-stratum balancer.
+---
+
+import Eq from '../../../components/Math.astro';
+import Chart from '../../../components/Chart.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+Source: `Model_Traning/v5/models/losses.py`. All terms are computed in fp32, even under mixed precision.
+
+## Total objective
+
+<Eq block tex="\mathcal{L} = 1.0\,\mathcal{R}(\hat h) + 0.3\,\mathcal{R}(a) + 0.3\,\mathcal{R}(b) + w_n\mathcal{L}_{\text{normal}} + 0.2\,\mathcal{L}_{\text{flat}} + 0.5\,\mathcal{L}_{\text{bin}} + w_e\mathcal{L}_{\text{ent}} + 0.2\,\mathcal{L}_{\text{seg}}" />
+
+The fused prediction carries the main weight. Heads A and B get auxiliary supervision so each stays a useful height estimate for the gate to choose between.
+
+## Regression term
+
+Each height map *h* is scored against the label *y* with three parts:
+
+<Eq block tex="\mathcal{R}(h) = w_{\ell_1}\,\mathcal{L}_{\ell_1}^{\text{bal}} + w_{\text{silog}}\,\mathcal{L}_{\text{silog}} + w_{\text{grad}}\,\mathcal{L}_{\text{grad}}" />
+
+| Term | Definition |
+|---|---|
+| **Balanced L1** | L1 error, weighted per pixel by the stratum balancer (below) |
+| **SiLog** | Scale-invariant log error with a +1 m shift so 0 m is defined: <Eq tex="g = \log(y+1) - \log(h+1),\ \sqrt{\max(\overline{g^2} - 0.85\,\bar g^{\,2},\,10^{-8})}" /> |
+| **Gradient** | L1 on horizontal and vertical first differences, averaged over 4 scales. Keeps edges crisp |
+
+## Structural terms
+
+| Term | Definition | Purpose |
+|---|---|---|
+| **Normal** | 1 − cos between predicted and true surface normals, with slopes scaled by GSD | Keeps roofs planar and walls vertical |
+| **Flatness** | \|Laplacian of the prediction\| where the true Laplacian is below 0.35 m, on ground / low-veg / water / road or unlabelled pixels | Stops noise on flat ground |
+| **Bin CE** | Cross-entropy on Head B's bin logits at half resolution. Targets are the nearest bin, or a Gaussian over neighbouring bins when `bin_soft_sigma` > 0 | Direct supervision for the bin distribution |
+| **Bin entropy** | Negative entropy of the batch-mean bin distribution | Stops every pixel collapsing into one bin |
+| **Segmentation** | Cross-entropy, ignore index 7 | Trains Head C |
+
+## Weights by version
+
+| Setting | v3 | v4 | v5 profile | v5 final run |
+|---|---|---|---|---|
+| `w_grad` | 0.5 | 0.5 | 0.5 | **1.0** |
+| `w_normal` | 0.3 | 0.3 | 0.3 | **0.5** |
+| `bin_soft_sigma` | hard | 1.5 | 0.0 | 0.0 |
+| `w_bin_entropy` | — | 0.02 | 0.0 | 0.0 |
+| Stratum β / clip | 0.5 / 5 | 0.7 / 8 | 0.5 / 5 | 0.5 / 5 |
+
+v4 changed five of these settings at once (β, clip, soft bins, entropy and top-16 unfreeze) and regressed on flat ground. v5 reverted them. The final run doubled the gradient and normal weights to fight over-smoothing ([Design findings](/training/findings/)).
+
+## Stratum balancer
+
+Height labels are extremely long-tailed: 49–61 % of GAMUS validation pixels are below 2 m, depending on the split version. Plain L1 would spend almost all its gradient on flat ground and under-predict tall structures. The balancer re-weights pixels by **how rare their height band is**.
+
+With strata *s* ∈ \{0–2, 2–5, 5–10, 10–20, 20+ m\} and running frequencies *f<sub>s</sub>* (EMA with momentum 0.98):
+
+<Eq block tex="w_s = \operatorname{clip}\!\left(\frac{f_s^{-\beta}}{\sum_t f_t\,f_t^{-\beta}},\ \tfrac1c,\ c\right)" />
+
+Weights are then rescaled to a mean of 1 over valid pixels. β controls how strongly rare bands are boosted, and *c* caps the ratio.
+
+<Chart
+	height={320}
+	caption="Effective per-pixel loss weight by height band. β = 0.7 / c = 8 (v4) raised the tall-to-flat ratio from 2.37 to 3.35 and cut the 0–2 m weight by 17 %. That moved error onto flat ground, where most pixels are, so global RMSE rose."
+	source="Model_Traning/V4_modal/v3VSv4.md §4.1"
+	option={{
+		legend: { top: 0 },
+		xAxis: { type: 'category', data: ['0–2 m', '2–5 m', '5–10 m', '10–20 m', '20+ m'] },
+		yAxis: { type: 'value', name: 'weight' },
+		series: [
+			{ name: 'β 0.5 / c 5 (v3, v5)', type: 'bar', data: [0.675, 1.555, 1.131, 1.217, 1.602], barGap: '15%' },
+			{ name: 'β 0.7 / c 8 (v4)', type: 'bar', data: [0.558, 1.794, 1.149, 1.274, 1.871] },
+			{ name: 'uniform', type: 'line', data: [1, 1, 1, 1, 1], symbol: 'none', lineStyle: { type: 'dashed', width: 1.5 } },
+		],
+	}}
+/>
+
+## Coarse-label and consistency terms (v5)
+
+- **Coarse labels.** Some sources have labels coarser than their pixels, for example NEON's 1 m LiDAR rasters on 0.5 m pixels. For sources listed in `coarse_label_sources`, the L1, SiLog and gradient terms are computed after *k × k* average pooling (*k* = round(label size / GSD)), and those pixels skip the normal, flatness and bin terms. The part is mixed in by its share of valid pixels. An optional vegetation mask (excess-green index > 0.10 with label < 1 m) ignores trees that a label wrongly records at 0 m.
+- **Mean-teacher consistency.** The code has an L1 term against an EMA teacher's prediction on unlabelled imagery, keeping only pixels where the teacher's σ ≤ 1.5 m. No run has used it, because the unlabelled data store was never built.
+
+<Aside type="tip">All weights are fields of `Config` in `config.py`, and the resolved values are saved into every checkpoint and run's `config.json`.</Aside>

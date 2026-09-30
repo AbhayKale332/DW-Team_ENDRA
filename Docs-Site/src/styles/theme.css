@@ -1,0 +1,403 @@
+/* DepthWizard docs theme. Mirrors the app's tokens in Frontend/src/theme/global.css. */
+
+:root {
+	--sl-font: 'Inter', system-ui, sans-serif;
+	--sl-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+	--sl-content-width: 52rem;
+	--sl-text-h1: 2.125rem;
+	--sl-text-h2: 1.5rem;
+	--sl-text-h3: 1.175rem;
+	--sl-text-h4: 1rem;
+
+	/* Dark (Starlight's default block) */
+	--sl-color-white: #eef2f6;
+	--sl-color-gray-1: #d7dde4;
+	--sl-color-gray-2: #b3bcc6;
+	--sl-color-gray-3: #7b8591;
+	--sl-color-gray-4: #4a5461;
+	--sl-color-gray-5: #252c34;
+	--sl-color-gray-6: #12161b;
+	--sl-color-black: #0b0e11;
+	--sl-color-accent-low: #142748;
+	--sl-color-accent: #4f8df5;
+	--sl-color-accent-high: #b9d0fb;
+	--sl-color-bg-sidebar: #0d1014;
+	--sl-color-bg-nav: #0b0e11;
+	--sl-color-hairline: #1c2229;
+	--sl-color-hairline-light: #252c34;
+
+	/* Tokens for components and diagrams */
+	--dw-ink: #e8ecf1;
+	--dw-dim: #a2acb7;
+	--dw-faint: #6b7580;
+	--dw-line: #2a323b;
+	--dw-surface: #12161b;
+	--dw-panel: #161b21;
+	--dw-blue: #4f8df5;
+	--dw-blue-soft: rgba(79, 141, 245, 0.14);
+	--dw-violet: #8a74f5;
+	--dw-violet-soft: rgba(138, 116, 245, 0.15);
+	--dw-orange: #f08a4b;
+	--dw-orange-soft: rgba(240, 138, 75, 0.15);
+	--dw-green: #3fb27f;
+	--dw-green-soft: rgba(63, 178, 127, 0.15);
+	--dw-red: #ef6b5b;
+	--dw-radius: 8px;
+	--sl-hue-blue: 218;
+	--sl-hue-purple: 255;
+}
+
+:root[data-theme='light'] {
+	--sl-color-white: #151a20;
+	--sl-color-gray-1: #252c34;
+	--sl-color-gray-2: #3b4450;
+	--sl-color-gray-3: #5b6572;
+	--sl-color-gray-4: #8a949e;
+	--sl-color-gray-5: #d5dbe2;
+	--sl-color-gray-6: #eef1f5;
+	--sl-color-gray-7: #f7f8fa;
+	--sl-color-black: #ffffff;
+	--sl-color-accent-low: #e3ecfc;
+	--sl-color-accent: #2d6cdf;
+	--sl-color-accent-high: #1d4fae;
+	--sl-color-bg-sidebar: #fafbfc;
+	--sl-color-bg-nav: #ffffff;
+	--sl-color-hairline: #e6eaef;
+	--sl-color-hairline-light: #dde2e8;
+
+	--dw-ink: #151a20;
+	--dw-dim: #5b6572;
+	--dw-faint: #8a949e;
+	--dw-line: #d5dbe2;
+	--dw-surface: #ffffff;
+	--dw-panel: #f7f8fa;
+	--dw-blue: #2d6cdf;
+	--dw-blue-soft: rgba(45, 108, 223, 0.08);
+	--dw-violet: #6a4cf0;
+	--dw-violet-soft: rgba(106, 76, 240, 0.08);
+	--dw-orange: #e5793a;
+	--dw-orange-soft: rgba(229, 121, 58, 0.09);
+	--dw-green: #1f9a63;
+	--dw-green-soft: rgba(31, 154, 99, 0.08);
+	--dw-red: #d9483b;
+}
+
+/* ---------- Base typography ---------- */
+body {
+	font-feature-settings: 'cv11', 'ss01';
+	-webkit-font-smoothing: antialiased;
+}
+.sl-markdown-content h1,
+.sl-markdown-content h2,
+.sl-markdown-content h3 {
+	letter-spacing: -0.015em;
+	font-weight: 600;
+}
+.sl-markdown-content h2 {
+	padding-top: 0.5rem;
+}
+h1#_top {
+	letter-spacing: -0.025em;
+	font-weight: 700;
+}
+.sl-markdown-content :not(pre) > code {
+	border-radius: 4px;
+	padding: 0.1em 0.35em;
+	font-size: 0.86em;
+}
+
+/* ---------- Header / sidebar polish ---------- */
+.site-title {
+	font-weight: 650;
+	letter-spacing: -0.02em;
+	font-size: 1.05rem;
+}
+.site-title img {
+	height: 1.6rem;
+}
+header.header {
+	border-bottom: 1px solid var(--sl-color-hairline);
+	backdrop-filter: saturate(160%) blur(8px);
+}
+nav.sidebar .top-level > li > details > summary .group-label > span {
+	font-size: 0.72rem;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--sl-color-gray-3);
+}
+nav.sidebar a[aria-current='page'],
+nav.sidebar a[aria-current='page']:hover,
+nav.sidebar a[aria-current='page']:focus {
+	font-weight: 600;
+	background-color: color-mix(in srgb, var(--sl-color-accent) 13%, transparent);
+	color: var(--sl-color-accent-high);
+}
+
+/* ---------- Tables ---------- */
+.sl-markdown-content table {
+	display: block;
+	overflow-x: auto;
+	border-collapse: collapse;
+	font-size: 0.875rem;
+	font-variant-numeric: tabular-nums;
+}
+.sl-markdown-content :is(th, td) {
+	border: none;
+	border-bottom: 1px solid var(--sl-color-hairline-light);
+	padding: 0.55rem 0.75rem;
+}
+.sl-markdown-content th {
+	background: transparent;
+	font-weight: 600;
+	color: var(--sl-color-gray-2);
+	font-size: 0.8rem;
+	letter-spacing: 0.01em;
+	border-bottom-width: 1.5px;
+}
+.sl-markdown-content tr:hover td {
+	background: color-mix(in srgb, var(--sl-color-accent) 4%, transparent);
+}
+.table-wrap {
+	overflow-x: auto;
+	margin-block: 1.25rem;
+}
+
+@media (min-width: 50rem) {
+	.sl-markdown-content table {
+		display: table;
+		width: 100%;
+	}
+}
+.table-wrap table {
+	display: table !important;
+	width: 100%;
+}
+
+/* ---------- Misc ---------- */
+.dw-num {
+	font-family: var(--sl-font-mono);
+	font-variant-numeric: tabular-nums;
+}
+.best {
+	color: var(--dw-green);
+	font-weight: 600;
+}
+.sl-markdown-content .katex-display {
+	overflow-x: auto;
+	overflow-y: hidden;
+	padding: 0.25rem 0;
+}
+.starlight-aside {
+	border-radius: var(--dw-radius);
+}
+
+/* Mermaid containers */
+.sl-markdown-content pre.mermaid,
+.sl-markdown-content .mermaid {
+	background: var(--dw-panel);
+	border: 1px solid var(--dw-line);
+	border-radius: var(--dw-radius);
+	padding: 1.25rem;
+	display: flex;
+	justify-content: center;
+	overflow-x: auto;
+}
+
+/* Splash hero */
+.hero {
+	padding-block: 2.5rem 1rem;
+}
+.hero h1 {
+	letter-spacing: -0.035em;
+}
+
+/* ---------- Inline SVG diagrams ---------- */
+.dw-svg {
+	font-family: 'Inter', system-ui, sans-serif;
+}
+.dw-svg text {
+	fill: var(--dw-ink);
+	font-size: 12px;
+}
+.dw-svg .t-dim {
+	fill: var(--dw-dim);
+	font-size: 10.5px;
+}
+.dw-svg .t-sm {
+	font-size: 10.5px;
+}
+.dw-svg .t-title {
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	fill: var(--dw-faint);
+	text-transform: uppercase;
+}
+.dw-svg .t-b {
+	font-weight: 600;
+}
+.dw-svg .mono {
+	font-family: 'JetBrains Mono', monospace;
+	font-size: 10px;
+}
+.dw-svg .box {
+	fill: var(--dw-surface);
+	stroke: var(--dw-line);
+	stroke-width: 1.2;
+}
+.dw-svg .blue {
+	fill: var(--dw-blue-soft);
+	stroke: var(--dw-blue);
+	stroke-width: 1.2;
+}
+.dw-svg .violet {
+	fill: var(--dw-violet-soft);
+	stroke: var(--dw-violet);
+	stroke-width: 1.2;
+}
+.dw-svg .orange {
+	fill: var(--dw-orange-soft);
+	stroke: var(--dw-orange);
+	stroke-width: 1.2;
+}
+.dw-svg .green {
+	fill: var(--dw-green-soft);
+	stroke: var(--dw-green);
+	stroke-width: 1.2;
+}
+.dw-svg .group {
+	fill: none;
+	stroke: var(--dw-line);
+	stroke-width: 1.2;
+	stroke-dasharray: 5 4;
+}
+.dw-svg .edge {
+	fill: none;
+	stroke: var(--dw-dim);
+	stroke-width: 1.3;
+}
+.dw-svg .edge-dash {
+	fill: none;
+	stroke: var(--dw-dim);
+	stroke-width: 1.2;
+	stroke-dasharray: 4 3;
+}
+.dw-svg .edge-blue {
+	fill: none;
+	stroke: var(--dw-blue);
+	stroke-width: 1.5;
+}
+.dw-svg .edge-orange {
+	fill: none;
+	stroke: var(--dw-orange);
+	stroke-width: 1.5;
+}
+.dw-svg .edge-green {
+	fill: none;
+	stroke: var(--dw-green);
+	stroke-width: 1.5;
+}
+.dw-svg .arrowhead {
+	fill: var(--dw-dim);
+}
+.dw-svg .ah-blue {
+	fill: var(--dw-blue);
+}
+.dw-svg .ah-orange {
+	fill: var(--dw-orange);
+}
+.dw-svg .ah-green {
+	fill: var(--dw-green);
+}
+.dw-svg .fill-blue {
+	fill: var(--dw-blue);
+}
+.dw-svg .fill-orange {
+	fill: var(--dw-orange);
+}
+.dw-svg .fill-green {
+	fill: var(--dw-green);
+}
+.dw-svg .fill-violet {
+	fill: var(--dw-violet);
+}
+.dw-svg .fill-line {
+	fill: var(--dw-line);
+}
+.dw-svg .fill-dim {
+	fill: var(--dw-dim);
+}
+
+/* ---------- Mermaid: brand the default/dark themes with site tokens ---------- */
+pre.mermaid[data-processed] {
+	background-color: var(--dw-panel) !important;
+	border-radius: var(--dw-radius) !important;
+}
+pre.mermaid svg {
+	font-family: 'Inter', system-ui, sans-serif !important;
+}
+/* flowchart + class + state nodes */
+pre.mermaid svg :is(.node rect, .node polygon, .node circle:not(.state-start), .node ellipse, .node path.basic, .classGroup rect, .stateGroup rect, g.stateGroup rect) {
+	fill: var(--dw-surface) !important;
+	stroke: var(--dw-blue) !important;
+	stroke-width: 1.2px !important;
+}
+pre.mermaid svg :is(.nodeLabel, .node .label, .label foreignObject div, .edgeLabel, .cluster-label, text.classTitle, .stateLabel, .state-title) {
+	color: var(--dw-ink) !important;
+	fill: var(--dw-ink) !important;
+}
+pre.mermaid svg :is(.edgeLabel, .labelBkg, .edgeLabel rect, .edgeLabel p) {
+	background-color: var(--dw-panel) !important;
+	fill: var(--dw-panel) !important;
+	color: var(--dw-dim) !important;
+}
+pre.mermaid svg :is(.flowchart-link, .edgePath path, .transition, path.relation) {
+	stroke: var(--dw-dim) !important;
+}
+pre.mermaid svg :is(.marker, marker path, .arrowheadPath, #arrowhead path) {
+	fill: var(--dw-dim) !important;
+	stroke: var(--dw-dim) !important;
+}
+pre.mermaid svg .cluster rect {
+	fill: color-mix(in srgb, var(--dw-blue) 4%, transparent) !important;
+	stroke: var(--dw-line) !important;
+	stroke-dasharray: 5 4;
+}
+pre.mermaid svg .cluster :is(text, span, .nodeLabel) {
+	fill: var(--dw-faint) !important;
+	color: var(--dw-faint) !important;
+	font-weight: 600;
+}
+/* sequence */
+pre.mermaid svg :is(rect.actor, .actor-box) {
+	fill: var(--dw-blue-soft) !important;
+	stroke: var(--dw-blue) !important;
+}
+pre.mermaid svg :is(text.actor, text.actor tspan, .messageText, .loopText, .loopText tspan, .labelText, .noteText, .noteText tspan) {
+	fill: var(--dw-ink) !important;
+	stroke: none !important;
+}
+pre.mermaid svg :is(.actor-line, line.actor-line) {
+	stroke: var(--dw-line) !important;
+}
+pre.mermaid svg :is(.messageLine0, .messageLine1) {
+	stroke: var(--dw-dim) !important;
+}
+pre.mermaid svg :is(.loopLine) {
+	stroke: var(--dw-faint) !important;
+}
+pre.mermaid svg .labelBox {
+	fill: var(--dw-surface) !important;
+	stroke: var(--dw-faint) !important;
+}
+pre.mermaid svg .note {
+	fill: var(--dw-orange-soft) !important;
+	stroke: var(--dw-orange) !important;
+}
+pre.mermaid svg .sequenceNumber {
+	fill: var(--dw-surface) !important;
+}
+pre.mermaid svg circle[class*='sequenceNumber'], pre.mermaid svg #sequencenumber {
+	fill: var(--dw-blue) !important;
+}

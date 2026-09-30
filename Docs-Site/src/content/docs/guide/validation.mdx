@@ -1,0 +1,53 @@
+---
+title: Validation against a reference
+description: Load a LiDAR or DEM raster, compute accuracy metrics, inspect error maps and export a report.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+The **Validation** tab compares the prediction with a reference raster you trust, such as a LiDAR nDSM, a stereo DSM or a surveyed model.
+
+<Steps>
+
+1. Open **Inspector → Validation**, or **Tools → Validate against reference**.
+2. Load a reference **`.tif`** (GeoTIFF) or **`.npy`** array.
+3. Set **Reference type**:
+   - **Height above ground (nDSM)**: compared directly with the prediction.
+   - **Elevation (DSM)**: absolute heights. Turn on **Remove ground offset** to compare its shape with the height-above-ground estimate, or anchor the prediction first ([Anchoring](/guide/anchoring/)).
+4. Read the metrics and charts, then use the layers to find *where* the errors are.
+
+</Steps>
+
+GeoTIFF references are aligned by coordinates. Plain arrays must match the prediction grid. *Reference aligned* confirms the overlap.
+
+## Metrics
+
+| Metric | Meaning |
+|---|---|
+| **RMSE** | Root-mean-square error (m) |
+| **MAE** | Mean absolute error (m) |
+| **Bias** | Mean signed error. Positive means the model predicts too high |
+| **Pearson r** | Correlation |
+| **Within ±1 m / ±2 m** | Share of pixels with error inside the band |
+| **Balanced RMSE** | Mean RMSE across height bands 0–2, 2–5, 5–10, 10–20 and 20+ m |
+| **N** | Number of compared pixels |
+
+These use the same definitions as the model evaluation ([Metrics](/results/metrics/)).
+
+## Charts
+
+- **Density scatter**: predicted vs reference height. A tight diagonal is good, and a slope below 1 means tall objects are under-predicted.
+- **Error histogram**: the distribution of prediction − reference.
+- **RMSE per height band** (*Per-stratum metrics*): shows whether error comes from flat ground or tall structures.
+
+## Visual comparison
+
+- **Error layer**: drapes signed error on the terrain (blue under, red over).
+- **Reference layer**: shows the reference's own heights.
+- **Compare swipe** (*prediction | reference*): a slider splits the view, with the prediction on one side and the reference on the other.
+
+## Export a report
+
+**Export report** saves a self-contained **HTML** file with the metrics, charts and scene details. Anyone can open it in a browser, with no server needed.
+
+<Aside type="caution">A 30 m DEM (SRTM, Copernicus) is a poor reference for building heights: it smooths every structure over 30 m cells. Use LiDAR or stereo products for per-pixel validation. For a DEM reference, compare 30 m cell averages instead, which the [self-hosted service](/system/api-reference/) reports as `per_cell`.</Aside>

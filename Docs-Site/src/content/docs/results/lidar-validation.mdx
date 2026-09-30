@@ -1,0 +1,88 @@
+---
+title: LiDAR validation
+description: v5 predictions on WorldView-3 imagery compared with airborne LiDAR at eight held-out IARPA MVS3DM benchmark sites.
+---
+
+import Chart from '../../../components/Chart.astro';
+import DataTable from '../../../components/DataTable.astro';
+import ImageGrid from '../../../components/ImageGrid.astro';
+import Stat from '../../../components/Stat.astro';
+import StatGrid from '../../../components/StatGrid.astro';
+import metrics from '../../../data/metrics.json';
+import { Aside } from '@astrojs/starlight/components';
+import e_rgb from '../../../assets/gallery/mvs_Explorer_rgb.jpg';
+import e_gt from '../../../assets/gallery/mvs_Explorer_gt.jpg';
+import e_pred from '../../../assets/gallery/mvs_Explorer_pred.jpg';
+import e_err from '../../../assets/gallery/mvs_Explorer_err.jpg';
+import s_rgb from '../../../assets/gallery/mvs_MasterSequestered3_rgb.jpg';
+import s_gt from '../../../assets/gallery/mvs_MasterSequestered3_gt.jpg';
+import s_pred from '../../../assets/gallery/mvs_MasterSequestered3_pred.jpg';
+import s_err from '../../../assets/gallery/mvs_MasterSequestered3_err.jpg';
+
+export const M = metrics.mvs3dm;
+
+The **IARPA Multi-View Stereo 3D Mapping (MVS3DM)** benchmark pairs WorldView-3 imagery of San Fernando, Argentina with airborne LiDAR. DepthWizard v5 was run on a pansharpened true-ortho of one scene (0.3 m, 5.4° off-nadir) and compared with a LiDAR nDSM at the **8 official benchmark sites**. These sites form the `test` split in `tools/pack_mvs3dm.py`, and tiles within a buffer around them are dropped, so they were never trained on.
+
+<StatGrid cols={3}>
+	<Stat label="Per-pixel RMSE" value={M.pooled_px.rmse.toFixed(2)} unit="m" note={`pooled over ${(M.pooled_px.n / 1e6).toFixed(1)} M pixels · bias +${M.pooled_px.bias}`} />
+	<Stat label="30 m-cell RMSE" value={M.pooled_cell.rmse.toFixed(2)} unit="m" note={`${M.pooled_cell.n.toLocaleString('en')} cells · bias +${M.pooled_cell.bias}`} />
+	<Stat label="Median ground error" value="≤ 0.11" unit="m" note="on LiDAR ground pixels, every site" />
+</StatGrid>
+
+## Per site
+
+<Chart
+	height={340}
+	caption="RMSE per site at three levels: every pixel, confident pixels only (the more certain half, by predicted σ), and 30 m cell averages. Averaging to 30 m, the resolution of public DEMs, removes most of the edge and alignment error."
+	source={M.source[0]}
+	option={{
+		legend: { top: 0 },
+		tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+		grid: { left: 50, right: 20, top: 40, bottom: 72 },
+		xAxis: { type: 'category', data: M.sites.map((s) => s.site.replace('Master', '')), axisLabel: { interval: 0, rotate: 30, fontSize: 10.5 } },
+		yAxis: { type: 'value', name: 'RMSE (m)' },
+		series: [
+			{ name: 'per pixel', type: 'bar', data: M.sites.map((s) => s.px_rmse) },
+			{ name: 'confident pixels', type: 'bar', data: M.sites.map((s) => s.conf_rmse) },
+			{ name: '30 m cells', type: 'bar', data: M.sites.map((s) => s.cell_rmse) },
+		],
+	}}
+/>
+
+<DataTable
+	headers={['Site', 'px RMSE', 'Bias', 'r', 'Conf. RMSE', '30 m RMSE', '30 m bias', 'Median gnd. err.']}
+	rows={M.sites.map((s) => [s.site, s.px_rmse, s.bias, s.r, s.conf_rmse, s.cell_rmse, s.cell_bias, s.gnd_err])}
+	digits={2}
+	bestCols={[1, 4, 5]}
+	source={M.source[0]}
+/>
+
+## Examples
+
+<ImageGrid
+	cols={4}
+	items={[
+		{ src: e_rgb, label: 'Explorer · RGB' },
+		{ src: e_gt, label: 'LiDAR nDSM' },
+		{ src: e_pred, label: 'DepthWizard' },
+		{ src: e_err, label: 'Error (−8…+8 m)' },
+	]}
+	caption="Explorer site: 2.55 m per-pixel RMSE, 0.89 m per 30 m cell. Height colour scale 0–20 m (turbo). In the error map, red is over-prediction and blue under-prediction."
+	credit="Imagery: IARPA MVS3DM, courtesy of DigitalGlobe. Approved for public release."
+/>
+
+<ImageGrid
+	cols={4}
+	items={[
+		{ src: s_rgb, label: 'Sequestered3 · RGB' },
+		{ src: s_gt, label: 'LiDAR nDSM' },
+		{ src: s_pred, label: 'DepthWizard' },
+		{ src: s_err, label: 'Error (−8…+8 m)' },
+	]}
+	caption="MasterSequestered3: dense high-rise blocks. 4.83 m per pixel (r 0.84); most error sits on building edges and in the tallest towers."
+	credit="Imagery: IARPA MVS3DM, courtesy of DigitalGlobe. Approved for public release."
+/>
+
+<Aside type="note" title="Provenance">
+The outputs were produced by a v5 checkpoint. The output metadata does not record which one, but v5 training runs that included MVS3DM used only its `train` and `val` splits. The LiDAR ground truth is a morphological DTM subtracted from the despiked LiDAR DSM, because the LAZ points are unclassified.
+</Aside>

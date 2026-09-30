@@ -1,0 +1,63 @@
+---
+title: Interface tour
+description: The DepthWizard workspace, region by region.
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import UiLayoutMap from '../../../components/diagrams/UiLayoutMap.astro';
+
+DepthWizard is a single workspace. Everything happens on one screen: upload, inference, 3D navigation, analysis and export.
+
+<Diagram caption="Workspace layout. Toggle the side panels with [ and ], and the status bar from the View menu.">
+	<UiLayoutMap />
+</Diagram>
+
+## 1 · Header
+
+| Element | What it does |
+|---|---|
+| **Logo + menus** | File, View, Tools and Help ([menu reference](#menus)) |
+| **Scenarios ▾** | Opens the [Flood response](/guide/scenarios/#flood-response) or [Telecom coverage](/guide/scenarios/#telecom-coverage) planner |
+| **Raw** switch | Hides 3D objects and ambient occlusion, so you see exactly the heights the model returned |
+| **Model status pill** | *Model online* · *waking up* · *unreachable* · *Offline demo*. Re-checked every 2 minutes; click it to open Settings |
+| **Panel toggles, theme** | Show or hide the side panels; light or dark theme |
+
+## 2 · Project panel
+
+Where a run starts: the drop zone (PNG / JPG / TIFF up to 512 MB), the image card (size, bands, bit depth, a *georeferenced* badge with its EPSG code, and the GSD read from the file), **Resolution (m/pixel)**, the **Higher quality (TTA)** switch, **Estimate heights** and a summary of the current result. See [Your first estimate](/guide/first-estimate/).
+
+## 3 · Viewport
+
+One canvas with three views: **3D DSM** (perspective), **Height Map** and **Input Image** (both top-down). It also holds:
+
+- the **view switcher** (top left) and the **tool palette** (3D objects, basemap, facilities, OSM),
+- the **product chip**, showing rDSM / nDSM / DSM and anchoring progress,
+- the **navigation stack**: zoom in / out, fullscreen, and reset (shown after the camera has moved),
+- the **compass** (georeferenced scenes; click to face north),
+- **legends**: scale bar (2D views), colour bar, class and layer legends,
+- a **hover card** with the object type and height under the cursor.
+
+See [Navigating in 3D](/guide/navigation/) and [Layers & visualisation](/guide/layers/).
+
+## 4 · Inspector
+
+Three tabs:
+
+- **Layers**: what is draped on the terrain and how it looks ([Layers](/guide/layers/)).
+- **Validation**: compare with a reference raster ([Validation](/guide/validation/)).
+- **Info**: elevation reference and anchoring, height statistics, geometry and CRS, detected objects, provenance, the model report and download links ([Anchoring](/guide/anchoring/)).
+
+## 5 · Status bar
+
+Live read-outs under the cursor: pixel x/y, height, slope, lat/lon, difference from the reference, plus the scene's GSD and its source, product, grid size and EPSG, vertex count, camera mode and **fps** (shown in orange below 30).
+
+## Menus
+
+| Menu | Items |
+|---|---|
+| **File** | New Project (<kbd>Alt</kbd>+<kbd>N</kbd>) · Load / Open (<kbd>Ctrl</kbd>+<kbd>O</kbd>) · Recent · Sample scenes · Save Project (<kbd>Ctrl</kbd>+<kbd>S</kbd>) · Export ▸ · Settings |
+| **View** | Input Image (3) · Heatmap (2) · 3D Height Map (1) · Project panel · Inspector · Status bar · Theme: Light / Dark / System |
+| **Tools** | Flight Simulator (G) · First-person walk (F) · Drone tour (T) · 3D objects: Buildings / Trees / Water · Hover details · OpenStreetMap overlay · Surrounding basemap · Facilities · Validate against reference · Scenarios |
+| **Help** | Documentation · Keyboard Shortcuts (?) · Model Information · About |
+
+The OpenStreetMap overlay, basemap and Facilities need a **georeferenced** scene, because they are positioned by coordinates.

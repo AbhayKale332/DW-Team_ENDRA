@@ -1,0 +1,37 @@
+---
+import Markers from './Markers.astro';
+const m = 'dc';
+---
+
+<svg class="dw-svg" viewBox="0 0 820 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Why DEM plus nDSM double counts buildings">
+	<Markers id={m} />
+	<!-- Left panel -->
+	<text x="200" y="24" text-anchor="middle" class="t-b">DEM + nDSM (naive)</text>
+	<path d="M30 250 H370" class="edge-dash" />
+	<path d="M30 220 H150 C 170 220, 175 130, 200 130 C 225 130, 230 220, 250 220 H370" class="orange" style="fill-opacity:.6" />
+	<text x="290" y="212" class="t-dim">30 m DEM already contains the tower</text>
+	<rect x="185" y="40" width="30" height="90" class="blue" />
+	<path d="M235 40 V130" class="edge" marker-start={`url(#${m})`} marker-end={`url(#${m})`} />
+	<text x="241" y="84" class="t-sm">+ nDSM 30 m</text>
+	<path d="M170 40 H130" class="edge-dash" />
+	<text x="124" y="44" text-anchor="end" class="t-b" style="fill:var(--dw-red)">165.0 m</text>
+	<rect x="185" y="130" width="30" height="90" fill="none" class="edge-dash" />
+	<text x="124" y="134" text-anchor="end" class="t-dim">truth 135.0 m</text>
+	<path d="M130 130 H182" class="edge-dash" />
+
+	<!-- Right panel -->
+	<text x="610" y="24" text-anchor="middle" class="t-b">DTM + nDSM (DepthWizard)</text>
+	<path d="M440 250 H780" class="edge-dash" />
+	<path d="M440 220 H780 V250 H440 Z" class="orange" />
+	<text x="450" y="242" class="t-dim">DTM fitted through ground pixels only</text>
+	<rect x="595" y="130" width="30" height="90" class="blue" />
+	<path d="M645 130 V220" class="edge" marker-start={`url(#${m})`} marker-end={`url(#${m})`} />
+	<text x="651" y="178" class="t-sm">nDSM 30 m</text>
+	<path d="M590 130 H545" class="edge-dash" />
+	<text x="539" y="134" text-anchor="end" class="t-b" style="fill:var(--dw-green)">134.4 m</text>
+	<text x="539" y="150" text-anchor="end" class="t-dim">truth 135.0 m</text>
+
+	<path d="M410 40 V270" class="edge-dash" style="stroke:var(--dw-line)" />
+	<text x="200" y="285" text-anchor="middle" class="t-dim">building height counted twice</text>
+	<text x="610" y="285" text-anchor="middle" class="t-dim">ground-only terrain, building counted once</text>
+</svg>

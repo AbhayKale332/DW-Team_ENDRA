@@ -1,0 +1,59 @@
+---
+title: ONNX export
+description: Graph signature, external weights, parity with PyTorch and how to export a checkpoint.
+---
+
+import Stat from '../../../components/Stat.astro';
+import StatGrid from '../../../components/StatGrid.astro';
+import { Aside } from '@astrojs/starlight/components';
+
+The model exports to a single ONNX graph with its three outputs, so it can run on CPU-only machines or in any ONNX Runtime host without PyTorch.
+
+```bash title="Model_Traning/v5/"
+python -m infer.export_onnx --ckpt outputs/v5/best.pt --out outputs/v5/depthwizard.onnx
+```
+
+## Signature
+
+| | Name | Type | Shape |
+|---|---|---|---|
+| Input | `image` | float32 | (batch, 3, 512, 512): encoder-normalised RGB at 0.5 m |
+| Output | `height_m` | float32 | (batch, 1, 512, 512): nDSM in metres |
+| Output | `seg` | int32 | (batch, 1, 512, 512): class id |
+| Output | `height_std_m` | float32 | (batch, 1, 512, 512): Head B spread (uncertainty) |
+
+Only the batch dimension is dynamic. The graph is traced at batch 2 and checked at batch 1. Tiling, stretching, blending and TTA stay in Python (`predict_scene`), exactly as for PyTorch.
+
+## Files
+
+| File | Size | Notes |
+|---|---|---|
+| `depthwizard.onnx` | 3.96 MB | graph |
+| `depthwizard.onnx.data` | about 1.3 GB | external weights; **must sit next to the graph** |
+| `depthwizard.onnx.json` | — | preprocessing recipe, I/O description, opset, source checkpoint |
+| `parity.json` | — | PyTorch vs ONNX comparison |
+
+The requested opset was 17; the file is **opset 18** because the opset-17 conversion failed and the exporter kept 18.
+
+## Parity
+
+<StatGrid cols={3}>
+	<Stat label="Max |Δ height|" value="0.00024" unit="m" note="sample RGB; tolerance 0.05 m" />
+	<Stat label="Mean |Δ height|" value="1.6e-5" unit="m" note="sample RGB" />
+	<Stat label="Class agreement" value="100" unit="%" note="sample RGB and noise inputs" />
+</StatGrid>
+
+```json title="parity.json (abridged)"
+{
+  "tol_m": 0.05,
+  "ok": true,
+  "checks": {
+    "sample rgb": { "height_max_abs_m": 0.000236, "std_max_abs_m": 0.00035, "seg_agree": 1.0 },
+    "noise":      { "height_max_abs_m": 0.000039, "std_max_abs_m": 0.000078, "seg_agree": 1.0 }
+  }
+}
+```
+
+<Aside type="caution" title="Which checkpoint">
+The ONNX graph in `best.onyx/v5_probe_v4init_onnx/` was exported from **`v5_probe_v4init/best.pt`** (`source_checkpoint` in the sidecar JSON), not from the v5 final run. Re-export after the final run has been evaluated on the test splits.
+</Aside>

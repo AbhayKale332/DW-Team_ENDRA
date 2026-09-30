@@ -1,0 +1,92 @@
+---
+title: Absolute DSM
+description: Turning a predicted nDSM into elevations above a vertical datum without double counting, using DEM anchoring, DTM fitting or ground control points.
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import DoubleCountDiagram from '../../../components/diagrams/DoubleCountDiagram.astro';
+import DsmDiagram from '../../../components/diagrams/DsmDiagram.astro';
+import Eq from '../../../components/Math.astro';
+import DataTable from '../../../components/DataTable.astro';
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+For georeferenced inputs, DepthWizard can output an **absolute DSM**: elevation above a named vertical datum. The model predicts only height above ground, so the terrain has to come from somewhere else. Source: `Model_Traning/v5/geo/`.
+
+<Diagram caption="Absolute DSM = terrain (DTM) + predicted height above ground (nDSM).">
+	<DsmDiagram />
+</Diagram>
+
+## The double-counting problem
+
+Free global elevation models such as SRTM and Copernicus GLO-30 have about 30 m cells, and they are **surface** models: each cell already includes the buildings and trees inside it, averaged. Adding the predicted nDSM on top counts those structures twice.
+
+<Diagram caption="Synthetic check: a 30 m tower whose true top is at 135.0 m.">
+	<DoubleCountDiagram />
+</Diagram>
+
+<DataTable
+	headers={['Scene', 'Truth', 'DEM + nDSM', 'DTM + nDSM (ours)']}
+	rows={[['Synthetic 30 m tower', 135.0, 165.0, 134.4]]}
+	digits={1}
+	caption="Elevation at the structure top, metres."
+	source="Research-Paper/main.tex Table V"
+/>
+
+## Methods
+
+<Tabs>
+<TabItem label="DEM-anchored (v5 default)">
+
+`--dsm-mode dem_anchored`. The idea: the final DSM, averaged over each DEM cell, should **equal the DEM**, because that is what the DEM measures. The fine detail inside each cell comes from the prediction.
+
+<Eq block tex="D = U(X) + \lambda\,\big(\text{nDSM} - U(A(\text{nDSM}))\big)" />
+
+- *A* averages to about 30 m cells, and *U* interpolates bilinearly back to pixels.
+- The second term is the **high-frequency part** of the prediction, which has zero mean over each cell.
+- *X* is a coarse field solved iteratively (Tobler's pycnophylactic method) so that every 30 m cell of *D* averages exactly to the DEM.
+- λ = `detail_gain` (default 1.0) scales how much predicted detail is added.
+
+This never double counts: building mass already present in the DEM is redistributed onto the building footprint instead of being added again.
+
+</TabItem>
+<TabItem label="DTM + nDSM (v4)">
+
+`--dsm-mode dtm_plus_ndsm`. Fit a **bare-earth DTM** through ground pixels only, then add the nDSM.
+
+1. **Ground mask**: pixels that Head C labels as ground-like (ground, low vegetation, water, road) *and* whose nDSM is below 1.5 m. If fewer than 2 % of pixels qualify, the height test is used alone.
+2. **Robust surface fit**: a 2nd-order polynomial is fitted to the DEM at ground pixels with Tukey bi-weight re-weighting, plus a smoothed residual (64 px window) for local relief.
+3. **DSM = DTM + nDSM**.
+
+This is the method behind the 134.4 m result above.
+
+</TabItem>
+<TabItem label="Ground control points">
+
+`--gcps gcps.csv`. When surveyed points are available, they correct the result directly, and no DEM is needed.
+
+```csv title="gcps.csv (format)"
+lon,lat,elevation
+<lon>,<lat>,<metres above datum>
+```
+
+Rows can also be given as `row,col,elevation` in pixel coordinates. v5 fits each correction where its error actually lives (`refine_with_gcps_decomposed`):
+
+<Eq block tex="z = \text{DTM} + a + b\,x + c\,y + s\cdot\text{nDSM}" />
+
+- 1 point → offset *a* only;
+- ≥ 2 points spanning more than 0.5 m of nDSM → also the structure scale *s* (ground-only points cannot measure it);
+- ≥ 4 points → also the terrain tilt *b*, *c*.
+
+The fit uses **RANSAC** over minimal sets with a 1 m inlier threshold, then least squares on the consensus, so a few bad points do not corrupt it. v4 fitted a single scale to the whole DSM, which also stretched the terrain: a 1.05 scale on a 400 m plateau is a 20 m error.
+
+</TabItem>
+</Tabs>
+
+## Outputs
+
+With `absolute` enabled on a georeferenced input, a job writes `dtm_m.tif` and `dsm_m.tif` next to `ndsm_m.tif`. Each carries a **compound CRS** (horizontal EPSG + vertical datum), and `meta.json` records the `vertical_datum`.
+
+<Aside type="caution" title="Limits">
+- The DSM is only as good as the DEM's terrain. In steep terrain, a 30 m DEM smooths ridges and valleys.
+- Absolute accuracy against real LiDAR or GCPs on a real GeoTIFF has **not** yet been measured; only the synthetic check above has. The per-30 m-cell LiDAR comparison on [MVS3DM](/results/lidar-validation/) (1.35 m) is the closest available proxy.
+</Aside>

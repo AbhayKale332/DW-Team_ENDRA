@@ -1,0 +1,52 @@
+---
+import Markers from './Markers.astro';
+const m = 'ds';
+// Ground profile (DTM) as a smooth path; buildings sit on it.
+---
+
+<svg class="dw-svg" viewBox="0 0 820 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="DSM equals DTM plus nDSM">
+	<Markers id={m} />
+	<!-- datum -->
+	<path d="M30 262 H620" class="edge-dash" />
+	<text x="34" y="280" class="t-dim">vertical datum (geoid EGM96 / EGM2008, or WGS84 ellipsoid)</text>
+
+	<!-- terrain -->
+	<path d="M30 200 C 110 190, 170 170, 250 175 S 420 200, 500 185 S 590 160, 620 165 L620 262 L30 262 Z" class="orange" />
+	<!-- buildings -->
+	<rect x="120" y="120" width="54" height="66" class="blue" />
+	<rect x="190" y="146" width="40" height="30" class="blue" />
+	<rect x="300" y="80" width="46" height="104" class="blue" />
+	<rect x="440" y="140" width="62" height="50" class="blue" />
+	<!-- tree -->
+	<circle cx="398" cy="170" r="17" class="green" />
+	<rect x="396" y="186" width="4" height="8" class="fill-green" />
+
+	<!-- DSM outline -->
+	<path d="M30 200 C 70 196, 100 192, 120 190 V120 H174 V184 H190 V146 H230 V176 C 260 176, 285 180, 300 181 V80 H346 V186 C 360 189, 372 186, 381 170 A17 17 0 0 1 415 170 C 425 190, 435 191, 440 190 V140 H502 V186 C 540 180, 590 160, 620 165" class="edge-blue" style="stroke-dasharray:2 3" />
+
+	<!-- annotations on tall building -->
+	<path d="M360 80 V184" class="edge" marker-start={`url(#${m})`} marker-end={`url(#${m})`} />
+	<text x="366" y="132" class="t-sm t-b">nDSM</text>
+	<text x="366" y="146" class="t-dim">height above ground</text>
+	<path d="M285 184 V262" class="edge" marker-start={`url(#${m})`} marker-end={`url(#${m})`} />
+	<text x="278" y="230" text-anchor="end" class="t-sm t-b">DTM</text>
+	<text x="278" y="244" text-anchor="end" class="t-dim">bare earth</text>
+	<path d="M560 80 H300" class="edge-dash" />
+	<path d="M570 80 V262" class="edge" marker-start={`url(#${m})`} marker-end={`url(#${m})`} />
+	<text x="578" y="120" class="t-sm t-b">DSM</text>
+	<text x="578" y="134" class="t-dim">top surface</text>
+
+	<!-- legend -->
+	<rect x="650" y="40" width="150" height="190" rx="8" class="box" />
+	<text x="666" y="64" class="t-title">Products</text>
+	<rect x="666" y="78" width="12" height="12" rx="2" class="orange" />
+	<text x="686" y="89" class="t-sm">DTM · terrain</text>
+	<rect x="666" y="102" width="12" height="12" rx="2" class="blue" />
+	<text x="686" y="113" class="t-sm">nDSM · structures</text>
+	<rect x="666" y="126" width="12" height="12" rx="2" class="green" />
+	<text x="686" y="137" class="t-sm">nDSM · vegetation</text>
+	<path d="M666 158 H680" class="edge-blue" style="stroke-dasharray:2 3" />
+	<text x="686" y="162" class="t-sm">DSM outline</text>
+	<text x="666" y="192" class="t-b">DSM = DTM + nDSM</text>
+	<text x="666" y="210" class="t-dim">the model predicts nDSM</text>
+</svg>

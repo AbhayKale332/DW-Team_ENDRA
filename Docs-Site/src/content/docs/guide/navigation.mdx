@@ -1,0 +1,68 @@
+---
+title: Navigating in 3D
+description: Orbit, walk, fly and tour, with every control.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+The 3D view has four camera modes. Switch with the keys below or from **Tools**. <kbd>Esc</kbd> returns to Orbit.
+
+<Tabs>
+<TabItem label="Orbit (default)">
+
+| Input | Action |
+|---|---|
+| Left-drag | Rotate around the target |
+| Right-drag | Pan |
+| Wheel | Zoom towards the cursor |
+| Arrow keys (canvas focused) | Orbit |
+| <kbd>+</kbd> / <kbd>−</kbd> | Zoom in / out |
+| <kbd>R</kbd> | Reset camera |
+| <kbd>N</kbd> | Face north |
+| One finger / pinch / two fingers | Rotate / zoom / pan on touch screens |
+
+</TabItem>
+<TabItem label="Walk (F)">
+
+First-person on the terrain surface, with pointer lock.
+
+| Input | Action |
+|---|---|
+| Mouse | Look around |
+| <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> | Move |
+| <kbd>Shift</kbd> | Run |
+| <kbd>Space</kbd> / <kbd>C</kbd> | Up / down |
+| <kbd>Esc</kbd> | Release the pointer, then leave walk mode |
+
+</TabItem>
+<TabItem label="Flight (G)">
+
+A simple flight model over the scene. Gamepads are supported.
+
+| Input | Action |
+|---|---|
+| <kbd>W</kbd> / <kbd>S</kbd> | Throttle up / down |
+| Arrow keys | Pitch and roll |
+| <kbd>Q</kbd> / <kbd>E</kbd> | Yaw |
+| <kbd>Shift</kbd> | Boost |
+| <kbd>R</kbd> | Level out |
+
+</TabItem>
+<TabItem label="Drone tour (T)">
+
+An automatic flight path around the scene, with **play / pause** and a speed slider (0.2–4×). Useful for demos and screen recordings.
+
+</TabItem>
+</Tabs>
+
+## HUD and mini-map
+
+In Walk and Flight modes, a heads-up display shows a **heading tape** and read-outs: **AGL** (height above ground), **ALT** (altitude), **HDG** (heading), plus **SPD**, **PIT** and **ROL** in flight. A **mini-map** shows your position over the height map.
+
+## Performance
+
+- Choose **Mesh detail** (*Fast / Balanced / Full*) in Inspector → Layers. *Fast* keeps navigation smooth on laptops.
+- Ambient occlusion and anti-aliasing switch off automatically when the frame rate drops. The **fps** read-out in the status bar turns orange below 30.
+- If WebGL is unavailable, a fallback screen explains why. All three views share the same WebGL canvas.
+
+<Aside type="tip">Vertical exaggeration (Inspector → Layers, 0.2–8×) makes low relief visible, but reset it to 1× before taking screenshots that others will read as true scale.</Aside>

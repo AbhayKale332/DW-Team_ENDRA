@@ -1,0 +1,80 @@
+---
+import { Image } from 'astro:assets';
+import type { ImageMetadata } from 'astro';
+interface Item {
+	src: ImageMetadata;
+	label: string;
+}
+interface Props {
+	items: Item[];
+	cols?: number;
+	caption?: string;
+	credit?: string;
+}
+const { items, cols = items.length, caption, credit } = Astro.props;
+---
+
+<figure class="grid-fig not-content">
+	<div class="grid" style={`--cols:${cols}`}>
+		{
+			items.map((it) => (
+				<div class="cell">
+					<Image src={it.src} alt={it.label} widths={[320, 640]} sizes="(max-width: 50rem) 50vw, 16rem" />
+					<span>{it.label}</span>
+				</div>
+			))
+		}
+	</div>
+	{
+		(caption || credit) && (
+			<figcaption>
+				{caption}
+				{credit && <span class="credit">{credit}</span>}
+			</figcaption>
+		)
+	}
+</figure>
+
+<style>
+	.grid-fig {
+		margin: 1.5rem 0;
+	}
+	.grid {
+		display: grid;
+		grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+		gap: 0.5rem;
+	}
+	@media (max-width: 40rem) {
+		.grid {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+	.cell {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+	}
+	.cell :global(img) {
+		width: 100%;
+		height: auto;
+		aspect-ratio: 1;
+		object-fit: cover;
+		border-radius: 6px;
+		border: 1px solid var(--dw-line);
+	}
+	.cell span {
+		font-size: 0.75rem;
+		color: var(--dw-dim);
+		text-align: center;
+	}
+	figcaption {
+		font-size: 0.8rem;
+		color: var(--dw-dim);
+		margin-top: 0.6rem;
+	}
+	.credit {
+		display: block;
+		font-size: 0.72rem;
+		color: var(--dw-faint);
+	}
+</style>

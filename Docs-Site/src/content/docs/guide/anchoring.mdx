@@ -1,0 +1,40 @@
+---
+title: Elevation anchoring
+description: Convert a height-above-ground result into absolute elevations in the browser, using terrain tiles or your own DEM.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+The model predicts **height above ground** (nDSM). **Anchoring** adds terrain so every pixel gets an **absolute elevation** above a datum (DSM). It is available for georeferenced scenes, in **Inspector → Info → Elevation reference**.
+
+## Automatic anchoring
+
+With **Anchor georeferenced results automatically** on (the default), the app fetches coarse terrain tiles (AWS Terrarium) for the scene's footprint right after each run. The **product chip** in the viewport shows progress and changes from *nDSM* to *DSM* when anchoring is done.
+
+## Manual options
+
+<Steps>
+
+1. **Anchor to DEM (Terrain Tiles)**: fetch terrain tiles now.
+2. **Load DEM file**: use your own DEM GeoTIFF instead, such as a national DEM or CartoDEM. Set **Datum of a loaded DEM file**:
+   - *EGM96 (SRTM, NASADEM)*
+   - *EGM2008 (Copernicus GLO-30)*
+   - *WGS84 ellipsoid (CartoDEM)*
+   - *Not stated*
+3. Adjust **Share of structure height already in the DEM**. Coarse DEMs partly contain buildings and trees, and this slider controls how much of each structure is assumed to be in the DEM already, to avoid [double counting](/geo/absolute-dsm/#the-double-counting-problem).
+4. Choose the **Height reference** for display and export: above ground (nDSM) or elevation (DSM).
+
+</Steps>
+
+After anchoring, **File → Export → Elevation data** also offers **GeoTIFF nDSM** and **GeoTIFF DTM**.
+
+## Assumptions and limits
+
+The Info tab lists the assumptions behind the current anchoring. In short:
+
+- the terrain is only as detailed as the DEM (about 30 m), so steep relief is smoothed;
+- terrain tiles mix sources and are nominally EGM96;
+- building mass already in the DEM is removed only approximately (the slider above);
+- non-georeferenced (rDSM) results cannot be anchored.
+
+<Aside type="tip">For the most accurate absolute DSM, run the scene through the [self-hosted service](/system/self-hosted/) with `absolute=true`. It uses Copernicus GLO-30 and the DEM-anchored method, and writes a compound-CRS GeoTIFF.</Aside>

@@ -1,0 +1,85 @@
+---
+/** Table rendered from data. `highlight` marks the best value per numeric column (min by default). */
+interface Props {
+	headers: string[];
+	rows: (string | number | null)[][];
+	caption?: string;
+	source?: string;
+	digits?: number;
+	best?: 'min' | 'max' | Record<number, 'min' | 'max'>;
+	bestCols?: number[];
+	/** Highlight the minimum numeric cell in each row instead of per column. */
+	bestRow?: boolean;
+}
+const { headers, rows, caption, source, digits = 3, best, bestCols = [], bestRow = false } = Astro.props;
+const bestIdx = new Map<number, number>();
+for (const c of bestCols) {
+	const mode = typeof best === 'object' ? (best[c] ?? 'min') : (best ?? 'min');
+	let bi = -1;
+	let bv = mode === 'min' ? Infinity : -Infinity;
+	rows.forEach((r, i) => {
+		const v = r[c];
+		if (typeof v === 'number' && (mode === 'min' ? v < bv : v > bv)) {
+			bv = v;
+			bi = i;
+		}
+	});
+	bestIdx.set(c, bi);
+}
+const rowBest = rows.map((r) => {
+	if (!bestRow) return -1;
+	let bi = -1;
+	let bv = Infinity;
+	r.forEach((v, c) => {
+		if (typeof v === 'number' && v < bv) {
+			bv = v;
+			bi = c;
+		}
+	});
+	return bi;
+});
+const fmt = (v: string | number | null) => (v === null ? '—' : typeof v === 'number' ? v.toFixed(digits) : v);
+---
+
+<div class="table-wrap">
+	<table>
+		<thead>
+			<tr>{headers.map((h) => <th>{h}</th>)}</tr>
+		</thead>
+		<tbody>
+			{
+				rows.map((r, i) => (
+					<tr>
+						{r.map((v, c) => (
+							<td class:list={[typeof v === 'number' && 'dw-num', (bestIdx.get(c) === i || rowBest[i] === c) && 'best']}>{fmt(v)}</td>
+						))}
+					</tr>
+				))
+			}
+		</tbody>
+	</table>
+	{
+		(caption || source) && (
+			<p class="tcap">
+				{caption}
+				{source && (
+					<span>
+						{' '}
+						Source: <code>{source}</code>
+					</span>
+				)}
+			</p>
+		)
+	}
+</div>
+
+<style>
+	.tcap {
+		font-size: 0.78rem;
+		color: var(--dw-dim);
+		margin-top: 0.5rem;
+	}
+	.tcap code {
+		font-size: 0.7rem;
+	}
+</style>

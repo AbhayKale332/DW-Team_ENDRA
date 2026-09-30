@@ -1,0 +1,61 @@
+---
+title: Key concepts
+description: GSD, the DSM product family, vertical datums and test-time augmentation.
+---
+
+import Diagram from '../../../components/Diagram.astro';
+import DsmDiagram from '../../../components/diagrams/DsmDiagram.astro';
+
+These terms are used throughout the docs.
+
+## Surface model products
+
+<Diagram caption="The model predicts the nDSM: the height of each pixel above bare ground. Adding a terrain model (DTM) gives the absolute top surface (DSM).">
+	<DsmDiagram />
+</Diagram>
+
+| Product | Meaning | When DepthWizard produces it |
+|---|---|---|
+| **nDSM** | Normalised DSM: metres *above ground* for buildings, trees and other objects. Bare ground is about 0 | Always. This is what the network predicts |
+| **rDSM** | Relative DSM: an nDSM whose metric scale depends on an *assumed* GSD | Plain PNG/JPG input with no known resolution |
+| **DTM** | Digital terrain model: bare-earth elevation above a datum | Georeferenced input, fitted from a public DEM |
+| **DSM** | Digital surface model: elevation of the top surface above a datum, equal to DTM + nDSM | Georeferenced input with *absolute* enabled |
+
+## Ground sample distance (GSD)
+
+The GSD is the ground size of one pixel, in metres. It is the key that lets heights come out in metres. The model always works at a **canonical 0.5 m GSD**, so every image is resampled to 0.5 m before inference and the result is resampled back to the input grid afterwards.
+
+The GSD is resolved in this order:
+
+1. a value you supply (`--gsd`, or *Resolution* in the app),
+2. the pixel size in the GeoTIFF's geotransform,
+3. otherwise an **assumed 0.5 m**, in which case the output is labelled *rDSM*.
+
+A wrong GSD scales every height by roughly the same factor. For example, a 1.0 m image processed as 0.5 m would show buildings about twice as tall.
+
+## Vertical datums
+
+Absolute elevations are only meaningful relative to a stated datum:
+
+| Datum | Used by |
+|---|---|
+| **EGM2008** geoid | Copernicus GLO-30 (the default DEM) |
+| **EGM96** geoid | SRTM GL1, NASADEM, Terrarium tiles |
+| **WGS84 ellipsoid** | CartoDEM, raw GNSS / LiDAR |
+
+DepthWizard converts between them with PROJ geoid grids and writes a **compound vertical CRS** into every DSM GeoTIFF.
+
+## Test-time augmentation (TTA)
+
+TTA runs the model on the 8 flips and rotations of each tile (the dihedral group D4) and averages the predictions. Across our runs it lowered RMSE by 0.01–0.12 m, at 8× the compute (see [Benchmarks](/results/benchmarks/)). In the app this is the *Higher quality (TTA)* switch.
+
+## Glossary
+
+| Term | Meaning |
+|---|---|
+| **RMSE / MAE** | Root-mean-square / mean absolute error of predicted height, in metres |
+| **δ1** | Share of pixels where the ratio of (prediction + 1) to (truth + 1) is below 1.25 |
+| **Balanced RMSE** | Mean of the RMSEs in five height bands, so tall structures count as much as flat ground |
+| **Height stratum** | One of the bands 0–2, 2–5, 5–10, 10–20 and 20+ m |
+| **Sliding window** | Whole-scene inference over overlapping 512 px tiles, the path the app uses |
+| **OOD** | Out-of-domain: data from a sensor or region never seen in training |

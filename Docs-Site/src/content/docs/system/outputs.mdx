@@ -1,0 +1,96 @@
+---
+title: Output formats
+description: Every file DepthWizard writes, the meta.json schema and the 16-bit height encoding.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Source: `write_outputs` in `Model_Traning/v5/infer/predict.py`. The same writer is used by the CLI, the FastAPI service and the Space.
+
+## Files
+
+| File | Type | Units / content | When |
+|---|---|---|---|
+| `ndsm_m.npy` | Float32 array H × W | metres above ground; NaN = no data | always |
+| `ndsm_m.tif` | Float32 GeoTIFF | same, with CRS + geotransform | georeferenced input |
+| `ndsm_std_m.npy` / `.tif` | Float32 | per-pixel uncertainty σ (m) from Head B | always (TIFF if georeferenced) |
+| `dtm_m.npy` / `.tif` | Float32 | bare-earth elevation above datum | `absolute` |
+| `dsm_m.npy` / `.tif` | Float32 | absolute surface elevation above datum | `absolute` |
+| `seg.npy` / `seg.png` | uint8 | class id 0–6 ([classes](/model/decoder-heads/#head-c-segmentation)) | always |
+| `rgb.png` | 8-bit RGB | stretched input on the output grid | always |
+| `ndsm16.png` | 16-bit grey PNG | quantised height (encoding below) | always |
+| `terrain.glb` | glTF binary | textured height mesh | `mesh=true` (default) |
+| `terrain.obj` + `.mtl` + `texture.png` | Wavefront OBJ | same mesh | `mesh=true` |
+| `shadow_img.png` | binary PNG | detected shadow mask | always |
+| `meta.json` | JSON | stats, scene, preprocessing, files | always |
+| `report.html` | HTML | self-contained report | on request |
+| `validation.json`, `gt_ndsm_m.npy`, `err_ref_m.npy` | JSON / arrays | reference comparison | after `/api/reference` |
+
+GeoTIFF DSM/DTM outputs carry a **compound CRS**: the scene's horizontal EPSG plus the vertical datum of the DEM used.
+
+## `ndsm16.png` encoding
+
+```text
+height_m = height_min_m + (png16 / 65535) * (height_max_m - height_min_m)
+```
+
+`height_min_m` and `height_max_m` are stored in `meta.json`. The quantisation step is (max − min) / 65535: about 0.2 mm for a 12 m scene and 1.7 mm for a 112 m scene.
+
+## `meta.json`
+
+Abridged from a real Cartosat-2E job:
+
+```json title="meta.json"
+{
+  "stem": "input",
+  "product": "nDSM",
+  "units": "metres_above_ground",
+  "height_min_m": 0.0000013,
+  "height_max_m": 11.812,
+  "height_mean_m": 0.253,
+  "height_median_m": 0.0039,
+  "frac_below_1m": 0.923,
+  "size_px": [1024, 1024],
+  "scene": {
+    "width": 1024, "height": 1024,
+    "gsd_m": 0.6, "gsd_source": "geotiff",
+    "georeferenced": true,
+    "crs": "EPSG:32644", "crs_epsg": 32644,
+    "transform": [0.6, 0.0, 213806.4, 0.0, -0.6, 1727287.8],
+    "valid_frac": 1.0,
+    "source": { "rgb_bands": [3, 2, 1], "pansharpened": false }
+  },
+  "preproc": {
+    "encoder_model_id": "facebook/dinov3-vitl16-pretrain-sat493m",
+    "mean": [0.43, 0.411, 0.296], "std": [0.213, 0.156, 0.143],
+    "canonical_gsd_m": 0.5, "tile_size": 512, "patch": 16,
+    "radiometric_stretch": true, "stretch_lo_pct": 2.0, "stretch_hi_pct": 98.0,
+    "target": "nDSM_agl_metres"
+  },
+  "vertical_datum": "EGM2008",
+  "files": ["rgb.png", "ndsm16.png", "ndsm_m.npy", "dsm_m.npy", "dtm_m.npy", "…"],
+  "ndsm16_encode": "height_m = height_min_m + (png16/65535)*(height_max_m-height_min_m)",
+  "uncertainty": { "std_median_m": 0.251, "…": "…" }
+}
+```
+
+| Key | Meaning |
+|---|---|
+| `product` | `nDSM`, or `rDSM` when the GSD was assumed |
+| `scene.gsd_source` | `geotiff`, `user` or `assumed` |
+| `scene.transform` | GDAL-order affine geotransform |
+| `frac_below_1m` | share of pixels below 1 m. The web app warns when a scene has very little flat ground |
+| `vertical_datum` | datum of `dsm_m` / `dtm_m` |
+
+## Web app exports
+
+The browser can re-export any loaded result:
+
+| Group | Formats |
+|---|---|
+| 3D object | GLB, OBJ (zip with MTL + texture), PLY, STL, the server's `terrain.glb` |
+| Heatmap | PNG, JPG |
+| Elevation data | GeoTIFF Float32, GeoTIFF nDSM and DTM (after anchoring), NumPy `.npy`, 16-bit PNG |
+| Project | `.dwproj` (reopen later, including settings) |
+
+<Aside type="tip">The web app also opens result bundles directly: drop a `.zip` or `.npy` from the CLI or the service onto the window to view it without running inference again.</Aside>
