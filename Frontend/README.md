@@ -27,7 +27,7 @@ Two ways to try it without the model:
 
 The Space is private, so every request must carry a Hugging Face token. The token never reaches the browser.
 
-- **Where it is stored:** `HF_TOKEN` in `.env`. It deliberately has no `VITE_` prefix; Vite would embed a `VITE_` variable in the JavaScript bundle.
+- **Where it is stored:** `HF_TOKEN` in `.env` (or several: `HF_TOKENS=a,b,c` / `HF_TOKEN_2`, `HF_TOKEN_3` …; when one fails — ZeroGPU quota used up, token rejected or rate-limited, or a run error — the server switches to the next and the app retries). It deliberately has no `VITE_` prefix; Vite would embed a `VITE_` variable in the JavaScript bundle.
 - **How it is used:** the browser only talks to its own origin at `/hf-space/*`. The server forwards those requests to the Space and adds `Authorization: Bearer $HF_TOKEN`.
   - In development and `npm run preview`, the server is Vite's proxy (`vite.config.ts`).
   - In production, it is `server/serve.mjs` (Node ≥ 20, no dependencies). It serves `dist/` and proxies the same path.
@@ -37,6 +37,8 @@ The Space is private, so every request must carry a Hugging Face token. The toke
 | Variable | Purpose |
 |---|---|
 | `HF_TOKEN` | Hugging Face token with read access to the Space. **Required**, server-side only. |
+| `HF_TOKENS`, `HF_TOKEN_2` … | Extra tokens from other accounts, used in turn when a token fails (quota, rejected token, run error). |
+| `HF_TOKEN_COOLDOWN_MIN` | How long an exhausted token is skipped when the Space gives no reset time (default 60). |
 | `VITE_SPACE_ID` | `owner/space` of the model; the proxy target is derived from it. |
 | `HF_SPACE_URL` | Optional explicit target, for example `https://owner-space.hf.space`. |
 | `PORT` | Port for `npm run serve` (default 8080). |

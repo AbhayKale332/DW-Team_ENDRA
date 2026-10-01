@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { fromArrayBuffer } from 'geotiff';
 import { unzipSync } from 'fflate';
 import { spaceUrlFromId } from '../server/space.mjs';
+import { parseTokens } from '../server/tokens.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const envFile = join(root, '.env');
@@ -31,7 +32,7 @@ if (!input || !outDir) {
   console.error('Usage: node scripts/sample-from-space.mjs <input.tif> <output dir> [--tta]');
   process.exit(1);
 }
-const TOKEN = process.env.HF_TOKEN;
+const TOKEN = parseTokens(process.env)[0];
 if (!TOKEN) throw new Error('HF_TOKEN is not set (.env) — the private Space will reject requests.');
 const SPACE = (process.env.HF_SPACE_URL || spaceUrlFromId(process.env.VITE_SPACE_ID || 'akashch1512/SingleViewHeigthEstimation')).replace(/\/$/, '');
 const auth = { Authorization: `Bearer ${TOKEN}` };

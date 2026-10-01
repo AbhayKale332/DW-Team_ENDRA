@@ -17,7 +17,7 @@ export class DepthWizardError extends Error {
 export const ERROR_COPY: Record<ErrorKind, { title: string; hint: string }> = {
   quota: {
     title: 'GPU quota used up',
-    hint: 'The ZeroGPU allowance of the account behind HF_TOKEN is exhausted for today. Retry later, turn TTA off, or open a sample scene.',
+    hint: 'The ZeroGPU allowance of every configured HF token is exhausted for today. Retry later, turn TTA off, or open a sample scene.',
   },
   'no-image': { title: 'No image received', hint: 'Open an image and run again.' },
   inference: { title: 'Inference failed', hint: 'The model could not process this image. Check the file and the declared GSD, then retry.' },

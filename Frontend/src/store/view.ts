@@ -72,7 +72,7 @@ interface ViewState {
 
 const defaults = {
   mode: 'dsm3d' as ViewMode,
-  layer3d: 'tint' as DrapeLayer,
+  layer3d: 'optical' as DrapeLayer,
   layer2d: 'height' as DrapeLayer,
   colormap: 'terrain' as ColormapId,
   rangeMode: 'robust' as RangeMode,

@@ -1,5 +1,6 @@
 // Production server: serves the built app (dist/) and proxies /hf-space/* to the private
-// Hugging Face Space, injecting HF_TOKEN from the environment. The token never reaches the browser.
+// Hugging Face Space, injecting an HF token from the environment (HF_TOKENS / HF_TOKEN — several rotate when one
+// runs out of ZeroGPU quota, see server/tokens.mjs). The tokens never reach the browser.
 // Only the Gradio endpoints the app uses are proxied, runs are rate-limited per client, and uploads are capped,
 // so the proxy cannot be used as an open door to the Space. Also relays /overpass/<mirror> — see server/overpass.mjs.
 // No dependencies — Node ≥ 20.   Usage:  node server/serve.mjs   (see .env.example for the variables)
@@ -14,6 +15,7 @@ import { spaceUrlFromId } from './space.mjs';
 import { relayOverpass } from './overpass.mjs';
 import { samplesIndex } from './samples.mjs';
 import { createRateLimiter, isAllowedSpaceRequest, pickForwardHeaders, MAX_UPLOAD_BYTES } from './guard.mjs';
+import { createTokenPool, isWatchedPath, parseTokens } from './tokens.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 // Minimal .env loader (KEY=VALUE lines) so the same .env works in dev and production.
@@ -26,7 +28,7 @@ if (existsSync(envFile)) {
 }
 
 const PORT = Number(process.env.PORT || 8080);
-const TOKEN = process.env.HF_TOKEN;
+const tokens = createTokenPool(parseTokens(process.env), { cooldownMs: Number(process.env.HF_TOKEN_COOLDOWN_MIN || 60) * 60_000 });
 const SPACE = new URL(process.env.HF_SPACE_URL || spaceUrlFromId(process.env.VITE_SPACE_ID || 'akashch1512/SingleViewHeigthEstimation'));
 const DIST = join(root, 'dist');
 // Behind a reverse proxy / PaaS router the client address is in X-Forwarded-For; only trust it when told to.
@@ -36,7 +38,7 @@ const RUNS = Number(process.env.RATE_LIMIT_RUNS || 10);
 const WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MIN || 10) * 60_000;
 const runLimiter = createRateLimiter({ max: RUNS, windowMs: WINDOW_MS });
 const uploadLimiter = createRateLimiter({ max: RUNS * 2, windowMs: WINDOW_MS });
-if (!TOKEN) console.warn('[depthwizard] HF_TOKEN is not set — the private Space will reject requests.');
+if (!tokens.size) console.warn('[depthwizard] HF_TOKEN is not set — the private Space will reject requests.');
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -103,9 +105,12 @@ function proxy(req, res) {
 
   const headers = pickForwardHeaders(req.headers);
   headers.host = SPACE.host;
-  if (TOKEN) headers.authorization = `Bearer ${TOKEN}`;
+  const token = tokens.pick(path);
+  if (token) headers.authorization = `Bearer ${token}`;
+  if (isWatchedPath(path)) delete headers['accept-encoding'];
   const up = httpsRequest({ protocol: SPACE.protocol, hostname: SPACE.hostname, port: SPACE.port || 443, path, method: req.method, headers }, (r) => {
-    const out = { ...r.headers };
+    tokens.observe(path, token, r);
+    const out = { ...r.headers, 'x-dw-spare-tokens': String(tokens.spare(token)) };
     delete out['set-cookie'];
     res.writeHead(r.statusCode || 502, out);
     r.pipe(res); // streams SSE without buffering
@@ -198,4 +203,4 @@ createServer((req, res) => {
   if (req.url.startsWith('/overpass/') && req.method === 'POST') return overpass(req, res);
   if (req.method !== 'GET' && req.method !== 'HEAD') return res.writeHead(405).end();
   return serveStatic(req, res);
-}).listen(PORT, () => console.log(`DepthWizard on http://localhost:${PORT}  →  model ${SPACE.origin}${TOKEN ? ' (token set)' : ' (NO TOKEN)'}`));
+}).listen(PORT, () => console.log(`DepthWizard on http://localhost:${PORT}  →  model ${SPACE.origin}${tokens.size ? ` (${tokens.size} token${tokens.size > 1 ? 's' : ''})` : ' (NO TOKEN)'}`));

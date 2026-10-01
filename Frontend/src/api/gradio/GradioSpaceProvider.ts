@@ -10,6 +10,15 @@ import type { Artefact, SceneMeta } from '@/domain/types';
 /** Same-origin path of the authenticating proxy (Vite dev/preview server or server/serve.mjs). */
 export const SPACE_PROXY = './hf-space';
 
+/** Upper bound on retries after a token failure, in case the proxy keeps reporting a spare token. */
+const MAX_TOKEN_RETRIES = 8;
+
+/** Spare HF tokens the proxy still has after this response (see server/tokens.mjs). */
+const spareTokens = (res: Response) => Number(res.headers.get('x-dw-spare-tokens') ?? 0);
+
+/** Same rule as isTokenFailure in server/tokens.mjs: the proxy benched the token that got this response. */
+const isTokenFailure = (status: number, path: string) => status === 401 || status === 402 || status === 403 || status === 429 || (status === 404 && path === '/config');
+
 export interface GradioSpaceOptions {
   spaceId: string;
   /** Base URL of the proxy that forwards to the private Space with the server-side HF_TOKEN. */
@@ -71,10 +80,14 @@ export class GradioSpaceProvider implements InferenceProvider {
 
   private async http(path: string, init: RequestInit = {}) {
     let res: Response;
-    try {
-      res = await fetch(`${this.base}${path}`, init);
-    } catch (e) {
-      throw toDepthWizardError(e);
+    // A refused token is benched by the proxy, so the same request goes out with the next one.
+    for (let attempt = 1; ; attempt++) {
+      try {
+        res = await fetch(`${this.base}${path}`, init);
+      } catch (e) {
+        throw toDepthWizardError(e);
+      }
+      if (!isTokenFailure(res.status, path.split('?')[0]) || spareTokens(res) <= 0 || attempt >= MAX_TOKEN_RETRIES || init.signal?.aborted) break;
     }
     if (res.status === 401 || res.status === 403) throw new DepthWizardError('auth', ERROR_COPY.auth.title, `HTTP ${res.status} from the model Space — check HF_TOKEN in .env.`);
     if (res.status === 404 && path === '/config') throw new DepthWizardError('auth', ERROR_COPY.auth.title, 'The Space was not found — it is private (token missing/invalid) or the Space id is wrong.');
@@ -122,16 +135,27 @@ export class GradioSpaceProvider implements InferenceProvider {
     if (!Array.isArray(uploaded) || !uploaded[0]) throw new DepthWizardError('network', 'Upload failed', 'The model Space did not accept the image.');
     const fileData = { path: uploaded[0], orig_name: req.uploadName, size: req.upload.size, mime_type: req.upload.type || 'image/png', meta: { _type: 'gradio.FileData' } };
 
+    // gsd 0 tells the Space to use the GeoTIFF / canonical resolution.
+    const body = JSON.stringify({ data: [fileData, req.gsd ?? 0, req.tta] });
+    // The proxy moves to its next HF token once one runs out of quota or its run errors; rerun while it has one left.
+    for (let attempt = 1; ; attempt++) {
+      const run = { spareTokens: 0, tokenFailed: false };
+      try {
+        return await this.fetchResult(await this.runPredict(body, run, onProgress, signal), onProgress, signal);
+      } catch (e) {
+        const err = toDepthWizardError(e);
+        const retry = err.kind === 'quota' || run.tokenFailed;
+        if (!retry || run.spareTokens <= 0 || attempt >= MAX_TOKEN_RETRIES || signal.aborted) throw err;
+      }
+    }
+  }
+
+  /** Start a predict job and wait for its result. */
+  private async runPredict(body: string, run: { spareTokens: number; tokenFailed: boolean }, onProgress: (p: ProgressEvent) => void, signal: AbortSignal) {
     onProgress({ stage: 'queued' });
-    const call = (await (
-      await this.http('/gradio_api/call/predict', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        // gsd 0 tells the Space to use the GeoTIFF / canonical resolution.
-        body: JSON.stringify({ data: [fileData, req.gsd ?? 0, req.tta] }),
-        signal,
-      })
-    ).json()) as { event_id?: string };
+    const res = await this.http('/gradio_api/call/predict', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal });
+    run.spareTokens = spareTokens(res);
+    const call = (await res.json()) as { event_id?: string };
     if (!call.event_id) throw new DepthWizardError('inference', 'The model did not start', 'No event id was returned.');
 
     const stream = await this.http(`/gradio_api/call/predict/${call.event_id}`, { signal, headers: { Accept: 'text/event-stream' } });
@@ -148,6 +172,7 @@ export class GradioSpaceProvider implements InferenceProvider {
           data = JSON.parse(ev.data) as unknown[];
           break;
         } else if (ev.event === 'error') {
+          run.tokenFailed = true;
           let msg = 'The model service reported an error.';
           try {
             const parsed = JSON.parse(ev.data);
@@ -171,15 +196,25 @@ export class GradioSpaceProvider implements InferenceProvider {
     const artefacts: Artefact[] = rawFiles
       .filter((f) => f && (f.url || f.path))
       .map((f) => ({ name: fileBaseName(f), url: this.viaProxy(f), size: f.size ?? undefined }));
-    const npy = findArtefact(artefacts, 'ndsm_m.npy');
+    const npyUrl = findArtefact(artefacts, 'ndsm_m.npy')?.url;
+    // quota and other Space failures come back as a status text without artefacts
+    if (!npyUrl) throw classifyStatusText(parsed.status);
+    return { parsed, artefacts, npyUrl };
+  }
+
+  /** Download the result artefacts of a finished run. */
+  private async fetchResult(
+    { parsed, artefacts, npyUrl }: { parsed: ReturnType<typeof parsePredictTuple>; artefacts: Artefact[]; npyUrl: string },
+    onProgress: (p: ProgressEvent) => void,
+    signal: AbortSignal,
+  ): Promise<PredictionResult> {
     const metaFile = findArtefact(artefacts, 'meta.json');
     const segFile = findArtefact(artefacts, 'seg.png');
     const objectsFile = findArtefact(artefacts, 'objects.json');
-    if (!npy?.url) throw classifyStatusText(parsed.status);
 
     onProgress({ stage: 'fetching' });
     const [npyBuf, meta, segBuf, objectsJson] = await Promise.all([
-      this.http(npy.url.slice(this.base.length), { signal }).then((r) => r.arrayBuffer()),
+      this.http(npyUrl.slice(this.base.length), { signal }).then((r) => r.arrayBuffer()),
       metaFile?.url
         ? this.http(metaFile.url.slice(this.base.length), { signal })
             .then((r) => r.json() as Promise<SceneMeta>)

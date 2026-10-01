@@ -1,21 +1,35 @@
 import { Tooltip } from '@mantine/core';
 import { useFullscreenElement } from '@mantine/hooks';
 import { IconMaximize, IconMinimize, IconMinus, IconPlus, IconRefresh } from '@tabler/icons-react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useCamera, viewportApi } from '@/store/camera';
-import { useScene } from '@/store/scene';
+import { isPreviewing, useScene } from '@/store/scene';
+import { useUi } from '@/store/ui';
 import classes from './overlays.module.css';
 
 /** Right-side viewport stack: zoom in / zoom out / fullscreen / reset (reset only once the view has moved). */
 export function NavControls() {
   const isHome = useCamera((s) => s.isHome);
   const mode = useCamera((s) => s.mode);
-  const hasScene = useScene((s) => !!s.scene);
+  const hasScene = useScene((s) => !!s.scene && !isPreviewing(s));
   const { toggle, fullscreen, ref } = useFullscreenElement<HTMLElement>();
 
+  // The whole page goes fullscreen so the header (and its menus, portalled to <body>) stays; the side panels
+  // fold away for the viewport and come back on exit.
+  const panels = useRef<{ projectOpen: boolean; inspectorOpen: boolean } | null>(null);
   useEffect(() => {
-    ref(document.getElementById('dw-viewport'));
+    ref(document.documentElement);
   }, [ref]);
+  useEffect(() => {
+    const ui = useUi.getState();
+    if (fullscreen) {
+      panels.current = { projectOpen: ui.projectOpen, inspectorOpen: ui.inspectorOpen };
+      ui.set({ projectOpen: false, inspectorOpen: false });
+    } else if (panels.current) {
+      ui.set(panels.current);
+      panels.current = null;
+    }
+  }, [fullscreen]);
 
   const zoomLabel = mode === 'flight' ? 'throttle' : mode === 'tour' ? 'tour speed' : 'zoom';
   return (

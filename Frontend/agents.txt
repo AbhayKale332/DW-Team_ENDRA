@@ -1,0 +1,2 @@
+# for using depth SingleViewHeigthEstimation for agents directly via hf api
+curl https://huggingface.co/spaces/akashch1512/SingleViewHeigthEstimation/agents.md

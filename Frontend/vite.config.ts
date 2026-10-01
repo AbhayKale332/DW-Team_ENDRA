@@ -7,6 +7,8 @@ import { resolve } from 'node:path';
 import { spaceUrlFromId } from './server/space.mjs';
 import { relayOverpass } from './server/overpass.mjs';
 import { samplesIndex } from './server/samples.mjs';
+import { createTokenPool, isWatchedPath, parseTokens } from './server/tokens.mjs';
+import type { IncomingMessage } from 'node:http';
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8')) as { version: string };
 
@@ -52,20 +54,34 @@ function samplesIndexPlugin(): Plugin {
 }
 
 export default defineConfig(({ mode }) => {
-  // Load ALL variables (no prefix filter) — HF_TOKEN stays in Node and is never exposed to client code.
+  // Load ALL variables (no prefix filter) — the HF tokens stay in Node and are never exposed to client code.
   const env = loadEnv(mode, process.cwd(), '');
   const spaceUrl = env.HF_SPACE_URL || spaceUrlFromId(env.VITE_SPACE_ID || 'akashch1512/SingleViewHeigthEstimation');
-  const token = env.HF_TOKEN;
-  if (!token && mode !== 'test') console.warn('\n[depthwizard] HF_TOKEN is not set in .env — requests to the private Space will be rejected.\n');
+  const tokens = createTokenPool(parseTokens(env), { cooldownMs: Number(env.HF_TOKEN_COOLDOWN_MIN || 60) * 60_000 });
+  if (!tokens.size && mode !== 'test') console.warn('\n[depthwizard] HF_TOKEN is not set in .env — requests to the private Space will be rejected.\n');
 
-  // /hf-space/* → private Space, with the access token injected server-side.
+  // /hf-space/* → private Space, with an access token injected server-side (rotated when one runs out of quota).
+  const upstream = new WeakMap<IncomingMessage, { path: string; token?: string }>();
   const hfProxy: Record<string, ProxyOptions> = {
     '/hf-space': {
       target: spaceUrl,
       changeOrigin: true,
       secure: true,
       rewrite: (p) => p.replace(/^\/hf-space/, '') || '/',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      configure: (proxy) => {
+        proxy.on('proxyReq', (proxyReq, req) => {
+          const path = proxyReq.path.split('?')[0];
+          const token = tokens.pick(path);
+          if (token) proxyReq.setHeader('authorization', `Bearer ${token}`);
+          if (isWatchedPath(path)) proxyReq.removeHeader('accept-encoding');
+          upstream.set(req, { path, token });
+        });
+        proxy.on('proxyRes', (proxyRes, req) => {
+          const { path = '', token } = upstream.get(req) ?? {};
+          tokens.observe(path, token, proxyRes);
+          proxyRes.headers['x-dw-spare-tokens'] = String(tokens.spare(token));
+        });
+      },
     },
   };
 

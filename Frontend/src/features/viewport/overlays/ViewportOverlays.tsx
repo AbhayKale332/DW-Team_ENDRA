@@ -1,7 +1,8 @@
-import { useScene } from '@/store/scene';
+import { isPreviewing, useScene } from '@/store/scene';
 import { canGeolocate } from '@/lib/osm';
 import { useCamera } from '@/store/camera';
 import { ProcessingOverlay } from '@/features/processing/ProcessingOverlay';
+import { InputPreview } from '@/features/processing/InputPreview';
 import { ScenarioOverlay } from '@/features/usecases/UseCasesTab';
 import { GcpOverlay } from '@/features/gcp/GcpOverlay';
 import { ProductChip } from '@/features/anchoring/ProductChip';
@@ -20,7 +21,9 @@ import classes from './overlays.module.css';
 
 /** Everything floating over the canvas. Layout follows the product mockups. */
 export function ViewportOverlays() {
-  const hasScene = useScene((s) => !!s.scene);
+  // while the input image is previewed, the scene's overlays stay hidden with it
+  const previewing = useScene(isPreviewing);
+  const hasScene = useScene((s) => !!s.scene) && !previewing;
   // A known CRS, not just a pixel transform: only then is "north" real (same test as the OSM overlay).
   const georeferenced = useScene((s) => canGeolocate(s.scene?.georef));
   const building = useScene((s) => s.meshBuilding && s.run.status !== 'running');
@@ -29,9 +32,10 @@ export function ViewportOverlays() {
   return (
     <div className={`${classes.layer} dw-no-print`}>
       <EmptyState />
+      <InputPreview />
       {hasScene && <NavigationHud />}
       <div className={classes.topLeft}>
-        <ViewSwitcher />
+        {!previewing && <ViewSwitcher />}
         {hasScene && orbit && <ToolPalette />}
         {hasScene && <ProductChip />}
         <ScenarioOverlay />

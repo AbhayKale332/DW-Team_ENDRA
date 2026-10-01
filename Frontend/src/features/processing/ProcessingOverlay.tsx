@@ -35,7 +35,6 @@ export function ProcessingOverlay() {
   const run = useScene((s) => s.run);
   const firstSample = useSamples((s) => s.samples[0]);
   const tta = useScene((s) => s.params.tta);
-  const hasPrevious = useScene((s) => !!s.scene);
   const elapsed = useElapsed(run.startedAt, run.status === 'running');
 
   if (run.status === 'error' && run.error) {
@@ -122,11 +121,6 @@ export function ProcessingOverlay() {
             );
           })}
         </Stack>
-        {hasPrevious && current !== 'building' && (
-          <Text size="xs" c="dimmed">
-            Showing the previous result.
-          </Text>
-        )}
         {current !== 'building' && (
           <Button size="xs" variant="default" leftSection={<IconX size={14} />} onClick={cancelPrediction}>
             Cancel run

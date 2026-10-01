@@ -40,6 +40,7 @@ export async function runPrediction() {
   }
 
   s.setRun({ status: 'running', stage: 'connecting', event: { stage: 'connecting' }, error: null, startedAt: performance.now() });
+  s.set({ inputPreview: true });
   try {
     const res = await provider.predict(
       { upload: input.upload, uploadName: input.uploadName, gsd: uploadGsd, tta: s.params.tta },
@@ -76,7 +77,8 @@ export async function runPrediction() {
     });
     useTool.getState().clear();
     useScene.getState().setScene(scene);
-    useScene.getState().set({ dirty: true });
+    // the input image stays up until the user chooses to explore the result
+    useScene.getState().set({ dirty: true, inputPreview: true });
     // georeferenced results become an absolute DSM once a DEM is fetched (rDSM stays relative)
     void import('@/features/anchoring/runAnchoring').then((m) => m.autoAnchor());
     // a re-run of the same image keeps its ground control points
@@ -90,6 +92,7 @@ export async function runPrediction() {
     const err = toDepthWizardError(e);
     if (err.kind === 'cancelled') {
       useScene.getState().setRun({ status: 'idle', stage: null, event: null, error: null });
+      useScene.getState().set({ inputPreview: false });
       notifications.show({ title: 'Run cancelled', message: 'The previous result is still shown.', color: 'gray' });
     } else {
       useScene.getState().setRun({ status: 'error', error: err });

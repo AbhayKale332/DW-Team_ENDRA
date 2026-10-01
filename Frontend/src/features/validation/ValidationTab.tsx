@@ -252,7 +252,7 @@ export function ValidationTab() {
             />
           )}
           <Group gap="xs">
-            <Button size="xs" variant="default" onClick={() => useView.getState().set({ layer3d: layerIsError ? 'tint' : 'error', layer2d: layerIsError ? 'height' : 'error' })}>
+            <Button size="xs" variant="default" onClick={() => useView.getState().set({ layer3d: layerIsError ? 'optical' : 'error', layer2d: layerIsError ? 'height' : 'error' })}>
               {layerIsError ? 'Hide error layer' : 'Show error layer'}
             </Button>
             <Button size="xs" variant="default" leftSection={<IconFileReport size={14} />} onClick={() => void exportValidationReport()}>

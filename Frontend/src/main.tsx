@@ -19,7 +19,7 @@ const colorSchemeManager = localStorageColorSchemeManager({ key: 'dw.color-schem
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <MantineProvider theme={theme} defaultColorScheme="light" colorSchemeManager={colorSchemeManager}>
+    <MantineProvider theme={theme} defaultColorScheme="auto" colorSchemeManager={colorSchemeManager}>
       <ModalsProvider>
         <Notifications position="bottom-right" limit={4} containerWidth={360} />
         <App />

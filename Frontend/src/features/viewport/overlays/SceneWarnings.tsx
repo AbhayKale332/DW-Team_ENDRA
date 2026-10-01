@@ -1,12 +1,12 @@
 import { Alert } from '@mantine/core';
 import { IconAlertTriangle } from '@tabler/icons-react';
-import { useScene } from '@/store/scene';
+import { isPreviewing, useScene } from '@/store/scene';
 
 /** Prominent, dismissible correctness warnings (e.g. "check the declared GSD"). Info-level notes live in the Info tab. */
 export function SceneWarnings() {
   const scene = useScene((s) => s.scene);
   const dismissed = useScene((s) => s.dismissed);
-  const running = useScene((s) => s.run.status === 'running');
+  const running = useScene((s) => s.run.status === 'running' || isPreviewing(s));
   if (!scene || running) return null;
   const items = scene.warnings.filter((w) => w.level === 'warning' && !dismissed.includes(w.id));
   if (!items.length) return null;

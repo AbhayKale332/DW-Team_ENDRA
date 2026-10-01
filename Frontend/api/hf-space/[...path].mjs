@@ -1,11 +1,14 @@
 import { request as httpsRequest } from 'node:https';
 import { spaceUrlFromId } from '../../server/space.mjs';
 import { createRateLimiter, isAllowedSpaceRequest, pickForwardHeaders, MAX_UPLOAD_BYTES } from '../../server/guard.mjs';
+import { createTokenPool, isWatchedPath, parseTokens } from '../../server/tokens.mjs';
 
 const RUNS = Number(process.env.RATE_LIMIT_RUNS || 10);
 const WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MIN || 10) * 60_000;
 const runLimiter = createRateLimiter({ max: RUNS, windowMs: WINDOW_MS });
 const uploadLimiter = createRateLimiter({ max: RUNS * 2, windowMs: WINDOW_MS });
+// per warm instance: a cold start forgets which tokens were benched and retries them once
+const tokens = createTokenPool(parseTokens(process.env), { cooldownMs: Number(process.env.HF_TOKEN_COOLDOWN_MIN || 60) * 60_000 });
 
 function deny(res, status, message) {
   res.writeHead(status, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }).end(message);
@@ -22,7 +25,7 @@ export default function handler(req, res) {
     : Buffer.isBuffer(req.body)
       ? req.body
       : Buffer.from(typeof req.body === 'string' ? req.body : JSON.stringify(req.body));
-  const token = process.env.HF_TOKEN;
+  const token = tokens.pick(path);
   if (!token) return deny(res, 503, 'HF_TOKEN is not configured for this deployment.');
 
   if (req.method === 'POST') {
@@ -43,6 +46,7 @@ export default function handler(req, res) {
   const headers = pickForwardHeaders(req.headers);
   headers.host = space.host;
   headers.authorization = `Bearer ${token}`;
+  if (isWatchedPath(path)) delete headers['accept-encoding'];
   if (requestBody) {
     headers['content-length'] = String(requestBody.length);
     delete headers['transfer-encoding'];
@@ -58,7 +62,8 @@ export default function handler(req, res) {
       headers,
     },
     (response) => {
-      const responseHeaders = { ...response.headers };
+      tokens.observe(path, token, response);
+      const responseHeaders = { ...response.headers, 'x-dw-spare-tokens': String(tokens.spare(token)) };
       delete responseHeaders['set-cookie'];
       res.writeHead(response.statusCode || 502, responseHeaders);
       response.pipe(res);
