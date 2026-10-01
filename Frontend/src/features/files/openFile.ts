@@ -3,7 +3,8 @@ import { prepareInput } from '@/lib/input';
 import { useScene } from '@/store/scene';
 import { useUi } from '@/store/ui';
 import { DepthWizardError, toDepthWizardError } from '@/api/errors';
-import { downloadSample, sampleUrl, useSampleLoad, type SampleDef } from '@/lib/samples';
+import { downloadSample, sampleUrl, useSampleLoad, type SampleDef, type SampleLoad } from '@/lib/samples';
+import { hasProjectCore, projectStream } from '@/lib/dwproj';
 import { useTool } from '@/store/tool';
 import { useCamera } from '@/store/camera';
 import { useView } from '@/store/view';
@@ -71,12 +72,17 @@ export async function openFiles(files: File[]) {
   return stageImage(first);
 }
 
-/** Open a sample scene: its .dwproj, like any project. Progress shows in the viewport (SampleLoading). */
+/** Open a sample scene: its .dwproj, like any project, unzipped as it downloads. The scene (image, height map,
+ *  classes, objects) opens as soon as its files are in; the source image and model outputs follow in the background.
+ *  Progress shows in the viewport (SampleLoading). */
 export async function openSample(def: SampleDef) {
   useSampleLoad.getState().controller?.abort();
   const controller = new AbortController();
   const current = () => useSampleLoad.getState().controller === controller;
+  const stage = (stage: SampleLoad['stage']) => useSampleLoad.setState((s) => (s.load ? { load: { ...s.load, stage } } : s));
   useSampleLoad.setState({ controller, load: { name: def.name, stage: 'download', loaded: 0, total: 0 } });
+  // the scene opened early, which the background download completes (assigned in callbacks, hence the casts)
+  let sceneId = null as string | null;
   try {
     const url = sampleUrl(def);
     // Overpass answers cached at build time (scripts/cache-osm.mjs) sit beside the .dwproj
@@ -85,17 +91,43 @@ export async function openSample(def: SampleDef) {
       fetch(dir + name, { signal: controller.signal })
         .then((x) => (x.ok ? (x.json() as Promise<unknown>) : null))
         .catch(() => null);
-    const [blob, osm, pois] = await Promise.all([downloadSample(url, def.file, controller.signal), optionalJson('osm.json'), optionalJson('pois.json')]);
-    if (!current()) return;
-    useSampleLoad.setState((s) => ({ load: s.load && { ...s.load, stage: 'open' } }));
-    const { openProject } = await import('./project');
-    if (current() && (await openProject(blob, { sample: true }))) {
-      const id = useScene.getState().scene?.id;
+    const bundled = Promise.all([optionalJson('osm.json'), optionalJson('pois.json')]);
+    const project = await import('./project');
+    const open = async (files: Record<string, Uint8Array>) => {
+      stage('open');
+      if (!current() || !(await project.openSampleFiles(files))) return null;
+      const id = useScene.getState().scene?.id ?? null;
+      const [osm, pois] = await bundled;
       if (id && osm) registerBundledOsm(id, osm);
       if (id && pois) registerBundledPois(id, pois);
-    }
+      return id;
+    };
+
+    let early = null as Promise<string | null> | null;
+    const stream = projectStream(() => {
+      // projects with the manifest stored last cannot show early: they open when complete
+      if (!hasProjectCore(stream.files)) return;
+      early = open({ ...stream.files }).then((id) => {
+        sceneId = id;
+        if (current()) {
+          if (id) stage('extras');
+          else controller.abort(); // the error is shown; the rest would not help
+        }
+        return id;
+      });
+    });
+    await downloadSample(url, def.file, controller.signal, (chunk) => {
+      stream.push(chunk);
+      // another scene replaced the sample: the rest of it is not needed any more
+      if (sceneId && useScene.getState().scene?.id !== sceneId) controller.abort();
+    });
+    stream.push(new Uint8Array(0), true);
+    if (!current()) return;
+    if (!early) await open(stream.files);
+    else if ((await early) && current() && project.attachProjectExtras(sceneId!, stream.files))
+      notifications.show({ color: 'teal', title: 'Full scene downloaded', message: def.name, autoClose: 4000 });
   } catch (e) {
-    if (!controller.signal.aborted) reportError(e, 'Could not load sample');
+    if (!controller.signal.aborted) reportError(e, sceneId ? 'Could not download the full sample' : 'Could not load sample');
   } finally {
     if (current()) useSampleLoad.setState({ load: null, controller: null });
   }

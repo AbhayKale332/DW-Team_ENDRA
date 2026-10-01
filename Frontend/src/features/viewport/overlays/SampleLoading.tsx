@@ -1,4 +1,4 @@
-import { Button, Group, Progress, Stack, Text } from '@mantine/core';
+import { Button, CloseButton, Group, Loader, Progress, Stack, Text } from '@mantine/core';
 import { IconX } from '@tabler/icons-react';
 import { cancelSampleLoad, useSampleLoad } from '@/lib/samples';
 import classes from './overlays.module.css';
@@ -8,7 +8,7 @@ const mb = (bytes: number) => (bytes / 1024 / 1024).toFixed(1);
 /** Progress card while a sample scene downloads and opens. */
 export function SampleLoading() {
   const load = useSampleLoad((s) => s.load);
-  if (!load) return null;
+  if (!load || load.stage === 'extras') return null;
   const known = load.stage === 'download' && load.total > 0;
   const pct = known ? Math.min(100, (load.loaded / load.total) * 100) : 100;
   const label = load.stage === 'open' ? 'Opening scene' : 'Downloading';
@@ -38,6 +38,25 @@ export function SampleLoading() {
           )}
         </Stack>
       </div>
+    </div>
+  );
+}
+
+/** Slim status while the rest of an opened sample (source image, model outputs) downloads behind the scene. */
+export function SampleExtras() {
+  const load = useSampleLoad((s) => (s.load?.stage === 'extras' ? s.load : null));
+  if (!load) return null;
+  const pct = load.total > 0 ? Math.min(100, (load.loaded / load.total) * 100) : null;
+  return (
+    <div className="dw-float" style={{ alignSelf: 'center', padding: '4px 4px 4px 11px', fontSize: 11.5 }} role="status" aria-label={`Downloading the full sample ${load.name}`}>
+      <Group gap={8} wrap="nowrap">
+        <Loader size={12} />
+        <span>Downloading full scene</span>
+        <span className="dw-mono" style={{ color: 'var(--dw-dim)' }}>
+          {pct === null ? `${mb(load.loaded)} MB` : `${pct.toFixed(0)} %`}
+        </span>
+        <CloseButton size="sm" onClick={cancelSampleLoad} aria-label="Stop downloading the full scene" />
+      </Group>
     </div>
   );
 }

@@ -30,10 +30,11 @@ export function loadSamples(): Promise<SampleDef[]> {
   return pending;
 }
 
-/** A sample scene being opened: download progress (total 0 when the server sends no size), then unpacking. */
+/** A sample scene being opened: download progress (total 0 when the server sends no size), unpacking, then the
+ *  heavy extras still downloading behind the opened scene. */
 export interface SampleLoad {
   name: string;
-  stage: 'download' | 'open';
+  stage: 'download' | 'open' | 'extras';
   loaded: number;
   total: number;
 }
@@ -45,23 +46,21 @@ export function cancelSampleLoad() {
   useSampleLoad.setState({ load: null, controller: null });
 }
 
-/** Download a sample file, reporting bytes received to the loading card. */
-export async function downloadSample(url: string, name: string, signal: AbortSignal): Promise<Blob> {
+/** Download a sample file, handing each chunk to `onChunk` and reporting bytes received to the loading card. */
+export async function downloadSample(url: string, name: string, signal: AbortSignal, onChunk: (chunk: Uint8Array) => void): Promise<void> {
   const r = await fetch(url, { signal });
   if (!r.ok) throw new Error(`Could not load ${name} (HTTP ${r.status})`);
   // a compressed response reports its encoded length, so only trust the header when nothing re-encoded it
   const total = r.headers.get('content-encoding') ? 0 : Number(r.headers.get('content-length') ?? 0);
   const set = (loaded: number) => useSampleLoad.setState((s) => (s.load ? { load: { ...s.load, loaded, total } } : s));
-  if (!r.body) return r.blob();
+  if (!r.body) return onChunk(new Uint8Array(await r.arrayBuffer()));
   const reader = r.body.getReader();
-  const chunks: Uint8Array[] = [];
   let loaded = 0;
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
-    chunks.push(value);
+    onChunk(value);
     loaded += value.length;
     set(loaded);
   }
-  return new Blob(chunks as BlobPart[], { type: r.headers.get('content-type') ?? 'application/zip' });
 }

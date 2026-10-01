@@ -12,8 +12,9 @@
  *  source/<name>      the original input image, so the model can be run again (optional)
  *  outputs/<name>     the model's output files (optional)
  *
- *  Version 1 projects (no v2 fields and files) still open. */
-import { strFromU8, unzipSync } from 'fflate';
+ *  Writers store manifest.json first and source/ + outputs/ last, so a project read as it downloads (projectStream)
+ *  can be shown before its heavy extras arrive. Version 1 projects (no v2 fields and files) still open. */
+import { strFromU8, Unzip, UnzipInflate, unzipSync } from 'fflate';
 import type { AnchoringInfo, CameraBookmark, ClassMap, Georef, GroundControlPoint, HeightGrid, Provenance, ReferenceSurface, SceneMeta, SceneObjects } from '@/domain/types';
 import { parseNpy } from './npy';
 import { parseObjects } from './objects';
@@ -71,8 +72,10 @@ export const json = <T>(u: Uint8Array | undefined): T | null => {
 };
 
 /** Unzip a project and decode the parts every consumer needs. Throws when it is not a project. */
-export function readProject(bytes: Uint8Array): ProjectCore {
-  const files = unzipSync(bytes);
+export const readProject = (bytes: Uint8Array): ProjectCore => readProjectFiles(unzipSync(bytes));
+
+/** Decode the parts every consumer needs from a project's unzipped files. Throws when it is not a project. */
+export function readProjectFiles(files: Record<string, Uint8Array>): ProjectCore {
   const manifest = json<Manifest>(files['manifest.json']);
   if (!manifest || manifest.format !== 'dwproj') throw new Error('Not a DepthWizard project');
   if (!files['ndsm_m.npy'] || !files[manifest.imageName]) throw new Error('The project is incomplete (no height map or image).');
@@ -96,6 +99,48 @@ export function readProject(bytes: Uint8Array): ProjectCore {
     }
   }
   return { manifest, files, image, heights: { data: arr.data, width: w, height: h }, classes, objects };
+}
+
+/** The heavy, optional part of a project: not needed to show the scene. */
+export const isProjectExtra = (name: string) => name.startsWith('source/') || name.startsWith('outputs/');
+
+/** Whether `files` already hold what showing the scene needs: the manifest, its image and the height map. */
+export function hasProjectCore(files: Record<string, Uint8Array>) {
+  const m = json<Manifest>(files['manifest.json']);
+  return m?.format === 'dwproj' && !!files[m.imageName] && !!files['ndsm_m.npy'];
+}
+
+const concat = (parts: Uint8Array[]) => {
+  if (parts.length === 1) return parts[0];
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  let at = 0;
+  for (const p of parts) {
+    out.set(p, at);
+    at += p.length;
+  }
+  return out;
+};
+
+/** Unzip a project as its bytes arrive. `onExtras` fires once, when the first source/ or outputs/ entry starts:
+ *  every file stored before it is complete in `files` by then. Throws from `push` on a broken archive. */
+export function projectStream(onExtras: () => void) {
+  const files: Record<string, Uint8Array> = {};
+  let extras = false;
+  const unzip = new Unzip((f) => {
+    if (!extras && isProjectExtra(f.name)) {
+      extras = true;
+      onExtras();
+    }
+    const parts: Uint8Array[] = [];
+    f.ondata = (err, chunk, final) => {
+      if (err) throw err;
+      parts.push(chunk);
+      if (final) files[f.name] = concat(parts);
+    };
+    f.start();
+  });
+  unzip.register(UnzipInflate);
+  return { files, push: (chunk: Uint8Array, final = false) => unzip.push(chunk, final) };
 }
 
 const TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', tif: 'image/tiff', tiff: 'image/tiff', json: 'application/json', glb: 'model/gltf-binary' };

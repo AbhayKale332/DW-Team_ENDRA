@@ -59,8 +59,8 @@ const manifest = {
   source,
   outputs: [],
 };
-files['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2));
 const out = join(dir, `${name}.dwproj`);
-writeFileSync(out, zipSync(files, { level: 6 }));
+// manifest first and source/ last: the app shows the scene while the source image is still downloading
+writeFileSync(out, zipSync({ 'manifest.json': strToU8(JSON.stringify(manifest, null, 2)), ...files }, { level: 6 }));
 console.log(`${out}  (${Object.keys(files).join(', ')})`);
 if (clean) for (const f of used) rmSync(join(dir, f));

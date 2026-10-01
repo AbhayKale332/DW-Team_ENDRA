@@ -1,7 +1,7 @@
 import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from 'fflate';
 import { notifications } from '@mantine/notifications';
 import type { Artefact, SceneMeta } from '@/domain/types';
-import { buf, json, mimeOf, readProject, type Manifest } from '@/lib/dwproj';
+import { buf, json, mimeOf, readProject, readProjectFiles, type Manifest, type ProjectCore } from '@/lib/dwproj';
 import type { DemCellsCache } from '@/lib/dem';
 import { parseNpy, writeNpyF32 } from '@/lib/npy';
 import { serializeObjects } from '@/lib/objects';
@@ -151,8 +151,8 @@ export async function buildProjectBlob({ fetchOutputs = true }: { fetchOutputs?:
     dismissed: st.dismissed,
     gcps: scene.gcps?.length ? scene.gcps : null,
   };
-  files['manifest.json'] = strToU8(JSON.stringify(manifest, null, 2));
-  const zip = zipSync(files, { level: 6 });
+  // manifest first (source/ and outputs/ are already last): a sample streamed in file order shows before the extras arrive
+  const zip = zipSync({ 'manifest.json': strToU8(JSON.stringify(manifest, null, 2)), ...files }, { level: 6 });
   return { blob: new Blob([zip as BlobPart], { type: 'application/zip' }), name: `${safeStem(scene.name)}.dwproj` };
 }
 
@@ -185,15 +185,31 @@ export async function rememberRecent(blob?: Blob) {
 const isPoint = (p: unknown): p is GridPoint => !!p && typeof (p as GridPoint).col === 'number' && typeof (p as GridPoint).row === 'number';
 const points = (v: unknown): GridPoint[] => (Array.isArray(v) ? v.filter(isPoint) : []);
 
-/** Make a project the current workspace. `sample` marks a bundled sample scene. */
-async function adoptProject(bytes: Uint8Array, opts: { sample?: boolean } = {}) {
-  const { manifest, files, image, heights, classes, objects } = readProject(bytes);
-  const outputs: Artefact[] = (manifest.outputs ?? [])
+type Files = Record<string, Uint8Array>;
+
+/** The model output files present in `files`. */
+const projectOutputs = (manifest: Manifest, files: Files): Artefact[] =>
+  (manifest.outputs ?? [])
     .filter((o) => files[o.file])
     .map((o) => {
       const blob = new Blob([files[o.file] as BlobPart], { type: mimeOf(o.name) });
       return { name: o.name, blob, size: blob.size };
     });
+
+/** The original image, staged again so the model can be re-run from this project. */
+function restageSource(manifest: Manifest, files: Files) {
+  const src = manifest.source && files[manifest.source.file];
+  if (!manifest.source || !src) return false;
+  const file = new File([src as BlobPart], manifest.source.name, { type: mimeOf(manifest.source.name) });
+  void prepareInput(file)
+    .then((input) => useScene.getState().setInput(input))
+    .catch((e) => console.warn('Project source image unreadable', e));
+  return true;
+}
+
+/** Make a project the current workspace. `sample` marks a bundled sample scene. */
+async function adoptProject({ manifest, files, image, heights, classes, objects }: ProjectCore, opts: { sample?: boolean } = {}) {
+  const outputs = projectOutputs(manifest, files);
   let scene = await buildScene({
     name: manifest.name,
     image,
@@ -263,27 +279,41 @@ async function adoptProject(bytes: Uint8Array, opts: { sample?: boolean } = {}) 
   restoreUseCases(scene.id, pickUseCases(manifest.usecases));
   useUi.getState().set({ projectOpen: false });
 
-  // The original image, staged again so the model can be re-run from this project.
-  const src = manifest.source && files[manifest.source.file];
-  if (manifest.source && src) {
-    const file = new File([src as BlobPart], manifest.source.name, { type: mimeOf(manifest.source.name) });
-    void prepareInput(file)
-      .then((input) => useScene.getState().setInput(input))
-      .catch((e) => console.warn('Project source image unreadable', e));
-  } else {
-    useScene.getState().setInput(null);
-  }
+  if (!restageSource(manifest, files)) useScene.getState().setInput(null);
 }
 
 export async function openProject(file: Blob & { name?: string }, opts: { sample?: boolean } = {}) {
   try {
-    await adoptProject(new Uint8Array(await file.arrayBuffer()), opts);
+    await adoptProject(readProject(new Uint8Array(await file.arrayBuffer())), opts);
     if (!opts.sample) notifications.show({ title: 'Project opened', message: file.name ?? 'Project', color: 'teal' });
     return true;
   } catch (e) {
     reportError(e, opts.sample ? 'Could not load sample' : 'Could not open project');
     return false;
   }
+}
+
+/** Open a sample scene from its unzipped files: all of them, or only the scene part while the rest downloads. */
+export async function openSampleFiles(files: Files) {
+  try {
+    await adoptProject(readProjectFiles(files), { sample: true });
+    return true;
+  } catch (e) {
+    reportError(e, 'Could not load sample');
+    return false;
+  }
+}
+
+/** Add the source/ and outputs/ files that arrived after the scene was opened, if it is still the current one. */
+export function attachProjectExtras(sceneId: string, files: Files) {
+  const manifest = json<Manifest>(files['manifest.json']);
+  const scene = useScene.getState().scene;
+  if (!manifest || scene?.id !== sceneId) return false;
+  // in place: a new scene object would rebuild the mesh, and the list is only read on export and save
+  const have = new Set(scene.artefacts.map((a) => a.name));
+  scene.artefacts.push(...projectOutputs(manifest, files).filter((a) => !have.has(a.name)));
+  restageSource(manifest, files);
+  return true;
 }
 
 export async function openRecent(id: string) {

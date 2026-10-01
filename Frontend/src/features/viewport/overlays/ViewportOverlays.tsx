@@ -15,7 +15,7 @@ import { HoverCard } from './HoverCard';
 import { OsmLegend } from '@/features/osm/OsmLegend';
 import { SurroundingsLegend } from '@/features/basemap/SurroundingsLegend';
 import { EmptyState } from './EmptyState';
-import { SampleLoading } from './SampleLoading';
+import { SampleExtras, SampleLoading } from './SampleLoading';
 import { SceneWarnings } from './SceneWarnings';
 import { KeyHints, ModeBar, NavigationHud } from './NavigationHud';
 import classes from './overlays.module.css';
@@ -45,6 +45,7 @@ export function ViewportOverlays() {
       </div>
       <div className={classes.topCenter}>
         {!orbit && <ModeBar />}
+        <SampleExtras />
         <SceneWarnings />
       </div>
       <div className={classes.topRight}>

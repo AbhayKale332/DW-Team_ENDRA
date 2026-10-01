@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
+import { unzipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import type { Georef } from '@/domain/types';
 import { listSamples } from '../../server/samples.mjs';
-import { readProject } from './dwproj';
+import { hasProjectCore, isProjectExtra, projectStream, readProject } from './dwproj';
 import { proj4ForEpsg } from './georef';
 import { canGeolocate, CONTEXT_MARGIN, contextBBox, MAX_BBOX_DEG2, sceneBBox } from './osm';
 
@@ -24,6 +25,21 @@ describe('bundled sample scenes', () => {
       expect((north - south) * (east - west)).toBeLessThan(MAX_BBOX_DEG2);
       // the full surroundings window (basemap + facilities) fits the public Overpass limit too
       expect(contextBBox(georef, W, H)?.margin).toBe(CONTEXT_MARGIN);
+    });
+
+    it(`${s.id}: streamed, the scene is complete before the source image and outputs arrive`, () => {
+      const bytes = new Uint8Array(readFileSync(`public/samples/${s.file}`));
+      let early: string[] | null = null;
+      const stream = projectStream(() => {
+        expect(hasProjectCore(stream.files)).toBe(true);
+        early = Object.keys(stream.files);
+      });
+      for (let at = 0; at < bytes.length; at += 64 * 1024) stream.push(bytes.subarray(at, at + 64 * 1024));
+      stream.push(new Uint8Array(0), true);
+      const all = unzipSync(bytes);
+      if (Object.keys(all).some(isProjectExtra)) expect(early).toEqual(Object.keys(all).filter((n) => !isProjectExtra(n)));
+      expect(Object.keys(stream.files).sort()).toEqual(Object.keys(all).sort());
+      for (const [n, v] of Object.entries(all)) expect(stream.files[n].length, n).toBe(v.length);
     });
   }
 });
