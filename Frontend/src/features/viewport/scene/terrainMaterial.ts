@@ -50,6 +50,19 @@ export function createClassTexture(data: Uint8Array, width: number, height: numb
   return tex;
 }
 
+/** Soft cloud mask (0..255) as a linearly filtered R8 texture over the whole scene. */
+export function createCloudTexture(data: Uint8Array, width: number, height: number): THREE.DataTexture {
+  const tex = new THREE.DataTexture(data, width, height, THREE.RedFormat, THREE.UnsignedByteType);
+  tex.unpackAlignment = 1;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearFilter;
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.flipY = false;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 /** 256×1 RGBA palette indexed by class id. */
 export function createClassPalette(rgba: Uint8Array): THREE.DataTexture {
   const tex = new THREE.DataTexture(rgba, 256, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
@@ -70,6 +83,11 @@ export interface TerrainUniforms {
   uClass: THREE.IUniform<THREE.Texture | null>;
   uClassLut: THREE.IUniform<THREE.Texture | null>;
   uHasClass: THREE.IUniform<number>;
+  /** Masked clouds (soft alpha) and whether to hatch them; see createCloudTexture. */
+  uCloud: THREE.IUniform<THREE.Texture | null>;
+  uHasCloud: THREE.IUniform<number>;
+  /** Hatch period, in height-grid cells. */
+  uCloudPeriod: THREE.IUniform<number>;
   uLayer: THREE.IUniform<number>;
   uRange: THREE.IUniform<THREE.Vector2>;
   uCmapRow: THREE.IUniform<number>;
@@ -119,6 +137,9 @@ export function createUniforms(): TerrainUniforms {
     uClass: { value: null },
     uClassLut: { value: null },
     uHasClass: { value: 0 },
+    uCloud: { value: null },
+    uHasCloud: { value: 0 },
+    uCloudPeriod: { value: 16 },
     uLayer: { value: 0 },
     uRange: { value: new THREE.Vector2(0, 1) },
     uCmapRow: { value: 1 },
@@ -167,6 +188,9 @@ const fragmentShader = /* glsl */ `
   uniform sampler2D uClass;
   uniform sampler2D uClassLut;
   uniform float uHasClass;
+  uniform sampler2D uCloud;
+  uniform float uHasCloud;
+  uniform float uCloudPeriod;
   uniform int uLayer;
   uniform vec2 uRange;
   uniform float uCmapRow;
@@ -294,6 +318,26 @@ const fragmentShader = /* glsl */ `
     return color;
   }
 
+  // Masked clouds: the area is filled, not measured. Slightly washed out, a faint diagonal hatch and a dashed edge.
+  vec3 markClouds(vec3 color, vec2 g) {
+    if (uHasCloud < 0.5) return color;
+    float m = texture2D(uCloud, g).r;
+    float inside = smoothstep(0.42, 0.58, m);
+    vec2 cell = g / uTexel;
+    float f = (cell.x + cell.y) / uCloudPeriod;
+    float fw = max(fwidth(f), 1e-4);
+    float stripe = smoothstep(0.36 - fw, 0.36 + fw, abs(fract(f) - 0.5));
+    // hatch only once the stripes are wider than a couple of screen pixels (no moire when zoomed far out)
+    stripe *= 1.0 - smoothstep(0.08, 0.2, fw);
+    float lum = dot(color, vec3(0.299, 0.587, 0.114));
+    color = mix(color, vec3(lum) * 0.92 + 0.06, 0.35 * inside);
+    color = mix(color, vec3(0.94, 0.97, 1.0), 0.22 * stripe * inside);
+    float fm = max(fwidth(m), 1e-4);
+    float edge = 1.0 - smoothstep(fm * 0.8, fm * 2.2, abs(m - 0.5));
+    float dash = step(0.5, fract((cell.x - cell.y) / (uCloudPeriod * 0.75)));
+    return mix(color, vec3(0.96, 0.98, 1.0), 0.85 * edge * dash);
+  }
+
   void main() {
     int layer = uLayer;
     if (uCompare > 0.5 && uHasRef > 0.5 && gl_FragCoord.x > uSwipe * uViewport.x) {
@@ -306,6 +350,7 @@ const fragmentShader = /* glsl */ `
       float line = 1.0 - clamp(d - 0.5, 0.0, 1.0);
       color = mix(color, vec3(0.08, 0.09, 0.11), line * 0.7);
     }
+    color = markClouds(color, vGrid);
     color = applyOverlay(color, vGrid);
     csm_DiffuseColor = vec4(color * vShade, 1.0);
   }

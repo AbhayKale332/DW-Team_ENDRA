@@ -1,6 +1,7 @@
-import type { Artefact, ClassMap, Georef, GsdSource, HeightGrid, Product, Provenance, Scene, SceneMeta, SceneObjects, SceneWarning } from '@/domain/types';
+import type { Artefact, ClassMap, Georef, GridPoint, GsdSource, HeightGrid, Product, Provenance, Scene, SceneCloud, SceneMeta, SceneObjects, SceneWarning } from '@/domain/types';
 import { computeStats } from './heights';
 import { proj4ForEpsg, rescaleTransform } from './georef';
+import { resampleMask } from './cloud';
 
 export interface BuildSceneArgs {
   name: string;
@@ -10,6 +11,8 @@ export interface BuildSceneArgs {
   classes?: ClassMap | null;
   /** 3D objects on the height grid; dropped if the grid does not match. */
   objects?: SceneObjects | null;
+  /** Clouds masked out of the input; `heights` must already be filled under them. */
+  cloud?: SceneCloud | null;
   meta: SceneMeta;
   gsd?: number | null;
   gsdSource?: GsdSource;
@@ -23,6 +26,27 @@ export interface BuildSceneArgs {
   provenance: Provenance;
 }
 
+/** Objects whose position falls under the cloud are the model reading the fill colour: drop them. */
+function objectsOutsideCloud(objects: SceneObjects, under: Uint8Array): SceneObjects {
+  const { width, height } = objects;
+  const at = (x: number, y: number) => under[Math.min(height - 1, Math.max(0, Math.floor(y))) * width + Math.min(width - 1, Math.max(0, Math.floor(x)))] >= 128;
+  const centre = (poly: GridPoint[]) => {
+    let x = 0;
+    let y = 0;
+    for (const [px, py] of poly) {
+      x += px;
+      y += py;
+    }
+    return poly.length ? at(x / poly.length, y / poly.length) : false;
+  };
+  return {
+    ...objects,
+    trees: objects.trees.filter((t) => !at(t.x, t.y)),
+    buildings: objects.buildings.filter((b) => !centre(b.poly)),
+    water: objects.water.filter((w) => !centre(w.poly)),
+  };
+}
+
 async function imageSize(blob: Blob) {
   const bmp = await createImageBitmap(blob);
   const s = { width: bmp.width, height: bmp.height };
@@ -32,7 +56,15 @@ async function imageSize(blob: Blob) {
 
 export async function buildScene(a: BuildSceneArgs): Promise<Scene> {
   const { heights, meta } = a;
-  const stats = computeStats(heights.data);
+  const cloud = a.cloud ?? null;
+  // the fill under the cloud is invented: keep it out of the statistics
+  const under = cloud ? resampleMask(cloud.mask, cloud.width, cloud.height, heights.width, heights.height) : null;
+  let statsData = heights.data;
+  if (under) {
+    statsData = heights.data.slice();
+    for (let i = 0; i < under.length; i++) if (under[i] >= 128) statsData[i] = NaN;
+  }
+  const stats = computeStats(statsData);
   const size = a.inputSize ?? (await imageSize(a.image));
 
   // The Space omits the affine (it may resample); restore it from the input GeoTIFF, scaled to the grid.
@@ -64,6 +96,13 @@ export async function buildScene(a: BuildSceneArgs): Promise<Scene> {
         `Only ${(stats.fracBelow1m * 100).toFixed(1)} % of the scene is below 1 m. The model may be reading texture as terrain — double-check the resolution (m/pixel).`,
     });
   }
+  if (cloud)
+    warnings.push({
+      id: 'clouds-masked',
+      level: 'info',
+      title: 'Clouds masked',
+      message: `Clouds covered ${(cloud.coverage * 100).toFixed(1)} % of the image. The model saw those areas filled with the surrounding colours, and their heights were filled from the surrounding ground — they are hatched in the view and are not measurements.`,
+    });
   if (a.resampleNote) warnings.push({ id: 'resampled', level: 'info', title: 'Scene resampled', message: a.resampleNote });
   if (gsdSource === 'assumed')
     warnings.push({
@@ -82,7 +121,11 @@ export async function buildScene(a: BuildSceneArgs): Promise<Scene> {
     heights,
     classes: a.classes && a.classes.width === heights.width && a.classes.height === heights.height ? a.classes : null,
     // Positions are grid pixels; metres come from the scene's effective GSD, so carry that one.
-    objects: a.objects && a.objects.width === heights.width && a.objects.height === heights.height ? { ...a.objects, gsd } : null,
+    objects:
+      a.objects && a.objects.width === heights.width && a.objects.height === heights.height
+        ? { ...(under ? objectsOutsideCloud(a.objects, under) : a.objects), gsd }
+        : null,
+    cloud,
     gsd,
     gsdSource,
     product,

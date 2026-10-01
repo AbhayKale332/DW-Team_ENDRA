@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { ReferenceSurface, Scene, ValidationResult } from '@/domain/types';
 import type { PreparedInput } from '@/lib/input';
+import type { CloudMask } from '@/lib/cloud';
 import type { ProgressEvent, ProgressStage } from '@/api/provider';
 import type { DepthWizardError } from '@/api/errors';
 
@@ -20,10 +21,20 @@ export interface RunParams {
   gsdMode: GsdMode;
   gsd: number;
   tta: boolean;
+  /** Mask detected clouds out of the model input and fill them from the surrounding ground. */
+  cloudMask: boolean;
+}
+
+/** Cloud detection for the staged input: `null` mask = none found (or not looked yet, see `status`). */
+export interface InputCloud {
+  status: 'detecting' | 'done' | 'error';
+  mask: CloudMask | null;
 }
 
 interface SceneState {
   input: PreparedInput | null;
+  /** Clouds found in `input`; reset whenever the input changes. */
+  inputCloud: InputCloud | null;
   params: RunParams;
   scene: Scene | null;
   /** Object URL for scene.image, owned by the store. */
@@ -46,7 +57,7 @@ interface SceneState {
   setReference: (ref: ReferenceSurface | null) => void;
   setValidation: (v: ValidationResult | null) => void;
   setRun: (p: Partial<RunState>) => void;
-  set: (p: Partial<Pick<SceneState, 'removeOffset' | 'meshBuilding' | 'dirty' | 'inputPreview'>>) => void;
+  set: (p: Partial<Pick<SceneState, 'removeOffset' | 'meshBuilding' | 'dirty' | 'inputPreview' | 'inputCloud'>>) => void;
   dismiss: (id: string) => void;
   clearAll: () => void;
 }
@@ -55,7 +66,8 @@ const idleRun: RunState = { status: 'idle', stage: null, event: null, error: nul
 
 export const useScene = create<SceneState>()((set, get) => ({
   input: null,
-  params: { gsdMode: 'auto', gsd: 0.5, tta: false },
+  inputCloud: null,
+  params: { gsdMode: 'auto', gsd: 0.5, tta: false, cloudMask: true },
   scene: null,
   imageUrl: null,
   reference: null,
@@ -69,7 +81,7 @@ export const useScene = create<SceneState>()((set, get) => ({
   setInput: (input) => {
     const prev = get().input;
     if (prev && prev !== input) URL.revokeObjectURL(prev.previewUrl);
-    set({ input, inputPreview: false });
+    set({ input, inputPreview: false, ...(prev !== input ? { inputCloud: null } : {}) });
   },
   setParams: (p) => set({ params: { ...get().params, ...p } }),
   setScene: (scene) => {
@@ -95,7 +107,7 @@ export const useScene = create<SceneState>()((set, get) => ({
     const { imageUrl, input } = get();
     if (imageUrl) URL.revokeObjectURL(imageUrl);
     if (input) URL.revokeObjectURL(input.previewUrl);
-    set({ input: null, scene: null, imageUrl: null, reference: null, validation: null, run: idleRun, dirty: false, inputPreview: false, dismissed: [] });
+    set({ input: null, inputCloud: null, scene: null, imageUrl: null, reference: null, validation: null, run: idleRun, dirty: false, inputPreview: false, dismissed: [] });
   },
 }));
 

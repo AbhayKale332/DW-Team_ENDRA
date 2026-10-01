@@ -94,6 +94,24 @@ function SurroundingsSection() {
   );
 }
 
+/** Clouds masked out of the model input: how their filled areas are shown. */
+function CloudSection() {
+  const coverage = useScene((s) => s.scene?.cloud?.coverage);
+  const hatch = useView((s) => s.cloudHatch);
+  const original = useView((s) => s.cloudOriginal);
+  const set = useView((s) => s.set);
+  if (coverage === undefined) return null;
+  return (
+    <Section title="Clouds">
+      <Text size="xs" c="dimmed">
+        {(coverage * 100).toFixed(1)} % of the image was cloud. Heights there are filled from the surrounding ground, not measured.
+      </Text>
+      <Switch label="Mark filled cloud areas" checked={hatch} onChange={(e) => set({ cloudHatch: e.currentTarget.checked })} />
+      <Switch label="Show original image under clouds" checked={original} onChange={(e) => set({ cloudOriginal: e.currentTarget.checked })} />
+    </Section>
+  );
+}
+
 /** Visual layer stack: drape, colormap, range, relief, lighting and mesh options. */
 export function LayersTab() {
   const scene = useScene((s) => s.scene);
@@ -274,6 +292,7 @@ export function LayersTab() {
           </Field>
         </Section>
       )}
+      {scene?.cloud && <CloudSection />}
       {scene && <SurroundingsSection />}
     </Stack>
   );

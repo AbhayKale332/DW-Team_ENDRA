@@ -50,6 +50,7 @@ export async function stageImage(file: File) {
     // GeoTIFFs default to their own resolution; plain images keep the mode the user last chose.
     if (input.fileGsd) useScene.getState().setParams({ gsdMode: 'auto' });
     useUi.getState().set({ projectOpen: true });
+    void import('@/features/input/cloudPrompt').then((m) => m.detectInputClouds(input, { ask: true }));
   } catch (e) {
     notifications.clean();
     reportError(e, e instanceof DepthWizardError ? e.message : 'Could not open image');

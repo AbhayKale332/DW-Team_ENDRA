@@ -4,6 +4,7 @@
  *  input.png|jpg      the drape image
  *  ndsm_m.npy         height above ground, Float32 metres
  *  seg.png            object classes (optional)
+ *  cloud_mask.png     clouds masked out of the model input, soft alpha (optional; heights already filled)
  *  objects.json       3D objects, the Space's schema (optional)
  *  reference_m.npy    validation reference on the same grid (optional)
  *  dem_cells.json     DEM cells the scene was anchored with, so it re-anchors without a network (optional)
@@ -44,12 +45,14 @@ export interface Manifest {
   source?: { name: string; file: string } | null;
   /** Model output files, stored under `outputs/` (or pointing at a top-level file with the same content). */
   outputs?: Array<{ name: string; file: string }>;
-  params?: { gsdMode: 'auto' | 'preset' | 'custom'; gsd: number; tta: boolean };
+  params?: { gsdMode: 'auto' | 'preset' | 'custom'; gsd: number; tta: boolean; cloudMask?: boolean };
   usecases?: Record<string, unknown>;
   removeOffset?: boolean;
   dismissed?: string[];
   /** Ground control points applied to a scene without its own georeferencing. */
   gcps?: GroundControlPoint[] | null;
+  /** Present when the project carries `cloud_mask.png`. */
+  cloud?: { coverage: number } | null;
 }
 
 export interface ProjectCore {

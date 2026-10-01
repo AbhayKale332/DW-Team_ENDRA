@@ -142,7 +142,7 @@ export interface Provenance {
   provider: string;
   source: 'inference' | 'sample' | 'bundle' | 'project';
   createdAt: string;
-  params?: { gsd: number | null; tta: boolean };
+  params?: { gsd: number | null; tta: boolean; cloudMask?: boolean };
   modelVersion?: string;
 }
 
@@ -186,6 +186,18 @@ export interface GroundControlPoint {
   elev: number | null;
 }
 
+/** Clouds masked out of a scene: the model saw the cloud-free image, the heights under them are filled. */
+export interface SceneCloud {
+  /** Soft alpha (0 clear .. 255 cloud, >= 128 the cloud proper) on its own grid, same extent as the image. */
+  mask: Uint8Array;
+  width: number;
+  height: number;
+  /** Share of the image under cloud. */
+  coverage: number;
+  /** The image with the clouds painted over (the drape, unless the original is asked for). */
+  image: Blob;
+}
+
 export interface Scene {
   id: string;
   name: string;
@@ -206,6 +218,8 @@ export interface Scene {
   classes?: ClassMap | null;
   /** Trees, buildings and water as 3D objects; absent for older backends, samples and imported bundles. */
   objects?: SceneObjects | null;
+  /** Clouds masked out of the model input, when there were any and masking was on. */
+  cloud?: SceneCloud | null;
   gsd: number;
   gsdSource: GsdSource;
   product: Product;

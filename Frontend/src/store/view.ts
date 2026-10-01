@@ -66,6 +66,10 @@ interface ViewState {
   swipe: number;
   /** Raw model output: 3D objects and post-processing are off (the previous object selection is restored on exit). */
   raw: boolean;
+  /** Masked clouds: hatch and outline the filled areas. */
+  cloudHatch: boolean;
+  /** Masked clouds: drape the original (cloudy) image instead of the cloud-free one. */
+  cloudOriginal: boolean;
   set: (p: Partial<Omit<ViewState, 'set' | 'reset'>>) => void;
   reset: () => void;
 }
@@ -100,6 +104,8 @@ const defaults = {
   compareSwipe: false,
   swipe: 0.5,
   raw: false,
+  cloudHatch: true,
+  cloudOriginal: false,
 };
 
 export const useView = create<ViewState>()((set) => ({

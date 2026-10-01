@@ -7,7 +7,7 @@ import { useSettings, type Quality } from '@/store/settings';
 import { terrainWorker } from '@/workers/clients';
 import type { TerrainGeometryData } from '@/workers/terrainMesh';
 import { markRunDone } from '@/features/processing/runPrediction';
-import { LUT_ROWS, LAYER_INDEX, createClassPalette, createClassTexture, createHeightTexture, createLutAtlas, createTerrainMaterial, createUniforms, sunDirection } from './terrainMaterial';
+import { LUT_ROWS, LAYER_INDEX, createClassPalette, createClassTexture, createCloudTexture, createHeightTexture, createLutAtlas, createTerrainMaterial, createUniforms, sunDirection } from './terrainMaterial';
 import { classPaletteRGBA } from '@/theme/classes';
 import { loadObjectSurface } from '../objectSurfaceClient';
 import { loadImageTexture } from './imageTexture';
@@ -41,6 +41,8 @@ export function Terrain() {
   const objectsKey = useView((s) => objectKindsKey(activeObjectKinds(s.objectKinds, scene?.objects)));
   const mode = useView((s) => s.mode);
   const wireframe = useView((s) => s.wireframe);
+  // masked clouds: drape the original (cloudy) image instead of the cloud-free one
+  const cloudDrape = useView((s) => s.cloudOriginal);
   const shadows = useView((s) => s.shadows);
   // with the surroundings on, the ground continues past the edge: no diorama skirt
   const basemap = useBasemapShown();
@@ -65,7 +67,7 @@ export function Terrain() {
     return () => t.dispose();
   }, [uniforms]);
 
-  // Height + optical textures per scene.
+  // Height texture per scene.
   useEffect(() => {
     if (!scene) return;
     const base = sceneBase(scene);
@@ -74,22 +76,51 @@ export function Terrain() {
     uniforms.uBase.value = base;
     uniforms.uGsd.value = scene.gsd;
     uniforms.uTexel.value.set(1 / scene.heights.width, 1 / scene.heights.height);
+    invalidate();
+    return () => {
+      hTex.dispose();
+    };
+  }, [scene, uniforms, invalidate]);
+
+  // Optical drape per scene (the cloud-free image when clouds were masked, unless the original is asked for).
+  useEffect(() => {
+    if (!scene) return;
+    const image = scene.cloud && !cloudDrape ? scene.cloud.image : scene.image;
     let rgb: THREE.Texture | null = null;
     let cancelled = false;
-    loadImageTexture(scene.image, Math.min(gl.capabilities.maxTextureSize, 8192), gl.capabilities.getMaxAnisotropy()).then((t) => {
+    loadImageTexture(image, Math.min(gl.capabilities.maxTextureSize, 8192), gl.capabilities.getMaxAnisotropy()).then((t) => {
       if (cancelled) return t.dispose();
       rgb = t;
       uniforms.uRgb.value = t;
       invalidate();
     });
-    invalidate();
     return () => {
       cancelled = true;
-      hTex.dispose();
       rgb?.dispose();
       uniforms.uRgb.value = null;
     };
-  }, [scene, uniforms, gl, invalidate]);
+  }, [scene, cloudDrape, uniforms, gl, invalidate]);
+
+  // Masked-cloud texture: hatched and outlined by the shader.
+  useEffect(() => {
+    const cloud = scene?.cloud;
+    if (!scene || !cloud) {
+      uniforms.uCloud.value = null;
+      uniforms.uHasCloud.value = 0;
+      invalidate();
+      return;
+    }
+    const t = createCloudTexture(cloud.mask, cloud.width, cloud.height);
+    uniforms.uCloud.value = t;
+    uniforms.uCloudPeriod.value = Math.max(6, Math.max(scene.heights.width, scene.heights.height) / 90);
+    uniforms.uHasCloud.value = useView.getState().cloudHatch ? 1 : 0;
+    invalidate();
+    return () => {
+      t.dispose();
+      uniforms.uCloud.value = null;
+      uniforms.uHasCloud.value = 0;
+    };
+  }, [scene, uniforms, invalidate]);
 
   // Height above ground for the tint layer of an absolute DSM.
   useEffect(() => {
@@ -223,6 +254,7 @@ export function Terrain() {
       uniforms.uContour.value = v.contours ? v.contourInterval : 0;
       uniforms.uCompare.value = v.compareSwipe ? 1 : 0;
       uniforms.uSwipe.value = v.swipe;
+      uniforms.uHasCloud.value = sc?.cloud && uniforms.uCloud.value && v.cloudHatch ? 1 : 0;
       sunDirection(v.sunAzimuth, v.sunElevation, uniforms.uSunDir.value);
       if (sc) {
         const base = sceneBase(sc);

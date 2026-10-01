@@ -60,7 +60,7 @@ export async function exportGlb(scene: Scene, o: MeshExportOptions): Promise<Blo
   const [{ GLTFExporter }, geometry, canvas] = await Promise.all([
     import('three/addons/exporters/GLTFExporter.js'),
     buildGeometry(scene, o, surface ?? scene.heights.data),
-    imageCanvas(scene.image),
+    imageCanvas(scene.cloud?.image ?? scene.image),
   ]);
   const tex = new THREE.CanvasTexture(canvas);
   tex.flipY = false; // UVs follow glTF convention (v = 0 at the image top)
@@ -129,7 +129,7 @@ function header(scene: Scene, o: MeshExportOptions) {
 
 /** OBJ + MTL + texture in a zip. */
 export async function exportObjZip(scene: Scene, o: MeshExportOptions): Promise<Blob> {
-  const [geometry, canvas] = await Promise.all([buildGeometry(scene, { ...o, exaggeration: 1 }), imageCanvas(scene.image)]);
+  const [geometry, canvas] = await Promise.all([buildGeometry(scene, { ...o, exaggeration: 1 }), imageCanvas(scene.cloud?.image ?? scene.image)]);
   const pos = toZUp(geometry, scene.stats.min, 1);
   const uv = geometry.getAttribute('uv') as THREE.BufferAttribute;
   const nrm = geometry.getAttribute('normal') as THREE.BufferAttribute;

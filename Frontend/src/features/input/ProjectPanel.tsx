@@ -1,4 +1,5 @@
-import { ActionIcon, Badge, Button, Divider, Group, Input, NumberInput, ScrollArea, SegmentedControl, Stack, Switch, Text, Tooltip } from '@mantine/core';
+import { useEffect, useState } from 'react';
+import { ActionIcon, Badge, Button, Divider, Group, Input, Loader, NumberInput, ScrollArea, SegmentedControl, Stack, Switch, Text, Tooltip } from '@mantine/core';
 import { Dropzone } from '@mantine/dropzone';
 import { IconChevronLeft, IconInfoCircle, IconPhotoUp, IconPlayerPlay, IconWorld, IconX } from '@tabler/icons-react';
 import { ProductBadge } from '@/components/ProductBadge';
@@ -8,6 +9,7 @@ import { useUi } from '@/store/ui';
 import { effectiveModelGrid, MODEL_MAX_SIDE } from '@/lib/input';
 import { stageImage } from '@/features/files/openFile';
 import { cancelPrediction, resolveGsd, runPrediction } from '@/features/processing/runPrediction';
+import { cloudOverlay } from '@/lib/cloudImage';
 import classes from '@/features/shell/shell.module.css';
 
 const PRESETS = [
@@ -17,9 +19,31 @@ const PRESETS = [
   { value: '1', label: '1.0' },
 ];
 
+/** Object URL of the cyan cloud overlay for the staged input, while the cloud mask is on. */
+function useCloudOverlayUrl() {
+  const mask = useScene((s) => (s.params.cloudMask ? s.inputCloud?.mask : null));
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!mask) return setUrl(null);
+    let cancelled = false;
+    let made: string | null = null;
+    void cloudOverlay(mask).then((b) => {
+      if (cancelled) return;
+      made = URL.createObjectURL(b);
+      setUrl(made);
+    });
+    return () => {
+      cancelled = true;
+      if (made) URL.revokeObjectURL(made);
+    };
+  }, [mask]);
+  return url;
+}
+
 function InputCard() {
   const input = useScene((s) => s.input);
   const running = useScene((s) => s.run.status === 'running');
+  const overlay = useCloudOverlayUrl();
   if (!input) {
     return (
       <Dropzone
@@ -47,6 +71,14 @@ function InputCard() {
     <Stack gap={8}>
       <div style={{ position: 'relative', border: '1px solid var(--dw-line)', background: 'var(--dw-surface)' }}>
         <img src={input.previewUrl} alt={`Preview of ${input.name}`} style={{ display: 'block', width: '100%', maxHeight: 180, objectFit: 'contain' }} />
+        {overlay && (
+          <img
+            src={overlay}
+            alt=""
+            aria-hidden
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', maxHeight: 180, objectFit: 'contain', pointerEvents: 'none' }}
+          />
+        )}
         <Tooltip label="Remove image">
           <ActionIcon
             variant="filled"
@@ -142,7 +174,39 @@ function Parameters() {
         disabled={running}
         label="Higher quality (TTA, slower)"
       />
+      <CloudSwitch />
     </Stack>
+  );
+}
+
+function CloudSwitch() {
+  const input = useScene((s) => s.input);
+  const cloud = useScene((s) => s.inputCloud);
+  const on = useScene((s) => s.params.cloudMask);
+  const running = useScene((s) => s.run.status === 'running');
+  const pct = cloud?.mask ? cloud.mask.coverage * 100 : 0;
+  const description = !input
+    ? 'Masks clouds out of the image before the model sees it.'
+    : cloud?.status === 'detecting'
+      ? 'Looking for clouds…'
+      : cloud?.status === 'error'
+        ? 'Cloud detection failed; the image is sent as is.'
+        : cloud?.mask
+          ? `${pct < 1 ? pct.toFixed(1) : pct.toFixed(0)} % of the image looks like cloud${on ? ' (tinted in the preview)' : ''}.`
+          : 'No clouds detected.';
+  return (
+    <Switch
+      checked={on}
+      onChange={(e) => useScene.getState().setParams({ cloudMask: e.currentTarget.checked })}
+      disabled={running}
+      label={
+        <Group gap={6} wrap="nowrap">
+          Cloud mask
+          {cloud?.status === 'detecting' && <Loader size={10} />}
+        </Group>
+      }
+      description={description}
+    />
   );
 }
 

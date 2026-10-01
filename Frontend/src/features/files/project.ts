@@ -1,13 +1,13 @@
 import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from 'fflate';
 import { notifications } from '@mantine/notifications';
-import type { Artefact, SceneMeta } from '@/domain/types';
+import type { Artefact, SceneCloud, SceneMeta } from '@/domain/types';
 import { buf, json, mimeOf, readProject, readProjectFiles, type Manifest, type ProjectCore } from '@/lib/dwproj';
 import type { DemCellsCache } from '@/lib/dem';
 import { parseNpy, writeNpyF32 } from '@/lib/npy';
 import { serializeObjects } from '@/lib/objects';
 import type { OsmFeature } from '@/lib/osm';
 import type { Poi } from '@/lib/poi';
-import { encodeGray8Png } from '@/lib/png';
+import { decodeGray8Png, encodeGray8Png } from '@/lib/png';
 import { buildScene } from '@/lib/sceneBuilder';
 import { download, safeStem } from '@/lib/download';
 import { getRecentBlob, putRecent } from '@/lib/recent';
@@ -23,6 +23,7 @@ import { osmFeaturesFor, useOsm } from '@/features/osm/osmStore';
 import { poisFor, usePoi } from '@/features/poi/poiStore';
 import { restoreUseCases } from '@/features/usecases/actions';
 import { reportError } from './openFile';
+import { analysisWorker } from '@/workers/clients';
 
 async function thumbnail(): Promise<string | null> {
   const shot = await viewportApi.screenshot();
@@ -84,6 +85,7 @@ export async function buildProjectBlob({ fetchOutputs = true }: { fetchOutputs?:
   if (reference) put('reference_m.npy', writeNpyF32(reference.data, [scene.heights.height, scene.heights.width]));
   if (scene.classes) put('seg.png', await bytes(encodeGray8Png(scene.classes.data, scene.classes.width, scene.classes.height)));
   // Same schema the Space publishes, so a project's objects.json is readable by anything that reads the Space's.
+  if (scene.cloud) put('cloud_mask.png', await bytes(encodeGray8Png(scene.cloud.mask, scene.cloud.width, scene.cloud.height)));
   if (scene.objects) put('objects.json', strToU8(JSON.stringify(serializeObjects(scene.objects))));
 
   const a = scene.anchoring;
@@ -150,6 +152,7 @@ export async function buildProjectBlob({ fetchOutputs = true }: { fetchOutputs?:
     removeOffset: st.removeOffset,
     dismissed: st.dismissed,
     gcps: scene.gcps?.length ? scene.gcps : null,
+    cloud: scene.cloud ? { coverage: scene.cloud.coverage } : null,
   };
   // manifest first (source/ and outputs/ are already last): a sample streamed in file order shows before the extras arrive
   const zip = zipSync({ 'manifest.json': strToU8(JSON.stringify(manifest, null, 2)), ...files }, { level: 6 });
@@ -202,7 +205,10 @@ function restageSource(manifest: Manifest, files: Files) {
   if (!manifest.source || !src) return false;
   const file = new File([src as BlobPart], manifest.source.name, { type: mimeOf(manifest.source.name) });
   void prepareInput(file)
-    .then((input) => useScene.getState().setInput(input))
+    .then((input) => {
+      useScene.getState().setInput(input);
+      void import('@/features/input/cloudPrompt').then((m) => m.detectInputClouds(input, { ask: false }));
+    })
     .catch((e) => console.warn('Project source image unreadable', e));
   return true;
 }
@@ -210,12 +216,23 @@ function restageSource(manifest: Manifest, files: Files) {
 /** Make a project the current workspace. `sample` marks a bundled sample scene. */
 async function adoptProject({ manifest, files, image, heights, classes, objects }: ProjectCore, opts: { sample?: boolean } = {}) {
   const outputs = projectOutputs(manifest, files);
+  let cloud: SceneCloud | null = null;
+  if (manifest.cloud && files['cloud_mask.png']) {
+    try {
+      const m = decodeGray8Png(buf(files['cloud_mask.png']));
+      const mask = { mask: m.data, width: m.width, height: m.height, coverage: manifest.cloud.coverage };
+      cloud = { ...mask, image: await analysisWorker().cloudFill(image, mask) };
+    } catch (e) {
+      console.warn('Project cloud_mask.png unusable; clouds not marked', e);
+    }
+  }
   let scene = await buildScene({
     name: manifest.name,
     image,
     heights,
     classes,
     objects,
+    cloud,
     meta: manifest.meta,
     gsd: manifest.gsd,
     gsdSource: manifest.gsdSource,
