@@ -15,6 +15,7 @@ import { HoverCard } from './HoverCard';
 import { OsmLegend } from '@/features/osm/OsmLegend';
 import { SurroundingsLegend } from '@/features/basemap/SurroundingsLegend';
 import { EmptyState } from './EmptyState';
+import { SampleLoading } from './SampleLoading';
 import { SceneWarnings } from './SceneWarnings';
 import { KeyHints, ModeBar, NavigationHud } from './NavigationHud';
 import classes from './overlays.module.css';
@@ -33,6 +34,7 @@ export function ViewportOverlays() {
     <div className={`${classes.layer} dw-no-print`}>
       <EmptyState />
       <InputPreview />
+      <SampleLoading />
       {hasScene && <NavigationHud />}
       <div className={classes.topLeft}>
         {!previewing && <ViewSwitcher />}

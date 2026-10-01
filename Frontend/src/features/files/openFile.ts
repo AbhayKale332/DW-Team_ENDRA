@@ -3,7 +3,7 @@ import { prepareInput } from '@/lib/input';
 import { useScene } from '@/store/scene';
 import { useUi } from '@/store/ui';
 import { DepthWizardError, toDepthWizardError } from '@/api/errors';
-import { sampleUrl, type SampleDef } from '@/lib/samples';
+import { downloadSample, sampleUrl, useSampleLoad, type SampleDef } from '@/lib/samples';
 import { useTool } from '@/store/tool';
 import { useCamera } from '@/store/camera';
 import { useView } from '@/store/view';
@@ -71,28 +71,33 @@ export async function openFiles(files: File[]) {
   return stageImage(first);
 }
 
-/** Open a sample scene: its .dwproj, like any project. */
+/** Open a sample scene: its .dwproj, like any project. Progress shows in the viewport (SampleLoading). */
 export async function openSample(def: SampleDef) {
-  const n = notifications.show({ loading: true, title: 'Loading sample', message: def.name, autoClose: false, withCloseButton: false });
+  useSampleLoad.getState().controller?.abort();
+  const controller = new AbortController();
+  const current = () => useSampleLoad.getState().controller === controller;
+  useSampleLoad.setState({ controller, load: { name: def.name, stage: 'download', loaded: 0, total: 0 } });
   try {
     const url = sampleUrl(def);
-    const r = await fetch(url);
-    if (!r.ok) throw new Error(`Could not load ${def.file} (HTTP ${r.status})`);
-    const blob = await r.blob();
     // Overpass answers cached at build time (scripts/cache-osm.mjs) sit beside the .dwproj
     const dir = url.slice(0, url.lastIndexOf('/') + 1);
-    const optionalJson = (name: string) => fetch(dir + name).then((x) => (x.ok ? (x.json() as Promise<unknown>) : null)).catch(() => null);
-    const [osm, pois] = await Promise.all([optionalJson('osm.json'), optionalJson('pois.json')]);
+    const optionalJson = (name: string) =>
+      fetch(dir + name, { signal: controller.signal })
+        .then((x) => (x.ok ? (x.json() as Promise<unknown>) : null))
+        .catch(() => null);
+    const [blob, osm, pois] = await Promise.all([downloadSample(url, def.file, controller.signal), optionalJson('osm.json'), optionalJson('pois.json')]);
+    if (!current()) return;
+    useSampleLoad.setState((s) => ({ load: s.load && { ...s.load, stage: 'open' } }));
     const { openProject } = await import('./project');
-    if (await openProject(blob, { sample: true })) {
+    if (current() && (await openProject(blob, { sample: true }))) {
       const id = useScene.getState().scene?.id;
       if (id && osm) registerBundledOsm(id, osm);
       if (id && pois) registerBundledPois(id, pois);
-      notifications.update({ id: n, loading: false, title: 'Sample loaded', message: def.name, autoClose: 2500, withCloseButton: true, color: 'dwBlue' });
-    } else notifications.hide(n);
+    }
   } catch (e) {
-    notifications.hide(n);
-    reportError(e, 'Could not load sample');
+    if (!controller.signal.aborted) reportError(e, 'Could not load sample');
+  } finally {
+    if (current()) useSampleLoad.setState({ load: null, controller: null });
   }
 }
 

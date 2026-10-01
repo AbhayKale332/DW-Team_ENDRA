@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Button, Group, Menu, Stack, Text, Title } from '@mantine/core';
 import { IconChevronDown, IconFolderOpen, IconSparkles } from '@tabler/icons-react';
 import { useScene } from '@/store/scene';
-import { loadSamples, useSamples } from '@/lib/samples';
+import { loadSamples, useSampleLoad, useSamples } from '@/lib/samples';
 import { IMAGE_ACCEPT, openSample, pickFiles, stageImage } from '@/features/files/openFile';
 import { BrandMark } from '@/features/shell/Brand';
 import classes from './overlays.module.css';
@@ -13,8 +13,9 @@ export function EmptyState() {
   const hasInput = useScene((s) => !!s.input);
   const running = useScene((s) => s.run.status === 'running');
   const samples = useSamples((s) => s.samples);
+  const loadingSample = useSampleLoad((s) => !!s.load);
   useEffect(() => void loadSamples(), []);
-  if (hasScene || running) return null;
+  if (hasScene || running || loadingSample) return null;
   return (
     <div className={classes.empty}>
       <div className={`dw-float ${classes.emptyCard}`}>
