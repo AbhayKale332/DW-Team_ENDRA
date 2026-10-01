@@ -6,9 +6,13 @@ export interface SampleDef {
   name: string;
   /** Path of the .dwproj relative to samples/. */
   file: string;
+  /** Input image and height map relative to samples/, shown while the .dwproj downloads (scripts/sample-previews.mjs). */
+  image?: string;
+  height?: string;
 }
 
-export const sampleUrl = (s: SampleDef) => `./samples/${s.file.split('/').map(encodeURIComponent).join('/')}`;
+/** URL of a file under samples/ (a SampleDef's `file`, `image` or `height`). */
+export const sampleUrl = (path: string) => `./samples/${path.split('/').map(encodeURIComponent).join('/')}`;
 
 export const useSamples = create<{ samples: SampleDef[] }>()(() => ({ samples: [] }));
 
@@ -37,6 +41,9 @@ export interface SampleLoad {
   stage: 'download' | 'open' | 'extras';
   loaded: number;
   total: number;
+  /** Samples with quick looks show them over the viewport while the .dwproj downloads, then wait for the user to
+   *  open the 3D view. Image URLs are null while loading, '' when they failed to load. */
+  preview?: { image: string | null; height: string | null; ready: boolean };
 }
 
 export const useSampleLoad = create<{ load: SampleLoad | null; controller: AbortController | null }>()(() => ({ load: null, controller: null }));

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { unzipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import type { Georef } from '@/domain/types';
@@ -25,6 +25,10 @@ describe('bundled sample scenes', () => {
       expect((north - south) * (east - west)).toBeLessThan(MAX_BBOX_DEG2);
       // the full surroundings window (basemap + facilities) fits the public Overpass limit too
       expect(contextBBox(georef, W, H)?.margin).toBe(CONTEXT_MARGIN);
+    });
+
+    it(`${s.id}: its input image and height map sit beside the project, to show while it downloads`, () => {
+      for (const f of [s.image, s.height]) expect(f && existsSync(`public/samples/${f}`), f).toBeTruthy();
     });
 
     it(`${s.id}: streamed, the scene is complete before the source image and outputs arrive`, () => {

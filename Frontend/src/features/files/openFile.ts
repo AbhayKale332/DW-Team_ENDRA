@@ -73,19 +73,41 @@ export async function openFiles(files: File[]) {
   return stageImage(first);
 }
 
-/** Open a sample scene: its .dwproj, like any project, unzipped as it downloads. The scene (image, height map,
- *  classes, objects) opens as soon as its files are in; the source image and model outputs follow in the background.
- *  Progress shows in the viewport (SampleLoading). */
+/** Load an image into the browser cache: resolves with its URL once decoded, '' if it could not be loaded. */
+const preload = (url: string) => {
+  const img = new Image();
+  img.src = url;
+  return img.decode().then(
+    () => url,
+    () => '',
+  );
+};
+
+/** Open a sample scene: its .dwproj, like any project, unzipped as it downloads. Progress shows in the viewport
+ *  (SampleLoading / SamplePreview).
+ *  - With quick looks (def.image, def.height): the input image, then the height map, cover the viewport while the
+ *    whole .dwproj downloads behind them; the scene opens when it is in and the 3D view waits for "Open 3D viewer".
+ *  - Without: the scene (image, height map, classes, objects) opens as soon as its files are in; the source image
+ *    and model outputs follow in the background. */
 export async function openSample(def: SampleDef) {
   useSampleLoad.getState().controller?.abort();
   const controller = new AbortController();
   const current = () => useSampleLoad.getState().controller === controller;
-  const stage = (stage: SampleLoad['stage']) => useSampleLoad.setState((s) => (s.load ? { load: { ...s.load, stage } } : s));
-  useSampleLoad.setState({ controller, load: { name: def.name, stage: 'download', loaded: 0, total: 0 } });
+  const patch = (p: Partial<SampleLoad>) => useSampleLoad.setState((s) => (s.load && current() ? { load: { ...s.load, ...p } } : s));
+  const stage = (stage: SampleLoad['stage']) => patch({ stage });
+  const quickLooks = !!(def.image && def.height);
+  let preview: SampleLoad['preview'] = quickLooks ? { image: null, height: null, ready: false } : undefined;
+  const setPreview = (p: Partial<NonNullable<SampleLoad['preview']>>) => {
+    preview = { ...preview!, ...p };
+    patch({ preview });
+  };
+  useSampleLoad.setState({ controller, load: { name: def.name, stage: 'download', loaded: 0, total: 0, preview } });
   // the scene opened early, which the background download completes (assigned in callbacks, hence the casts)
   let sceneId = null as string | null;
+  // a previewed sample stays up, ready, until the user opens the 3D view
+  let waiting = false;
   try {
-    const url = sampleUrl(def);
+    const url = sampleUrl(def.file);
     // Overpass answers cached at build time (scripts/cache-osm.mjs) sit beside the .dwproj
     const dir = url.slice(0, url.lastIndexOf('/') + 1);
     const optionalJson = (name: string) =>
@@ -103,6 +125,34 @@ export async function openSample(def: SampleDef) {
       if (id && pois) registerBundledPois(id, pois);
       return id;
     };
+
+    if (quickLooks) {
+      // one at a time, so each shows as soon as it can: the image, the height map, then the project
+      setPreview({ image: await preload(sampleUrl(def.image!)) });
+      if (!current()) return;
+      setPreview({ height: await preload(sampleUrl(def.height!)) });
+      if (!current()) return;
+      const stream = projectStream(() => {});
+      const before = useScene.getState().scene;
+      await downloadSample(url, def.file, controller.signal, (chunk) => {
+        stream.push(chunk);
+        // another scene was opened meanwhile: this one is not wanted any more
+        if (useScene.getState().scene !== before) controller.abort();
+      });
+      stream.push(new Uint8Array(0), true);
+      if (!current()) return;
+      const id = await open(stream.files);
+      if (!id || !current()) return;
+      setPreview({ ready: true });
+      waiting = true;
+      // opening anything else drops the preview
+      const unsubscribe = useScene.subscribe((s) => {
+        if (s.scene?.id === id) return;
+        unsubscribe();
+        if (current()) useSampleLoad.setState({ load: null, controller: null });
+      });
+      return;
+    }
 
     let early = null as Promise<string | null> | null;
     const stream = projectStream(() => {
@@ -130,7 +180,7 @@ export async function openSample(def: SampleDef) {
   } catch (e) {
     if (!controller.signal.aborted) reportError(e, sceneId ? 'Could not download the full sample' : 'Could not load sample');
   } finally {
-    if (current()) useSampleLoad.setState({ load: null, controller: null });
+    if (current() && !waiting) useSampleLoad.setState({ load: null, controller: null });
   }
 }
 

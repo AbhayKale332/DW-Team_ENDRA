@@ -3,10 +3,11 @@
 //
 //   node scripts/pack-sample.mjs public/samples/<folder> [--clean]
 //
-// Writes <folder>/<folder>.dwproj. --clean then deletes the loose files that went into it.
+// Writes <folder>/<folder>.dwproj, input.png and height.png. --clean then deletes the loose files that went into it.
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { strToU8, zipSync } from 'fflate';
+import { writePreviews } from './sample-previews.mjs';
 
 const dir = resolve(process.argv[2] ?? 'public/samples/buildings_large_campus');
 const clean = process.argv.includes('--clean');
@@ -63,4 +64,6 @@ const out = join(dir, `${name}.dwproj`);
 // manifest first and source/ last: the app shows the scene while the source image is still downloading
 writeFileSync(out, zipSync({ 'manifest.json': strToU8(JSON.stringify(manifest, null, 2)), ...files }, { level: 6 }));
 console.log(`${out}  (${Object.keys(files).join(', ')})`);
+// the input image and height map the app shows while the project downloads
+writePreviews(dir);
 if (clean) for (const f of used) rmSync(join(dir, f));

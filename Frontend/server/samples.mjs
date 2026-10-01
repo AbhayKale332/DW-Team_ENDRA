@@ -20,7 +20,7 @@ function entries(dir) {
   }
 }
 
-/** @returns {{ id: string; name: string; file: string }[]} `file` is relative to `dir`, with forward slashes. */
+/** @returns {{ id: string; name: string; file: string; image?: string; height?: string }[]} Paths are relative to `dir`, with forward slashes. */
 export function listSamples(dir) {
   const out = [];
   for (const e of entries(dir)) {
@@ -29,10 +29,14 @@ export function listSamples(dir) {
     const files = entries(join(dir, e.name))
       .filter((f) => f.isFile() && isProject(f.name))
       .map((f) => f.name);
+    // quick looks shown while the project downloads (scripts/sample-previews.mjs), for a folder's only project
+    const names = new Set(entries(join(dir, e.name)).map((f) => f.name));
+    const image = ['input.png', 'input.jpg', 'input.jpeg'].find((f) => names.has(f));
+    const previews = image && names.has('height.png') ? { image: `${e.name}/${image}`, height: `${e.name}/height.png` } : {};
     for (const f of files) {
       // one project per folder is the norm: it takes the folder's name
       const one = files.length === 1;
-      out.push({ id: one ? e.name : `${e.name}/${stem(f)}`, name: pretty(one ? e.name : stem(f)), file: `${e.name}/${f}` });
+      out.push({ id: one ? e.name : `${e.name}/${stem(f)}`, name: pretty(one ? e.name : stem(f)), file: `${e.name}/${f}`, ...(one ? previews : {}) });
     }
   }
   return out;

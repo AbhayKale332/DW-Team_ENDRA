@@ -328,13 +328,84 @@
   box-shadow: var(--mantine-shadow-md);
 }
 
-.previewReady {
+/* A sample's quick looks: input image and height map side by side (stacked in a tall viewport) */
+.samplePreview {
   position: absolute;
-  left: 50%;
-  bottom: calc(var(--dw-edge) * 2);
-  transform: translateX(-50%);
-  padding: 10px 10px 10px 14px;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: var(--dw-edge) var(--dw-edge) 96px;
+  background: var(--dw-viewport-bg);
+  z-index: 2;
+  container-type: size;
+}
+
+.sampleTitle {
+  flex: none;
+  text-align: center;
+}
+
+.sampleLooks {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 16px;
+}
+
+/* the viewport, not the window: the panels beside it change its shape */
+@container (max-aspect-ratio: 1/1) {
+  .sampleLooks {
+    flex-direction: column;
+  }
+}
+
+.sampleLook {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* leaves room for the caption right under the image */
+.sampleLookImage {
+  max-width: 100%;
+  max-height: calc(100% - 26px);
+  object-fit: contain;
+  box-shadow: var(--mantine-shadow-md);
+  animation: dw-sample-in 240ms ease-out;
+}
+
+@keyframes dw-sample-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.sampleLookCaption {
+  text-align: center;
+  font-size: 13px;
+  color: var(--dw-dim);
+}
+
+.sampleAction {
+  position: absolute;
+  right: var(--dw-edge);
+  bottom: var(--dw-edge);
   z-index: 5;
+}
+
+.sampleOpen {
+  height: 64px;
+  padding-inline: 28px;
+  font-size: 20px;
+  box-shadow: var(--mantine-shadow-lg);
+  animation: dw-sample-in 240ms ease-out;
 }
 
 .processing {

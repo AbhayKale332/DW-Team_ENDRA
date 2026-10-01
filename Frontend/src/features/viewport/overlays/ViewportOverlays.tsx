@@ -15,7 +15,8 @@ import { HoverCard } from './HoverCard';
 import { OsmLegend } from '@/features/osm/OsmLegend';
 import { SurroundingsLegend } from '@/features/basemap/SurroundingsLegend';
 import { EmptyState } from './EmptyState';
-import { SampleExtras, SampleLoading } from './SampleLoading';
+import { SampleExtras, SampleLoading, SamplePreview } from './SampleLoading';
+import { useSampleLoad } from '@/lib/samples';
 import { SceneWarnings } from './SceneWarnings';
 import { KeyHints, ModeBar, NavigationHud } from './NavigationHud';
 import classes from './overlays.module.css';
@@ -30,6 +31,14 @@ export function ViewportOverlays() {
   const building = useScene((s) => s.meshBuilding && s.run.status !== 'running');
   const camMode = useCamera((s) => s.mode);
   const orbit = camMode === 'orbit';
+  // a sample's quick looks cover the viewport, and the scene opening behind them, until the user opens 3D
+  const samplePreview = useSampleLoad((s) => !!s.load?.preview);
+  if (samplePreview)
+    return (
+      <div className={`${classes.layer} dw-no-print`}>
+        <SamplePreview />
+      </div>
+    );
   return (
     <div className={`${classes.layer} dw-no-print`}>
       <EmptyState />

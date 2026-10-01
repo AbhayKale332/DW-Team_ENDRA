@@ -106,8 +106,8 @@ export async function runPrediction() {
     });
     useTool.getState().clear();
     useScene.getState().setScene(scene);
-    // the input image stays up until the user chooses to explore the result
-    useScene.getState().set({ dirty: true, inputPreview: true });
+    // straight to the 3D result (the mesh builds in view)
+    useScene.getState().set({ dirty: true, inputPreview: false });
     // georeferenced results become an absolute DSM once a DEM is fetched (rDSM stays relative)
     void import('@/features/anchoring/runAnchoring').then((m) => m.autoAnchor());
     // a re-run of the same image keeps its ground control points

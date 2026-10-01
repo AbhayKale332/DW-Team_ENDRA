@@ -49,7 +49,7 @@ export class MockProvider implements InferenceProvider {
     onProgress({ stage: 'fetching' });
     const sample = this.sample ?? (await loadSamples())[0];
     if (!sample) throw new DepthWizardError('network', 'Sample unavailable', 'There is no sample project (.dwproj) under samples/.');
-    const buf: ArrayBuffer = await (await fetchOk(sampleUrl(sample), signal)).arrayBuffer();
+    const buf: ArrayBuffer = await (await fetchOk(sampleUrl(sample.file), signal)).arrayBuffer();
     const p = readProject(new Uint8Array(buf));
     const meta: SceneMeta = p.manifest.meta;
     const gsd = req.gsd ?? p.manifest.gsd;

@@ -1,0 +1,145 @@
+{
+  "format": "dwproj",
+  "version": 2,
+  "name": "buildings_large_campus",
+  "imageName": "input.png",
+  "gsd": 0.6,
+  "gsdSource": "geotiff",
+  "georef": null,
+  "meta": {
+    "product": "rDSM",
+    "units": "metres_above_ground",
+    "height_min_m": 1.2499542378918704e-7,
+    "height_max_m": 28.89175033569336,
+    "height_mean_m": 1.7269736528396606,
+    "height_median_m": 0.0019057466415688396,
+    "frac_below_1m": 0.8315219879150391,
+    "size_px": [
+      1024,
+      1024
+    ],
+    "scene": {
+      "path": "2s_buildings_large_campus.tif",
+      "width": 1024,
+      "height": 1024,
+      "gsd_m": 0.6,
+      "gsd_source": "geotiff",
+      "georeferenced": true,
+      "crs": "EPSG:32645",
+      "transform": [
+        0.6,
+        0,
+        374684.4364273353,
+        0,
+        -0.6,
+        2250121.8588118926
+      ],
+      "transform_note": "restored from 2s_buildings_large_campus.tif (EPSG:32645), rescaled 1024×1024 → 1024×1024",
+      "crs_epsg": 32645
+    },
+    "preproc": {
+      "encoder_model_id": "facebook/dinov3-vitl16-pretrain-sat493m",
+      "mean": [
+        0.43,
+        0.411,
+        0.296
+      ],
+      "std": [
+        0.213,
+        0.156,
+        0.143
+      ],
+      "canonical_gsd_m": 0.5,
+      "tile_size": 512,
+      "patch": 16,
+      "radiometric_stretch": true,
+      "stretch_lo_pct": 2,
+      "stretch_hi_pct": 98,
+      "target": "nDSM_agl_metres",
+      "version": "v3"
+    },
+    "classes": {
+      "0": "other",
+      "1": "ground",
+      "2": "low_veg",
+      "3": "building",
+      "4": "water",
+      "5": "road",
+      "6": "tree"
+    },
+    "class_fractions": {
+      "other": 0.002857208251953125,
+      "ground": 0.3616962432861328,
+      "low_veg": 0.39743995666503906,
+      "building": 0.14335060119628906,
+      "water": 0.07805442810058594,
+      "road": 0.013641357421875,
+      "tree": 0.002960205078125
+    },
+    "objects": {
+      "file": "objects.json",
+      "version": 1,
+      "counts": {
+        "trees": 33,
+        "buildings": 20,
+        "water": 35
+      },
+      "truncated": {
+        "trees": false,
+        "buildings": false,
+        "water": false
+      }
+    },
+    "ndsm16_encode": "height_m = height_min_m + (png16/65535)*(height_max_m-height_min_m)",
+    "files": [
+      "seg.png",
+      "classes_preview.png",
+      "objects.json",
+      "objects_overlay.png",
+      "ndsm_m.npy",
+      "ndsm16.png",
+      "rgb.png",
+      "height_colormap.png",
+      "hillshade.png",
+      "terrain.glb",
+      "terrain.obj",
+      "terrain.mtl",
+      "texture.png",
+      "meta.json"
+    ],
+    "note": "Predicted by the DepthWizard model (Hugging Face Space) from 2s_buildings_large_campus.tif · 1024×1024 px at 0.60 m/px, EPSG:32645."
+  },
+  "statusLines": [
+    "Predicted by the DepthWizard model (Hugging Face Space) from 2s_buildings_large_campus.tif · 1024×1024 px at 0.60 m/px, EPSG:32645."
+  ],
+  "provenance": {
+    "provider": "bundled sample",
+    "source": "sample",
+    "createdAt": "2026-09-30T07:22:05.851Z"
+  },
+  "view": {},
+  "bookmarks": [],
+  "tools": {
+    "probe": null,
+    "measure": [],
+    "profile": []
+  },
+  "reference": null,
+  "classes": {
+    "names": [
+      "other",
+      "ground",
+      "low_veg",
+      "building",
+      "water",
+      "road",
+      "tree"
+    ]
+  },
+  "anchoring": null,
+  "source": {
+    "name": "2s_buildings_large_campus.tif",
+    "file": "source/2s_buildings_large_campus.tif"
+  },
+  "outputs": []
+}
