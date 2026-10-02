@@ -1,5 +1,6 @@
 // Write the two quick-look images a sample shows while its .dwproj downloads: the input image (input.png / .jpg,
 // copied from the project) and the height map (height.png, coloured like the 3D view's default: Terrain over 2–98 %).
+// A PNG preview over 10 MB is box-shrunk to at most 1024 px on its longer side.
 //
 //   node scripts/sample-previews.mjs [public/samples/<folder> ...]     (no folder: every sample)
 //
@@ -7,7 +8,7 @@
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { strFromU8, unzipSync, zlibSync } from 'fflate';
+import { strFromU8, unzipSync, unzlibSync, zlibSync } from 'fflate';
 
 // src/theme/colormaps.ts 'terrain' (the default colormap in src/store/view.ts)
 const TERRAIN = [
@@ -65,6 +66,82 @@ function encodeRgbaPng(rgba, width, height) {
   return Buffer.concat(parts);
 }
 
+/** 8-bit, non-interlaced PNG → RGBA. */
+function decodePng(png) {
+  const dv = new DataView(png.buffer, png.byteOffset, png.byteLength);
+  const width = dv.getUint32(16);
+  const height = dv.getUint32(20);
+  const [depth, type, , , interlace] = png.subarray(24, 29);
+  const bpp = { 0: 1, 2: 3, 4: 2, 6: 4 }[type];
+  if (depth !== 8 || !bpp || interlace) throw new Error(`unsupported PNG (depth ${depth}, type ${type}, interlace ${interlace})`);
+  const idat = [];
+  for (let p = 8; p < png.length; ) {
+    const len = dv.getUint32(p);
+    if (strFromU8(png.subarray(p + 4, p + 8)) === 'IDAT') idat.push(png.subarray(p + 8, p + 8 + len));
+    p += 12 + len;
+  }
+  const raw = unzlibSync(Buffer.concat(idat));
+  const stride = width * bpp;
+  const px = new Uint8Array(stride * height);
+  const zero = new Uint8Array(stride);
+  for (let r = 0; r < height; r++) {
+    const f = raw[r * (stride + 1)];
+    const src = raw.subarray(r * (stride + 1) + 1, (r + 1) * (stride + 1));
+    const cur = px.subarray(r * stride, (r + 1) * stride);
+    const up = r ? px.subarray((r - 1) * stride, r * stride) : zero;
+    for (let i = 0; i < stride; i++) {
+      const a = i >= bpp ? cur[i - bpp] : 0;
+      const b = up[i];
+      const c = i >= bpp ? up[i - bpp] : 0;
+      let pred = 0;
+      if (f === 1) pred = a;
+      else if (f === 2) pred = b;
+      else if (f === 3) pred = (a + b) >> 1;
+      else if (f === 4) {
+        const p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
+        pred = pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+      }
+      cur[i] = (src[i] + pred) & 255;
+    }
+  }
+  const rgba = new Uint8Array(width * height * 4);
+  for (let i = 0, s = 0; i < rgba.length; i += 4, s += bpp) {
+    if (bpp <= 2) rgba.set([px[s], px[s], px[s], bpp === 2 ? px[s + 1] : 255], i);
+    else rgba.set([px[s], px[s + 1], px[s + 2], bpp === 4 ? px[s + 3] : 255], i);
+  }
+  return { rgba, width, height };
+}
+
+const MAX_PREVIEW_BYTES = 10 * 1024 * 1024;
+const SHRUNK_SIDE = 1024;
+
+/** Box-average by a whole factor so the longer side is at most SHRUNK_SIDE; transparent pixels don't bleed colour. */
+function shrink({ rgba, width, height }) {
+  const k = Math.ceil(Math.max(width, height) / SHRUNK_SIDE);
+  const w = Math.ceil(width / k);
+  const h = Math.ceil(height / k);
+  const out = new Uint8Array(w * h * 4);
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      let r = 0, g = 0, b = 0, a = 0, n = 0;
+      for (let yy = y * k; yy < Math.min(height, (y + 1) * k); yy++)
+        for (let xx = x * k; xx < Math.min(width, (x + 1) * k); xx++) {
+          const i = (yy * width + xx) * 4;
+          const al = rgba[i + 3];
+          r += rgba[i] * al; g += rgba[i + 1] * al; b += rgba[i + 2] * al; a += al; n++;
+        }
+      if (a) out.set([Math.round(r / a), Math.round(g / a), Math.round(b / a), Math.round(a / n)], (y * w + x) * 4);
+    }
+  return { rgba: out, width: w, height: h };
+}
+
+/** A PNG preview over MAX_PREVIEW_BYTES is shrunk: it is only a quick look while the project downloads. */
+function capPng(png, decoded = () => decodePng(png)) {
+  if (png.length <= MAX_PREVIEW_BYTES) return png;
+  const s = shrink(decoded());
+  return encodeRgbaPng(s.rgba, s.width, s.height);
+}
+
 function heightPng({ data, width, height }) {
   const finite = data.filter(Number.isFinite).sort();
   const q = (p) => finite[Math.min(finite.length - 1, Math.floor(p * finite.length))] ?? 0;
@@ -77,7 +154,7 @@ function heightPng({ data, width, height }) {
     rgba.set(colorAt((data[i] - lo) / (hi - lo)), i * 4);
     rgba[i * 4 + 3] = 255;
   }
-  return encodeRgbaPng(rgba, width, height);
+  return capPng(encodeRgbaPng(rgba, width, height), () => ({ rgba, width, height }));
 }
 
 /** Write input.<ext> and height.png next to the folder's .dwproj. */
@@ -89,7 +166,8 @@ export function writePreviews(dir) {
   });
   const manifest = JSON.parse(strFromU8(files['manifest.json']));
   const image = `input${extname(manifest.imageName).toLowerCase()}`;
-  writeFileSync(join(dir, image), files[manifest.imageName]);
+  const bytes = files[manifest.imageName];
+  writeFileSync(join(dir, image), image === 'input.png' ? capPng(bytes) : bytes);
   writeFileSync(join(dir, 'height.png'), heightPng(parseNpyF32(files['ndsm_m.npy'])));
   console.log(`${dir}  (${image}, height.png)`);
 }
