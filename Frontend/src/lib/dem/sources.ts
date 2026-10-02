@@ -9,6 +9,7 @@ import proj4 from 'proj4';
 import type { VerticalDatum } from '@/domain/types';
 import { decodeTiffBand } from '../geotiff';
 import { mapToPixel } from '../georef';
+import { decodePng8 } from '../png';
 import { lonLatToTile, tileRange, type BBox } from '../tiles';
 
 export interface DemSampler {
@@ -43,14 +44,15 @@ const TILE = 256;
 /** Terrarium: elevation = (R * 256 + G + B / 256) - 32768 metres. */
 export const decodeTerrarium = (r: number, g: number, b: number) => r * 256 + g + b / 256 - 32768;
 
-export function decodeTerrariumPixels(rgba: Uint8ClampedArray | Uint8Array): Float32Array {
-  const out = new Float32Array(rgba.length / 4);
-  for (let i = 0; i < out.length; i++) out[i] = decodeTerrarium(rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2]);
+export function decodeTerrariumPixels(px: Uint8ClampedArray | Uint8Array, channels = 4): Float32Array {
+  const out = new Float32Array(px.length / channels);
+  for (let i = 0; i < out.length; i++) out[i] = decodeTerrarium(px[i * channels], px[i * channels + 1], px[i * channels + 2]);
   return out;
 }
 
 async function fetchTile(z: number, x: number, y: number, signal?: AbortSignal): Promise<Float32Array> {
-  const key = `dw.dem.terrarium.${z}.${x}.${y}`;
+  // v2: tiles are decoded from the PNG bytes; v1 went through a canvas, whose readback some browsers perturb
+  const key = `dw.dem.terrarium.v2.${z}.${x}.${y}`;
   try {
     const hit = (await idbGet(key)) as Float32Array | undefined;
     if (hit && hit.length === TILE * TILE) return hit;
@@ -60,18 +62,22 @@ async function fetchTile(z: number, x: number, y: number, signal?: AbortSignal):
   let res: Response;
   try {
     res = await fetch(TERRARIUM_URL(z, x, y), { signal });
-  } catch (e) {
+  } catch {
     if (signal?.aborted) throw new DemError('Cancelled', 'cancelled');
     throw new DemError('Could not reach the elevation tile server. Check the connection, or load a DEM file instead.', 'network');
   }
   if (!res.ok) throw new DemError(`Elevation tile ${z}/${x}/${y} unavailable (HTTP ${res.status}).`, 'coverage');
-  const bmp = await createImageBitmap(await res.blob(), { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
-  const canvas = new OffscreenCanvas(TILE, TILE);
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) throw new DemError('2D canvas unavailable', 'unsupported');
-  ctx.drawImage(bmp, 0, 0);
-  bmp.close();
-  const h = decodeTerrariumPixels(ctx.getImageData(0, 0, TILE, TILE).data);
+  // Decoded from the bytes, never through a canvas: anti-fingerprinting browsers (Brave, Firefox strict / private)
+  // flip low bits of canvas readback, and one flip of the red channel is a 256 m pit in the terrain.
+  let png: ReturnType<typeof decodePng8>;
+  try {
+    png = decodePng8(await res.arrayBuffer(), [2, 6]);
+  } catch (e) {
+    if (signal?.aborted) throw new DemError('Cancelled', 'cancelled');
+    throw new DemError(`Elevation tile ${z}/${x}/${y} could not be decoded (${(e as Error).message}).`, 'format');
+  }
+  if (png.width !== TILE || png.height !== TILE) throw new DemError(`Elevation tile ${z}/${x}/${y} is ${png.width} x ${png.height}, not ${TILE} x ${TILE}.`, 'format');
+  const h = decodeTerrariumPixels(png.data, png.channels);
   try {
     await idbSet(key, h);
   } catch {

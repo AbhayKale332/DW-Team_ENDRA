@@ -77,12 +77,26 @@ function paeth(a: number, b: number, c: number) {
 /** Decode an 8-bit greyscale, non-interlaced PNG to its exact byte values.
  *  Label maps must not go through a canvas: colour management and premultiplication may alter values. */
 export function decodeGray8Png(buffer: ArrayBuffer): { data: Uint8Array; width: number; height: number } {
+  const { data, width, height } = decodePng8(buffer, [0]);
+  return { data, width, height };
+}
+
+/** PNG colour type -> channels per pixel, for the 8-bit types decodePng8 reads. */
+const CHANNELS: Record<number, number> = { 0: 1, 2: 3, 6: 4 };
+const COLOUR_NAMES: Record<number, string> = { 0: 'greyscale', 2: 'RGB', 6: 'RGBA' };
+
+/** Decode an 8-bit, non-interlaced PNG of one of the `colours` types to its exact bytes, channels interleaved.
+ *  Data images (label maps, Terrarium elevation tiles) must not go through a canvas: colour management and
+ *  premultiplication may alter values, and anti-fingerprinting browsers (Brave, Firefox strict / private) flip the
+ *  low bits of canvas readback, which in a Terrarium tile's red channel is a 256 m error. */
+export function decodePng8(buffer: ArrayBuffer, colours: number[] = [0, 2, 6]): { data: Uint8Array; width: number; height: number; channels: number } {
   const bytes = new Uint8Array(buffer);
   const sig = [137, 80, 78, 71, 13, 10, 26, 10];
   if (bytes.length < 8 || sig.some((b, i) => bytes[i] !== b)) throw new Error('Not a PNG file');
   const dv = new DataView(buffer);
   let width = 0;
   let height = 0;
+  let channels = 0;
   const idat: Uint8Array[] = [];
   for (let off = 8; off + 8 <= bytes.length; ) {
     const len = dv.getUint32(off);
@@ -92,7 +106,10 @@ export function decodeGray8Png(buffer: ArrayBuffer): { data: Uint8Array; width: 
       width = dv.getUint32(off + 8);
       height = dv.getUint32(off + 12);
       const [depth, colour, , , interlace] = body.subarray(8, 13);
-      if (depth !== 8 || colour !== 0 || interlace !== 0) throw new Error(`Unsupported PNG (depth ${depth}, colour type ${colour}, interlace ${interlace}); expected 8-bit greyscale`);
+      if (depth !== 8 || !colours.includes(colour) || interlace !== 0) {
+        throw new Error(`Unsupported PNG (depth ${depth}, colour type ${colour}, interlace ${interlace}); expected 8-bit ${colours.map((c) => COLOUR_NAMES[c]).join(' or ')}`);
+      }
+      channels = CHANNELS[colour];
     } else if (type === 'IDAT') idat.push(body);
     else if (type === 'IEND') break;
     off += 12 + len;
@@ -105,17 +122,19 @@ export function decodeGray8Png(buffer: ArrayBuffer): { data: Uint8Array; width: 
     at += c.length;
   }
   const raw = unzlibSync(joined);
-  if (raw.length < (width + 1) * height) throw new Error('PNG image data is truncated');
-  const out = new Uint8Array(width * height);
+  // filters work on bytes; "left" is the same channel of the previous pixel
+  const stride = width * channels;
+  if (raw.length < (stride + 1) * height) throw new Error('PNG image data is truncated');
+  const out = new Uint8Array(stride * height);
   for (let r = 0; r < height; r++) {
-    const filter = raw[r * (width + 1)];
-    const src = raw.subarray(r * (width + 1) + 1, (r + 1) * (width + 1));
-    const row = out.subarray(r * width, (r + 1) * width);
-    const up = r > 0 ? out.subarray((r - 1) * width, r * width) : null;
-    for (let c = 0; c < width; c++) {
-      const a = c > 0 ? row[c - 1] : 0;
+    const filter = raw[r * (stride + 1)];
+    const src = raw.subarray(r * (stride + 1) + 1, (r + 1) * (stride + 1));
+    const row = out.subarray(r * stride, (r + 1) * stride);
+    const up = r > 0 ? out.subarray((r - 1) * stride, r * stride) : null;
+    for (let c = 0; c < stride; c++) {
+      const a = c >= channels ? row[c - channels] : 0;
       const b = up ? up[c] : 0;
-      const d = up && c > 0 ? up[c - 1] : 0;
+      const d = up && c >= channels ? up[c - channels] : 0;
       let v = src[c];
       if (filter === 1) v += a;
       else if (filter === 2) v += b;
@@ -125,5 +144,5 @@ export function decodeGray8Png(buffer: ArrayBuffer): { data: Uint8Array; width: 
       row[c] = v & 255;
     }
   }
-  return { data: out, width, height };
+  return { data: out, width, height, channels };
 }

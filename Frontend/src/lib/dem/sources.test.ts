@@ -1,15 +1,29 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import type { Georef } from '@/domain/types';
 import { lonLatAt, proj4ForEpsg } from '../georef';
+import { decodePng8 } from '../png';
 import { lonLatToTile } from '../tiles';
 import { sampleDemCells } from './index';
-import { decodeTerrarium, mosaicSampler } from './sources';
+import { decodeTerrarium, decodeTerrariumPixels, mosaicSampler } from './sources';
 
 describe('Terrarium decoding', () => {
   it('decodes known values', () => {
     expect(decodeTerrarium(128, 0, 0)).toBe(0);
     expect(decodeTerrarium(128, 100, 128)).toBeCloseTo(100.5, 5);
     expect(decodeTerrarium(127, 246, 0)).toBe(-10);
+  });
+
+  it('decodes a real tile from its PNG bytes, matching an independent decoder (Pillow)', () => {
+    // terrarium/12/2938/1867: the Hilly Region sample, where canvas readback noise once punched 256 m pits
+    const b = readFileSync('src/lib/__fixtures__/terrarium_12_2938_1867.png');
+    const png = decodePng8(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer, [2, 6]);
+    expect([png.width, png.height, png.channels]).toEqual([256, 256, 3]);
+    const h = decodeTerrariumPixels(png.data, png.channels);
+    expect(h.length).toBe(256 * 256);
+    expect(h.reduce((s, v) => s + v, 0)).toBe(20525075);
+    expect([h.reduce((a, v) => Math.min(a, v)), h.reduce((a, v) => Math.max(a, v))]).toEqual([276, 480]);
+    expect([h[0], h[223 * 256 + 117], h[256 * 256 - 1]]).toEqual([324, 381, 389]);
   });
 
   it('samples a mosaic bilinearly in Mercator tile space', () => {

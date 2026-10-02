@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { decodeGray8Png, encodeGray8Png } from './png';
+import { decodeGray8Png, decodePng8, encodeGray8Png } from './png';
 import { classNamesFromMeta, classPaletteRGBA, classShares } from '@/theme/classes';
 
 const buf = (p: string) => {
@@ -45,6 +45,22 @@ describe('8-bit greyscale PNG (seg.png)', () => {
 
   it('rejects anything that is not 8-bit greyscale', () => {
     expect(() => decodeGray8Png(new Uint8Array([1, 2, 3]).buffer)).toThrow(/Not a PNG/);
+    expect(() => decodeGray8Png(buf('src/lib/__fixtures__/rgba8_filters.png'))).toThrow(/colour type 6.*expected 8-bit greyscale$/);
+  });
+});
+
+describe('8-bit multi-channel PNG', () => {
+  it('undoes every row filter with the previous pixel, not the previous byte, as "left"', () => {
+    // rgba8_filters.png: row r uses filter r % 5; channel ch of pixel (r, c) is (r*31 + c*17 + ch*59 + (r*c) % 5) % 256
+    const png = decodePng8(buf('src/lib/__fixtures__/rgba8_filters.png'));
+    expect([png.width, png.height, png.channels]).toEqual([29, 13, 4]);
+    const want = new Uint8Array(29 * 13 * 4);
+    for (let r = 0; r < 13; r++) for (let c = 0; c < 29; c++) for (let ch = 0; ch < 4; ch++) want[(r * 29 + c) * 4 + ch] = (r * 31 + c * 17 + ch * 59 + ((r * c) % 5)) % 256;
+    expect(png.data).toEqual(want);
+  });
+
+  it('only accepts the colour types asked for', () => {
+    expect(() => decodePng8(buf('src/lib/__fixtures__/rgba8_filters.png'), [2])).toThrow(/expected 8-bit RGB$/);
   });
 });
 
