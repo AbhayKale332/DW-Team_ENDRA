@@ -7,7 +7,8 @@
 import { createServer } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { readFile, stat } from 'node:fs/promises';
-import { existsSync, readFileSync } from 'node:fs';
+import { createReadStream, existsSync, readFileSync } from 'node:fs';
+import { pipeline } from 'node:stream/promises';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { brotliCompressSync, constants as zlib, gzipSync } from 'node:zlib';
@@ -182,17 +183,26 @@ async function serveStatic(req, res) {
     file = join(DIST, 'index.html'); // single-page app fallback
   }
   try {
-    const raw = await readFile(file);
     const hashed = /[.-][A-Za-z0-9_-]{8,}\.(js|css|woff2?)$/.test(file);
-    const packed = encodeFor(file, raw, String(req.headers['accept-encoding'] || ''));
-    res.writeHead(200, {
+    const headers = {
       ...SECURITY_HEADERS,
       'content-type': TYPES[extname(file)] || 'application/octet-stream',
       'cache-control': hashed ? 'public, max-age=31536000, immutable' : 'no-cache',
       vary: 'accept-encoding',
-      ...(packed ? { 'content-encoding': packed.enc } : {}),
-    });
-    res.end(req.method === 'HEAD' ? undefined : packed ? packed.body : raw);
+    };
+    // Streamed rather than buffered: sample .dwproj files run to hundreds of MB, and the sample loader's progress
+    // bar needs the content-length (writeHead + end(buffer) would go out chunked, without one).
+    if (!COMPRESSIBLE.has(extname(file))) {
+      const { size } = await stat(file);
+      res.writeHead(200, { ...headers, 'content-length': size });
+      if (req.method === 'HEAD') return res.end();
+      return pipeline(createReadStream(file), res).catch(() => {}); // client went away mid-download
+    }
+    const raw = await readFile(file);
+    const packed = encodeFor(file, raw, String(req.headers['accept-encoding'] || ''));
+    const body = packed ? packed.body : raw;
+    res.writeHead(200, { ...headers, 'content-length': body.length, ...(packed ? { 'content-encoding': packed.enc } : {}) });
+    res.end(req.method === 'HEAD' ? undefined : body);
   } catch {
     deny(res, 404, 'Not found');
   }

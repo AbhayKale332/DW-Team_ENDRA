@@ -209,7 +209,7 @@ viewer_sample/
 # Sample projects over GitHub's 100 MB limit: hosted on HF dataset Abhay-Kale/DW_Samples, fetched by Frontend/Dockerfile
 Frontend/public/samples/Cartosat 3 Sample/Cartosat 3 Sample.dwproj
 Frontend/public/samples/Cartosat3-PAN-Sample(B&W)/Cartosat3-PAN-Sample(B&W).dwproj
-Frontend/public/samples/Mountainus_Region_C2E/Mountainus_Region_C2E.dwproj
+Frontend/public/samples/Hilly_Region Sample/Hilly_Region Sample.dwproj
 
 # ============================================================
 

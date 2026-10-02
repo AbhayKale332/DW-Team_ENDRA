@@ -10,7 +10,7 @@ COPY . .
 ARG SAMPLES_URL=https://huggingface.co/datasets/Abhay-Kale/DW_Samples/resolve/main
 ADD ["${SAMPLES_URL}/Cartosat%203%20Sample/Cartosat%203%20Sample.dwproj", "public/samples/Cartosat 3 Sample/Cartosat 3 Sample.dwproj"]
 ADD ["${SAMPLES_URL}/Cartosat3-PAN-Sample%28B%26W%29/Cartosat3-PAN-Sample%28B%26W%29.dwproj", "public/samples/Cartosat3-PAN-Sample(B&W)/Cartosat3-PAN-Sample(B&W).dwproj"]
-ADD ["${SAMPLES_URL}/Mountainus_Region_C2E/Mountainus_Region_C2E.dwproj", "public/samples/Mountainus_Region_C2E/Mountainus_Region_C2E.dwproj"]
+ADD ["${SAMPLES_URL}/Hilly_Region%20Sample/Hilly_Region%20Sample.dwproj", "public/samples/Hilly_Region Sample/Hilly_Region Sample.dwproj"]
 RUN chmod -R a+rX public/samples
 RUN npm run build
 
