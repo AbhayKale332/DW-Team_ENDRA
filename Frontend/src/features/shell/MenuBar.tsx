@@ -19,6 +19,7 @@ import {
   IconPackage,
   IconPlaneTilt,
   IconRoute,
+  IconRuler,
   IconSettings,
   IconSparkles,
   IconTable,
@@ -37,6 +38,8 @@ import { loadSamples, useSamples } from '@/lib/samples';
 import { setViewMode } from '@/features/viewport/overlays/ViewSwitcher';
 import { setCameraMode } from '@/features/viewport/overlays/NavigationHud';
 import { openAny } from './commands';
+import { toggleMeasure } from '@/features/analysis/MeasureMenu';
+import { useTool } from '@/store/tool';
 import classes from './shell.module.css';
 
 const I = { size: 16, stroke: 1.6 };
@@ -73,6 +76,7 @@ export function MenuBar() {
   const hasAnchor = useScene((s) => !!s.scene?.terrain);
   const mode = useView((s) => s.mode);
   const hoverInfo = useView((s) => s.hoverInfo);
+  const measuring = useTool((s) => s.tool === 'measure');
   const ui = useUi();
   const showStatusBar = useSettings((s) => s.showStatusBar);
   const { colorScheme, setColorScheme } = useMantineColorScheme();
@@ -247,6 +251,11 @@ export function MenuBar() {
           </Menu.Item>
           <Menu.Item leftSection={<IconRoute {...I} />} rightSection={<Shortcut k="T" />} disabled={!hasScene} onClick={() => setCameraMode('tour')}>
             Drone Tour
+          </Menu.Item>
+          <Menu.Divider />
+          <Menu.Label>Analysis</Menu.Label>
+          <Menu.Item leftSection={<IconRuler {...I} />} rightSection={<Shortcut k="M" />} disabled={!hasScene} onClick={toggleMeasure}>
+            {measuring ? 'Stop Measuring' : 'Measure…'}
           </Menu.Item>
           <Menu.Divider />
           <Menu.Label>Display</Menu.Label>

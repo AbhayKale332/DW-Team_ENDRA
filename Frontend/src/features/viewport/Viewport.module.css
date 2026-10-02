@@ -19,6 +19,7 @@
 }
 
 .viewport[data-camera='walk'] .canvas,
-.viewport[data-camera='flight'] .canvas {
+.viewport[data-camera='flight'] .canvas,
+.viewport[data-measuring][data-camera='orbit'] .canvas {
   cursor: crosshair;
 }

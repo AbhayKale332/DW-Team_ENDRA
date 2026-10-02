@@ -7,6 +7,7 @@ import { ScenarioOverlay } from '@/features/usecases/UseCasesTab';
 import { GcpOverlay } from '@/features/gcp/GcpOverlay';
 import { ProductChip } from '@/features/anchoring/ProductChip';
 import { ToolPalette } from '@/features/analysis/ToolPalette';
+import { MeasurePanel } from '@/features/analysis/MeasurePanel';
 import { ViewSwitcher } from './ViewSwitcher';
 import { NavControls } from './NavControls';
 import { Compass } from './Compass';
@@ -49,6 +50,7 @@ export function ViewportOverlays() {
         {!previewing && <ViewSwitcher />}
         {hasScene && orbit && <ToolPalette />}
         {hasScene && <ProductChip />}
+        {hasScene && orbit && <MeasurePanel />}
         <ScenarioOverlay />
         <GcpOverlay />
       </div>

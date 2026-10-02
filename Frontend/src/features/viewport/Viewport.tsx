@@ -7,6 +7,7 @@ import { Box } from '@mantine/core';
 import { useScene } from '@/store/scene';
 import { useView, VIEW_LABELS } from '@/store/view';
 import { useCamera } from '@/store/camera';
+import { useTool } from '@/store/tool';
 import { useSettings } from '@/store/settings';
 import { Terrain } from './scene/Terrain';
 import { Objects } from './scene/Objects';
@@ -71,6 +72,7 @@ export function Viewport() {
   const scene = useScene((s) => s.scene);
   const mode = useView((s) => s.mode);
   const camMode = useCamera((s) => s.mode);
+  const measuring = useTool((s) => s.tool === 'measure');
   const [glError, setGlError] = useState<string | null>(null);
   const label = useMemo(() => {
     if (!scene) return 'Empty viewport. Open an image or a sample scene to begin.';
@@ -81,7 +83,7 @@ export function Viewport() {
   const animating = mode === 'dsm3d';
 
   return (
-    <Box className={classes.viewport} id="dw-viewport" data-view={mode} data-camera={camMode}>
+    <Box className={classes.viewport} id="dw-viewport" data-view={mode} data-camera={camMode} data-measuring={measuring || undefined}>
       {glError ? (
         <WebGLFallback message={glError} />
       ) : (

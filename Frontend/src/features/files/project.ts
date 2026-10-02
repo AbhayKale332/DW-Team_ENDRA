@@ -16,7 +16,7 @@ import { prepareInput, stemOf } from '@/lib/input';
 import { useScene } from '@/store/scene';
 import { useView } from '@/store/view';
 import { useCamera, viewportApi } from '@/store/camera';
-import { useTool, type GridPoint } from '@/store/tool';
+import { MEASURE_MIN_POINTS, MEASURE_MODES, useTool, type GridPoint, type MeasureMode } from '@/store/tool';
 import { useUi } from '@/store/ui';
 import { useAnchor } from '@/store/anchor';
 import { pickUseCases, snapshotUseCases } from '@/store/usecases';
@@ -143,7 +143,7 @@ export async function buildProjectBlob({ fetchOutputs = true }: { fetchOutputs?:
     provenance: scene.provenance,
     view,
     bookmarks: useCamera.getState().bookmarks,
-    tools: { probe: tool.probe, measure: tool.measure, profile: tool.profile },
+    tools: { probe: tool.probe, measure: tool.measure, measureMode: tool.measureMode, profile: tool.profile },
     reference: reference ? { name: reference.name, kind: reference.kind, alignment: reference.alignment, notes: reference.notes } : null,
     classes: scene.classes ? { names: Array.from(scene.classes.names, (n) => n ?? '') } : null,
     anchoring: a ? { source: a.source, sourceId: a.sourceId, structureShare: a.structureShare, heightRef: scene.product === 'DSM' ? 'dsm' : 'ndsm' } : null,
@@ -295,7 +295,18 @@ async function adoptProject({ manifest, files, image, heights, uncertainty, clas
   useView.getState().set(manifest.view as never);
   useCamera.getState().set({ mode: 'orbit', bookmarks: manifest.bookmarks ?? [] });
   const probe = manifest.tools?.probe;
-  useTool.getState().set({ probe: isPoint(probe) ? probe : null, measure: points(manifest.tools?.measure).slice(0, 2), profile: points(manifest.tools?.profile) });
+  const mode = manifest.tools?.measureMode;
+  const measureMode = MEASURE_MODES.includes(mode as MeasureMode) ? (mode as MeasureMode) : 'height';
+  const measure = points(manifest.tools?.measure).slice(0, measureMode === 'height' ? 2 : 500);
+  useTool.getState().set({
+    probe: isPoint(probe) ? probe : null,
+    // a saved measurement reopens with its read-out
+    ...(measure.length ? { tool: 'measure' as const } : {}),
+    measure,
+    measureMode,
+    measureDone: measureMode === 'height' ? measure.length === 2 : measure.length >= MEASURE_MIN_POINTS[measureMode],
+    profile: points(manifest.tools?.profile),
+  });
   restoreUseCases(scene.id, pickUseCases(manifest.usecases));
   useUi.getState().set({ projectOpen: false });
 

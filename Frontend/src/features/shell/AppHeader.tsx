@@ -5,6 +5,7 @@ import { useUi } from '@/store/ui';
 import { useScene } from '@/store/scene';
 import { useUseCases, type UseCase } from '@/store/usecases';
 import { setRawOutput, useView } from '@/store/view';
+import { MeasureMenu } from '@/features/analysis/MeasureMenu';
 import { BrandMark } from './Brand';
 import { MenuBar } from './MenuBar';
 import { BackendStatus } from './BackendStatus';
@@ -116,6 +117,7 @@ export function AppHeader() {
       <span className={classes.divider} aria-hidden />
       <ScenariosMenu />
       <GcpButton />
+      <MeasureMenu />
       <RawToggle />
       <div className={`${classes.headerActions} dw-no-print`}>
         <Button component="a" href={DOCS_URL} target="_blank" rel="noopener" size="compact-md" variant="subtle" color="gray" leftSection={<IconBook size={16} stroke={1.6} />}>

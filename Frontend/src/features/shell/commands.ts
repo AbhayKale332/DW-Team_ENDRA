@@ -8,6 +8,7 @@ import { saveProject } from '@/features/files/project';
 import { runExport } from '@/features/files/exports';
 import { setViewMode } from '@/features/viewport/overlays/ViewSwitcher';
 import { setCameraMode } from '@/features/viewport/overlays/NavigationHud';
+import { toggleMeasure } from '@/features/analysis/MeasureMenu';
 
 export interface Shortcut {
   keys: string;
@@ -35,6 +36,10 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: 'T', label: 'Drone tour', group: 'Navigation' },
   { keys: 'Esc', label: 'Leave navigation mode', group: 'Navigation' },
   { keys: 'O', label: 'All 3D objects off / back to your selection', group: 'Tools' },
+  { keys: 'M', label: 'Measure length, area or height / stop', group: 'Tools' },
+  { keys: 'Enter', label: 'Measure: finish the line / close the polygon', group: 'Tools' },
+  { keys: 'Backspace', label: 'Measure: undo the last point', group: 'Tools' },
+  { keys: 'Esc', label: 'Measure: clear (again: stop measuring)', group: 'Tools' },
   { keys: '?', label: 'Keyboard shortcuts', group: 'Help' },
 ];
 
@@ -69,6 +74,7 @@ export function useGlobalHotkeys() {
       ['T', () => hasScene() && setCameraMode(useCamera.getState().mode === 'tour' ? 'orbit' : 'tour')],
       ['Escape', () => useCamera.getState().mode !== 'orbit' && !document.pointerLockElement && setCameraMode('orbit')],
       ['O', () => !!useScene.getState().scene?.objects && toggleAllObjects()],
+      ['M', () => hasScene() && toggleMeasure()],
       ['shift+slash', () => useUi.getState().set({ dialog: 'shortcuts' })],
     ],
     ['INPUT', 'TEXTAREA', 'SELECT'],

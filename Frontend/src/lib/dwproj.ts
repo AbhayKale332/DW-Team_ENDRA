@@ -36,7 +36,8 @@ export interface Manifest {
   provenance: Provenance;
   view: Record<string, unknown>;
   bookmarks: CameraBookmark[];
-  tools: { probe: unknown; measure: unknown; profile: unknown };
+  /** `measureMode` is absent in older projects, whose `measure` was a two-point distance & slope (now Height). */
+  tools: { probe: unknown; measure: unknown; measureMode?: unknown; profile: unknown };
   reference: { name: string; kind: ReferenceSurface['kind']; alignment: ReferenceSurface['alignment']; notes: string[] } | null;
   /** Present when the project carries `seg.png` (object classes). Absent in older projects. */
   classes?: { names: string[] } | null;
