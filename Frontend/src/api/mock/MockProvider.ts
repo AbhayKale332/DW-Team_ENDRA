@@ -53,11 +53,12 @@ export class MockProvider implements InferenceProvider {
     const p = readProject(new Uint8Array(buf));
     const meta: SceneMeta = p.manifest.meta;
     const gsd = req.gsd ?? p.manifest.gsd;
-    const { heights, classes } = p;
+    const { heights, classes, uncertainty } = p;
     const objects = p.objects ? { ...p.objects, gsd } : null;
     const file = (name: string, data: BlobPart | undefined, type: string) => (data ? [{ name, blob: new Blob([data], { type }) }] : []);
     return {
       heights,
+      uncertainty,
       classes,
       objects,
       meta: { ...meta, scene: { ...meta.scene, gsd_m: gsd, gsd_source: req.gsd ? 'user' : 'assumed' } },
@@ -68,6 +69,7 @@ export class MockProvider implements InferenceProvider {
         ...file('meta.json', JSON.stringify(meta), 'application/json'),
         ...file('seg.png', p.files['seg.png'] as BlobPart | undefined, 'image/png'),
         ...file('objects.json', p.files['objects.json'] as BlobPart | undefined, 'application/json'),
+        ...file('ndsm_std_m.npy', p.files['ndsm_std_m.npy'] as BlobPart | undefined, 'application/octet-stream'),
       ],
     };
   }

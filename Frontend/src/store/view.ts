@@ -4,7 +4,7 @@ import type { ObjectKind, ObjectKinds, SceneObjects } from '@/domain/types';
 import type { PoiCategory } from '@/lib/poi';
 
 export type ViewMode = 'dsm3d' | 'heightmap' | 'image';
-export type DrapeLayer = 'tint' | 'optical' | 'height' | 'hillshade' | 'slope' | 'classes' | 'reference' | 'error';
+export type DrapeLayer = 'tint' | 'optical' | 'height' | 'hillshade' | 'slope' | 'classes' | 'uncertainty' | 'reference' | 'error';
 export type RangeMode = 'robust' | 'full' | 'custom';
 
 export const OBJECT_KINDS: ObjectKind[] = ['buildings', 'trees', 'water'];
@@ -25,6 +25,7 @@ export const LAYER_LABELS: Record<DrapeLayer, string> = {
   hillshade: 'Hillshade',
   slope: 'Slope (°)',
   classes: 'Object classes',
+  uncertainty: 'Uncertainty (σ)',
   reference: 'Reference height',
   error: 'Error vs reference',
 };

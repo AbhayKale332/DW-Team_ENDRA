@@ -1,4 +1,5 @@
-import type { Metrics, StratumMetrics, ValidationResult } from '@/domain/types';
+import type { Metrics, StratumMetrics, UncertaintyGrid, UncertaintyValidation, ValidationResult } from '@/domain/types';
+import { MAX_SPARSIFY_PX, sparsification } from './uncertainty';
 
 /** Height strata used by the model's evaluation (v5 eval/metrics.py). Bounds are on the reference height. */
 export const STRATA: Array<[number, number, string]> = [
@@ -82,8 +83,48 @@ export function groundOffset(pred: Float32Array, ref: Float32Array): number {
   return diffs[Math.floor(diffs.length / 2)];
 }
 
-/** Full validation: global + per-stratum metrics, density scatter and signed-error histogram. */
-export function validate(pred: Float32Array, refIn: Float32Array, opts: { removeOffset: boolean }): ValidationResult {
+/** Error on the confident pixels (σ at or below the scene's cut) and the sparsification curves, over the pixels where
+ *  prediction, reference (less `offset`) and σ are all finite. Null when no pixel qualifies. */
+export function validateUncertainty(pred: Float32Array, refIn: Float32Array, sigma: UncertaintyGrid, offset = 0): UncertaintyValidation | null {
+  const s = sigma.data;
+  const conf = new Acc();
+  let compared = 0;
+  let withSigma = 0;
+  for (let i = 0; i < pred.length; i++) {
+    const p = pred[i];
+    const t = refIn[i] - offset;
+    if (!Number.isFinite(p) || !Number.isFinite(t)) continue;
+    compared++;
+    if (!Number.isFinite(s[i])) continue;
+    withSigma++;
+    if (s[i] <= sigma.confidentM) conf.add(p, t);
+  }
+  if (!withSigma) return null;
+  // the curves rank pixels, so an even stride through a big scene keeps their shape
+  const stride = Math.max(1, Math.ceil(withSigma / MAX_SPARSIFY_PX));
+  const err2 = new Float64Array(Math.ceil(withSigma / stride));
+  const sig = new Float64Array(err2.length);
+  let k = 0;
+  let seen = 0;
+  for (let i = 0; i < pred.length && k < err2.length; i++) {
+    const p = pred[i];
+    const t = refIn[i] - offset;
+    if (!Number.isFinite(p) || !Number.isFinite(t) || !Number.isFinite(s[i])) continue;
+    if (seen++ % stride) continue;
+    err2[k] = (p - t) * (p - t);
+    sig[k++] = s[i];
+  }
+  return {
+    confidentM: sigma.confidentM,
+    confident: conf.result(),
+    coverage: conf.n / compared,
+    sparsification: sparsification(err2.subarray(0, k), sig.subarray(0, k)),
+  };
+}
+
+/** Full validation: global + per-stratum metrics, density scatter and signed-error histogram, and what σ says about the
+ *  error when the scene carries one. */
+export function validate(pred: Float32Array, refIn: Float32Array, opts: { removeOffset: boolean; sigma?: UncertaintyGrid | null }): ValidationResult {
   const offset = opts.removeOffset ? groundOffset(pred, refIn) : 0;
   const all = new Acc();
   const strata = STRATA.map(() => new Acc());
@@ -141,5 +182,6 @@ export function validate(pred: Float32Array, refIn: Float32Array, opts: { remove
     offset,
     scatter: { bins, lo, hi, counts },
     errorHist: { lo: -eRange, hi: eRange, counts: eCounts },
+    uncertainty: opts.sigma && opts.sigma.data.length === pred.length ? validateUncertainty(pred, refIn, opts.sigma, offset) : null,
   };
 }

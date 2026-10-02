@@ -41,6 +41,10 @@ config so v4 weights build a v4-shaped network.
     own shadows (GAMUS tiles carry no sun metadata), then the prediction's cast
     shadows are scored under that sun.  No labels needed at deploy time, but the
     GT sun makes it a fair per-tile comparison between versions.
+  * σ calibration, when the model returns Head B's spread `b_std` (v4/v5): the
+    plain pass is tapped and scored per tile with sparsification curves, AUSE
+    and AURG (`eval/sparsification.py`, Poggi et al. CVPR 2020), under
+    `<tag>_plain.uncertainty`.  Checks that the σ the web app shows tracks error.
   * `--compare`: `v3_v4_v5.md` from any mix of these `test_metrics.json` files
     and training `metrics.json` files (which carry the same `test_*` keys).
 """
@@ -86,6 +90,7 @@ def _load_here(name: str, rel: str):
 
 
 shadow = _load_here("_dw_v5_shadow", "viz/shadow.py")
+sparse = _load_here("_dw_v5_sparsification", "eval/sparsification.py")
 
 # Config keys that describe the *run*, not the network.  Restoring these from a
 # training config would point the eval back at the machine that trained it.
@@ -155,11 +160,16 @@ class Sharpness:
 
 
 class _Tap:
-    """Wraps a loader + model so the plain pass also feeds `Sharpness`."""
+    """Wraps a loader + model so the plain pass also feeds `Sharpness` (when the
+    evaluator does not compute it itself) and, when the model returns Head B's
+    spread `b_std`, the sparsification meter (AUSE / AURG)."""
 
-    def __init__(self, loader, max_h: float):
+    def __init__(self, loader, max_h: float, sharp: bool = True):
         self.loader, self.max_h, self.cur = loader, max_h, None
-        self.sharp = Sharpness()
+        # v5's evaluate() reads the source from loader.dataset (no_urban): keep it visible
+        self.dataset = getattr(loader, "dataset", None)
+        self.sharp = Sharpness() if sharp else None
+        self.sparse = sparse.SparsificationMeter()
 
     def __iter__(self):
         for b in self.loader:
@@ -186,7 +196,10 @@ class _Tapped(torch.nn.Module):
                 and x.shape[0] == b["target"].shape[0]:
             t = b["target"]
             v = b["valid"].bool() & (t <= self.tap.max_h)
-            self.tap.sharp.add(out["fused"].detach(), t, v)
+            if self.tap.sharp is not None:
+                self.tap.sharp.add(out["fused"].detach(), t, v)
+            if out.get("b_std") is not None:
+                self.tap.sparse.add_batch(out["fused"], t, out["b_std"], v)
             self.tap.cur = None
         return out
 
@@ -199,7 +212,7 @@ class Replicated(torch.nn.Module):
     thread-local, so the workers re-enter grad mode and autocast explicitly.
     """
 
-    KEYS = ("fused", "seg")
+    KEYS = ("fused", "seg", "b_std")
 
     def __init__(self, model, devices):
         super().__init__()
@@ -421,6 +434,8 @@ def compare_table(results: list[tuple[str, dict]], tag: str | None = None) -> st
     row("grad ratio", lambda r: _g(r, f"{tag}_plain", "grad_ratio")
         or _g(r, "sharpness", "grad_ratio"), 2)
     row("shadow IoU (qual)", lambda r: _g(r, "qualitative", "shadow_iou_pred_mean"))
+    row("sigma AUSE (RMSE)", lambda r: _g(r, f"{tag}_plain", "uncertainty", "ause_rmse_m"))
+    row("sigma AURG (RMSE)", lambda r: _g(r, f"{tag}_plain", "uncertainty", "aurg_rmse_m"))
 
     strata = []
     for _, r in results:
@@ -612,15 +627,24 @@ def main(argv=None) -> None:
         if not on:
             continue
         t0 = time.time()
-        if suffix == "plain" and not native_sharp:
-            tap = _Tap(dl, cfg.max_valid_height_m)
+        if suffix == "plain":
+            # tapped: sharpness for evaluators without it, and sigma calibration
+            # (sparsification / AUSE) whenever the model returns b_std
+            tap = _Tap(dl, cfg.max_valid_height_m, sharp=not native_sharp)
             res[f"{tag}_plain"] = evaluate(tap.wrap(model), tap, cfg, device, use_tta=False)
-            res[f"{tag}_plain"].update(tap.sharp.result())
-            res["sharpness"] = tap.sharp.result()
+            if tap.sharp is not None:
+                res[f"{tag}_plain"].update(tap.sharp.result())
+                res["sharpness"] = tap.sharp.result()
+            unc = tap.sparse.result()
+            if unc:
+                res[f"{tag}_plain"]["uncertainty"] = unc
         else:
             res[f"{tag}_{suffix}"] = evaluate(model, dl, cfg, device, use_tta=tta)
         print(f"[test] {tag}_{suffix:<6} {format_line(res[f'{tag}_{suffix}'])}"
               f"  ({time.time() - t0:.0f}s)", flush=True)
+        if suffix == "plain" and res[f"{tag}_plain"].get("uncertainty"):
+            print(f"[test] {tag}_sigma  {sparse.format_line(res[f'{tag}_plain']['uncertainty'])}",
+                  flush=True)
         (out_dir / "test_metrics.json").write_text(json.dumps(res, indent=2))
 
     if a.sliding_tiles:

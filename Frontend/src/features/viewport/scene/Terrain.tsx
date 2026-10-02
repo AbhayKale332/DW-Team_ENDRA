@@ -162,6 +162,30 @@ export function Terrain() {
     };
   }, [scene, reference, uniforms, invalidate]);
 
+  // Per-pixel σ (only when the backend supplied ndsm_std_m.npy); -1 marks pixels without one.
+  useEffect(() => {
+    const u = scene?.uncertainty;
+    if (!u) {
+      uniforms.uHasStd.value = 0;
+      // a result without σ does not stay on the uncertainty drape (back to the default layers)
+      const v = useView.getState();
+      if (v.layer3d === 'uncertainty') v.set({ layer3d: 'optical' });
+      if (v.layer2d === 'uncertainty') v.set({ layer2d: 'height' });
+      invalidate();
+      return;
+    }
+    const t = createHeightTexture(u.data, u.width, u.height, 0, -1);
+    uniforms.uStd.value = t;
+    uniforms.uStdMax.value = 2 * u.confidentM;
+    uniforms.uHasStd.value = 1;
+    invalidate();
+    return () => {
+      t.dispose();
+      uniforms.uStd.value = null;
+      uniforms.uHasStd.value = 0;
+    };
+  }, [scene, uniforms, invalidate]);
+
   // Object-class texture + palette (only when the backend supplied a class map).
   useEffect(() => {
     const classes = scene?.classes;

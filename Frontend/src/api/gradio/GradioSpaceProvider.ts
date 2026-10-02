@@ -5,6 +5,7 @@ import { parseStatus, plainText } from './parseStatus';
 import { parseNpy } from '@/lib/npy';
 import { classMapFromPng } from '@/lib/classMap';
 import { parseObjects } from '@/lib/objects';
+import { parseUncertainty } from '@/lib/uncertainty';
 import type { Artefact, SceneMeta } from '@/domain/types';
 
 /** Same-origin path of the authenticating proxy (Vite dev/preview server or server/serve.mjs). */
@@ -211,9 +212,10 @@ export class GradioSpaceProvider implements InferenceProvider {
     const metaFile = findArtefact(artefacts, 'meta.json');
     const segFile = findArtefact(artefacts, 'seg.png');
     const objectsFile = findArtefact(artefacts, 'objects.json');
+    const stdFile = findArtefact(artefacts, 'ndsm_std_m.npy');
 
     onProgress({ stage: 'fetching' });
-    const [npyBuf, meta, segBuf, objectsJson] = await Promise.all([
+    const [npyBuf, meta, segBuf, objectsJson, stdBuf] = await Promise.all([
       this.http(npyUrl.slice(this.base.length), { signal }).then((r) => r.arrayBuffer()),
       metaFile?.url
         ? this.http(metaFile.url.slice(this.base.length), { signal })
@@ -232,11 +234,18 @@ export class GradioSpaceProvider implements InferenceProvider {
             .then((r) => r.json() as Promise<unknown>)
             .catch(() => null)
         : Promise.resolve(null),
+      // Optional: per-pixel σ, written by v5 backends only (the v3 Space does not).
+      stdFile?.url
+        ? this.http(stdFile.url.slice(this.base.length), { signal })
+            .then((r) => r.arrayBuffer())
+            .catch(() => null)
+        : Promise.resolve(null),
     ]);
     const arr = parseNpy(npyBuf);
     const [h, w] = arr.shape;
     return {
       heights: { data: arr.data, width: w, height: h },
+      uncertainty: parseUncertainty(stdBuf, w, h),
       classes: classMapFromPng(segBuf, meta, w, h),
       objects: parseObjects(objectsJson, { width: w, height: h, gsd: meta.scene?.gsd_m }),
       meta,

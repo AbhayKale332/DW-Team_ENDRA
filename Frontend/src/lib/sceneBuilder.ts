@@ -2,11 +2,14 @@ import type { Artefact, ClassMap, Georef, GridPoint, GsdSource, HeightGrid, Prod
 import { computeStats } from './heights';
 import { proj4ForEpsg, rescaleTransform } from './georef';
 import { resampleMask } from './cloud';
+import { withConfidentCut } from './uncertainty';
 
 export interface BuildSceneArgs {
   name: string;
   image: Blob;
   heights: HeightGrid;
+  /** Per-pixel σ of `heights` (`ndsm_std_m.npy`); dropped if the size does not match. */
+  uncertainty?: HeightGrid | null;
   /** Object classes on the height grid; dropped if the size does not match. */
   classes?: ClassMap | null;
   /** 3D objects on the height grid; dropped if the grid does not match. */
@@ -119,6 +122,8 @@ export async function buildScene(a: BuildSceneArgs): Promise<Scene> {
     imageWidth: size.width,
     imageHeight: size.height,
     heights,
+    // no σ under the cloud: the heights there are filled, not measured
+    uncertainty: a.uncertainty && a.uncertainty.width === heights.width && a.uncertainty.height === heights.height ? withConfidentCut(a.uncertainty, meta, under) : null,
     classes: a.classes && a.classes.width === heights.width && a.classes.height === heights.height ? a.classes : null,
     // Positions are grid pixels; metres come from the scene's effective GSD, so carry that one.
     objects:

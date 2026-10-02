@@ -3,6 +3,7 @@
  *  manifest.json      scene, view, tools, scenarios, anchoring settings (Manifest below)
  *  input.png|jpg      the drape image
  *  ndsm_m.npy         height above ground, Float32 metres
+ *  ndsm_std_m.npy     per-pixel σ of those heights, Float32 metres (optional; v5 backends only)
  *  seg.png            object classes (optional)
  *  cloud_mask.png     clouds masked out of the model input, soft alpha (optional; heights already filled)
  *  objects.json       3D objects, the Space's schema (optional)
@@ -19,6 +20,7 @@ import { strFromU8, Unzip, UnzipInflate, unzipSync } from 'fflate';
 import type { AnchoringInfo, CameraBookmark, ClassMap, Georef, GroundControlPoint, HeightGrid, Provenance, ReferenceSurface, SceneMeta, SceneObjects } from '@/domain/types';
 import { parseNpy } from './npy';
 import { parseObjects } from './objects';
+import { parseUncertainty } from './uncertainty';
 import { decodeGray8Png } from './png';
 
 export interface Manifest {
@@ -60,6 +62,8 @@ export interface ProjectCore {
   files: Record<string, Uint8Array>;
   image: Blob;
   heights: HeightGrid;
+  /** σ of the heights (`ndsm_std_m.npy`), when the project carries one. */
+  uncertainty: HeightGrid | null;
   classes: ClassMap | null;
   objects: SceneObjects | null;
 }
@@ -101,7 +105,8 @@ export function readProjectFiles(files: Record<string, Uint8Array>): ProjectCore
       console.warn('Project objects.json unreadable; 3D objects disabled', e);
     }
   }
-  return { manifest, files, image, heights: { data: arr.data, width: w, height: h }, classes, objects };
+  const uncertainty = files['ndsm_std_m.npy'] ? parseUncertainty(buf(files['ndsm_std_m.npy']), w, h) : null;
+  return { manifest, files, image, heights: { data: arr.data, width: w, height: h }, uncertainty, classes, objects };
 }
 
 /** The heavy, optional part of a project: not needed to show the scene. */

@@ -5,6 +5,7 @@ import { buf, json, mimeOf, readProject, readProjectFiles, type Manifest, type P
 import type { DemCellsCache } from '@/lib/dem';
 import { parseNpy, writeNpyF32 } from '@/lib/npy';
 import { serializeObjects } from '@/lib/objects';
+import { parseUncertainty } from '@/lib/uncertainty';
 import type { OsmFeature } from '@/lib/osm';
 import type { Poi } from '@/lib/poi';
 import { decodeGray8Png, encodeGray8Png } from '@/lib/png';
@@ -82,6 +83,7 @@ export async function buildProjectBlob({ fetchOutputs = true }: { fetchOutputs?:
   put(imageName, await bytes(scene.image));
   // always the above-ground heights: an anchored scene re-anchors from dem_cells.json when reopened
   put('ndsm_m.npy', writeNpyF32((scene.ndsm ?? scene.heights).data, [scene.heights.height, scene.heights.width]));
+  if (scene.uncertainty) put('ndsm_std_m.npy', writeNpyF32(scene.uncertainty.data, [scene.heights.height, scene.heights.width]));
   if (reference) put('reference_m.npy', writeNpyF32(reference.data, [scene.heights.height, scene.heights.width]));
   if (scene.classes) put('seg.png', await bytes(encodeGray8Png(scene.classes.data, scene.classes.width, scene.classes.height)));
   // Same schema the Space publishes, so a project's objects.json is readable by anything that reads the Space's.
@@ -116,9 +118,9 @@ export async function buildProjectBlob({ fetchOutputs = true }: { fetchOutputs?:
   }
   const outputs: NonNullable<Manifest['outputs']> = [];
   for (const art of scene.artefacts) {
-    // the model's height map is the project's own ndsm_m.npy: do not store it twice
-    if (art.name === 'ndsm_m.npy') {
-      outputs.push({ name: art.name, file: 'ndsm_m.npy' });
+    // the model's height map (and σ) are the project's own ndsm_m.npy (ndsm_std_m.npy): do not store them twice
+    if (art.name === 'ndsm_m.npy' || (art.name === 'ndsm_std_m.npy' && scene.uncertainty)) {
+      outputs.push({ name: art.name, file: art.name });
       continue;
     }
     const b = await outputBlob(art, fetchOutputs);
@@ -214,7 +216,7 @@ function restageSource(manifest: Manifest, files: Files) {
 }
 
 /** Make a project the current workspace. `sample` marks a bundled sample scene. */
-async function adoptProject({ manifest, files, image, heights, classes, objects }: ProjectCore, opts: { sample?: boolean } = {}) {
+async function adoptProject({ manifest, files, image, heights, uncertainty, classes, objects }: ProjectCore, opts: { sample?: boolean } = {}) {
   const outputs = projectOutputs(manifest, files);
   let cloud: SceneCloud | null = null;
   if (manifest.cloud && files['cloud_mask.png']) {
@@ -230,6 +232,7 @@ async function adoptProject({ manifest, files, image, heights, classes, objects 
     name: manifest.name,
     image,
     heights,
+    uncertainty,
     classes,
     objects,
     cloud,
@@ -352,7 +355,8 @@ export async function openResultBundle(input: File[]) {
         for (const [k, v] of Object.entries(z)) files[k.split('/').pop()!.toLowerCase()] = v;
       } else files[f.name.toLowerCase()] = new Uint8Array(await f.arrayBuffer());
     }
-    const npyKey = ['ndsm_m.npy', 'pred_ndsm_m.npy', 'dsm_m.npy'].find((k) => files[k]) ?? Object.keys(files).find((k) => k.endsWith('.npy') && !k.startsWith('gt_'));
+    const npyKey =
+      ['ndsm_m.npy', 'pred_ndsm_m.npy', 'dsm_m.npy'].find((k) => files[k]) ?? Object.keys(files).find((k) => k.endsWith('.npy') && !k.startsWith('gt_') && !k.includes('_std'));
     if (!npyKey) throw new Error('The bundle has no height map (ndsm_m.npy).');
     const arr = parseNpy(files[npyKey].slice().buffer);
     const [h, w] = arr.shape;
@@ -373,6 +377,8 @@ export async function openResultBundle(input: File[]) {
       name,
       image,
       heights: { data: arr.data, width: w, height: h },
+      // v5 bundles carry the per-pixel σ next to the heights
+      uncertainty: files['ndsm_std_m.npy'] ? parseUncertainty(buf(files['ndsm_std_m.npy']), w, h) : null,
       meta,
       provenance: { provider: 'result bundle', source: 'bundle', createdAt: new Date().toISOString() },
       statusLines: [`Opened from ${input.map((f) => f.name).join(', ')}`],

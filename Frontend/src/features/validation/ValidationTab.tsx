@@ -68,7 +68,7 @@ function Metrics() {
   const validation = useScene((s) => s.validation);
 
   useEffect(() => {
-    const t = setTimeout(() => useScene.getState().setValidation(validate(scene.heights.data, reference.data, { removeOffset })), 0);
+    const t = setTimeout(() => useScene.getState().setValidation(validate(scene.heights.data, reference.data, { removeOffset, sigma: scene.uncertainty })), 0);
     return () => clearTimeout(t);
   }, [scene, reference, removeOffset]);
 
@@ -138,8 +138,32 @@ function Metrics() {
     [validation],
   );
 
+  const sparsify = useCallback(
+    (t: ChartTheme) => {
+      const sp = validation?.uncertainty?.sparsification;
+      if (!sp) return {};
+      // the curves' forced 0 at 100 % removed is for the areas only: plot up to the last real step
+      const pts = (ys: number[]) => sp.removed.slice(0, -1).map((x, i) => [x * 100, ys[i]]);
+      return {
+        grid: { left: 46, right: 12, top: 48, bottom: 40 },
+        legend: { top: 0, textStyle: { color: t.dim, fontSize: 10 }, itemHeight: 8 },
+        tooltip: { trigger: 'axis', valueFormatter: (v: number) => `${Number(v).toFixed(2)} m` },
+        xAxis: { type: 'value', ...baseAxis(t, 'Pixels removed, most uncertain first (%)'), min: 0, max: 100 },
+        yAxis: { type: 'value', ...baseAxis(t, 'RMSE of the rest (m)'), nameGap: 34, min: 0 },
+        series: [
+          { name: 'By model σ', type: 'line', showSymbol: false, data: pts(sp.bySigma), lineStyle: { width: 2, color: '#2d6cdf' }, itemStyle: { color: '#2d6cdf' } },
+          { name: 'By true error (best)', type: 'line', showSymbol: false, data: pts(sp.oracle), lineStyle: { width: 1.5, type: 'dashed', color: '#12b886' }, itemStyle: { color: '#12b886' } },
+          { name: 'Random', type: 'line', showSymbol: false, data: pts(sp.removed.map(() => sp.rmse)), lineStyle: { width: 1.5, type: 'dotted', color: t.dim }, itemStyle: { color: t.dim } },
+        ],
+      };
+    },
+    [validation],
+  );
+
   if (!validation) return <Text size="xs">Computing…</Text>;
   const a = validation.all;
+  const u = validation.uncertainty;
+  const sp = u?.sparsification;
   return (
     <Stack gap="sm">
       <Table withTableBorder withColumnBorders fz="xs" verticalSpacing={4} aria-label="Validation metrics">
@@ -167,6 +191,51 @@ function Metrics() {
       {validation.biasRemoved && (
         <Text size="xs" c="dimmed">
           Ground offset removed: {validation.offset.toFixed(2)} m (median reference − prediction where the prediction is below 1 m).
+        </Text>
+      )}
+      {u ? (
+        <>
+          <span className="dw-section-title">Model uncertainty vs error</span>
+          <Table withTableBorder withColumnBorders fz="xs" verticalSpacing={4} aria-label="Uncertainty metrics">
+            <Table.Tbody>
+              {(
+                [
+                  [`RMSE on confident pixels (σ ≤ ${u.confidentM.toFixed(1)} m)`, f2(u.confident.rmse)],
+                  ['Confident share of compared pixels', pct(u.coverage)],
+                  ...(sp
+                    ? ([
+                        ['AUSE (0 = σ ranks errors perfectly)', f2(sp.ause)],
+                        ['AURG (> 0 = better than random)', `${sp.aurg >= 0 ? '+' : ''}${f2(sp.aurg)}`],
+                      ] as Array<[string, string]>)
+                    : []),
+                ] as Array<[string, string]>
+              ).map(([k, v]) => (
+                <Table.Tr key={k}>
+                  <Table.Td>{k}</Table.Td>
+                  <Table.Td className="dw-mono" ta="right" fw={600}>
+                    {v}
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+          {sp && (
+            <>
+              <EChart
+                option={sparsify}
+                height={200}
+                ariaLabel={`Sparsification curve: RMSE of the remaining pixels as the most uncertain are removed, AUSE ${sp.ause.toFixed(2)} metres`}
+              />
+              <Text size="xs" c="dimmed">
+                If σ tracks the error, removing the most uncertain pixels first lowers the RMSE of the rest, close to the best possible order
+                (Poggi et al., CVPR 2020).{sp.n < a.n ? ` Curves from ${sp.n.toLocaleString()} evenly spaced pixels.` : ''}
+              </Text>
+            </>
+          )}
+        </>
+      ) : (
+        <Text size="xs" c="dimmed">
+          No uncertainty map in this result (ndsm_std_m.npy), so no confident-pixel RMSE or sparsification curve.
         </Text>
       )}
       <span className="dw-section-title">Prediction vs reference (density)</span>

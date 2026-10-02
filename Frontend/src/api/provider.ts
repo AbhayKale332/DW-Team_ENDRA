@@ -47,6 +47,8 @@ export interface ParsedStatus {
 
 export interface PredictionResult {
   heights: HeightGrid;
+  /** Per-pixel σ of the heights (`ndsm_std_m.npy`); null when the backend does not provide it. */
+  uncertainty?: HeightGrid | null;
   /** Object classes (`seg.png`); null when the backend does not provide them. */
   classes?: ClassMap | null;
   /** Trees / buildings / water (`objects.json`); null when the backend does not provide them. */

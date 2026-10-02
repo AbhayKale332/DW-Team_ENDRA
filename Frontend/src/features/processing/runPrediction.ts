@@ -84,6 +84,7 @@ export async function runPrediction() {
       name: stemOf(input.name),
       image: input.display,
       heights,
+      uncertainty: res.uncertainty,
       classes: res.classes,
       objects: res.objects,
       cloud,

@@ -23,6 +23,11 @@ export function Colorbar() {
     if (!scene) return null;
     if (layer === 'optical' || layer === 'hillshade' || layer === 'classes') return null;
     if (layer === 'slope') return { title: 'Slope', ramp: cssGradient('slope'), ticks: [view.slopeMax, view.slopeMax / 2, 0].map((v) => `${v.toFixed(0)}°`) };
+    if (layer === 'uncertainty') {
+      const u = scene.uncertainty;
+      if (!u) return null;
+      return { title: 'Uncertainty (1σ)', ramp: cssGradient('confidence'), ticks: [`≥ ${fmt(2 * u.confidentM, 'm')}`, fmt(u.confidentM, 'm'), '0 m'] };
+    }
     if (layer === 'error') {
       const r = Math.max(1, (scene.stats.p98 - scene.stats.p2) * 0.25);
       return { title: 'Prediction − reference', ramp: cssGradient('diverging'), ticks: [`+${fmt(r, 'm')}`, '0 m', `−${fmt(r, 'm')}`] };

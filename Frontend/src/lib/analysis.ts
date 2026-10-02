@@ -1,6 +1,7 @@
 import type { HeightGrid, Scene } from '@/domain/types';
 import { sampleBilinear, slopeAspectAt } from './heights';
 import { lonLatAt } from './georef';
+import { sigmaAt } from './uncertainty';
 
 export interface GridPt {
   col: number;
@@ -11,6 +12,8 @@ export interface ProbeReadout {
   col: number;
   row: number;
   height: number;
+  /** The model's σ of `height` here, metres; null without an uncertainty map. */
+  sigma: number | null;
   slope: number;
   aspect: number;
   lonLat: [number, number] | null;
@@ -30,6 +33,7 @@ export function probeAt(scene: Scene, p: GridPt, reference?: Float32Array | null
     col: p.col,
     row: p.row,
     height,
+    sigma: sigmaAt(scene, p),
     slope,
     aspect,
     lonLat: scene.georef ? lonLatAt(scene.georef, p.col, p.row) : null,

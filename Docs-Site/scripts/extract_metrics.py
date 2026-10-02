@@ -11,6 +11,8 @@ import csv
 import json
 from pathlib import Path
 
+from reproduce_landscape_table import landscape_table
+
 DOCS = Path(__file__).resolve().parents[1]
 ROOT = DOCS.parent                      # DepthWizard/
 M = ROOT / "Model_Traning"
@@ -136,6 +138,11 @@ data["v5_final"] = {
     "gamus_urban": [3.30, 3.30, 3.28, 3.27, 3.27, 3.27, 3.26],
     "us3d": [3.953, 3.899, 3.841, 3.857, 3.871, 3.866, 3.872],
 }
+
+# --- v5 final run: accuracy by landscape, pooled over the four val sets -----
+v5f = DOCS / "public/evidence/v5-final/metrics.json"   # copy of the Modal run's file
+data["v5_landscape"] = {"source": [rel(M / "v5/outputs/v5/modal/metrics.json")],
+                        **landscape_table(json.loads(v5f.read_text()))}
 
 # --- MVS3DM LiDAR validation ----------------------------------------------
 mv = ROOT / "cartosat_2S_Sample/mvs3dm_results/summary.txt"

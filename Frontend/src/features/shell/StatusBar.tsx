@@ -7,6 +7,7 @@ import { useTerrainInfo } from '@/features/viewport/terrainState';
 import { probeAt } from '@/lib/analysis';
 import { formatLonLat } from '@/lib/georef';
 import { formatHeight, productInfo } from '@/lib/product';
+import { plusMinus } from '@/lib/uncertainty';
 import classes from './shell.module.css';
 
 /** SNAP-style status bar: cursor read-out · resolution · product · mesh · frame rate. */
@@ -29,7 +30,7 @@ export function StatusBar() {
     <footer className={`${classes.statusbar} dw-no-print`} aria-label="Status bar">
       <span className={`${classes.statusCell} ${classes.statusGrow}`} aria-live="off">
         {cursor
-          ? `x ${cursor.col.toFixed(0)}  y ${cursor.row.toFixed(0)}  ·  ${formatHeight(scene!, cursor.height)}  ·  slope ${cursor.slope.toFixed(1)}°${cursor.lonLat ? `  ·  ${formatLonLat(cursor.lonLat)}` : ''}${cursor.error !== null ? `  ·  Δref ${cursor.error >= 0 ? '+' : ''}${cursor.error.toFixed(2)} m` : ''}`
+          ? `x ${cursor.col.toFixed(0)}  y ${cursor.row.toFixed(0)}  ·  ${formatHeight(scene!, cursor.height)}${plusMinus(cursor.sigma)}  ·  slope ${cursor.slope.toFixed(1)}°${cursor.lonLat ? `  ·  ${formatLonLat(cursor.lonLat)}` : ''}${cursor.error !== null ? `  ·  Δref ${cursor.error >= 0 ? '+' : ''}${cursor.error.toFixed(2)} m` : ''}`
           : scene
             ? '—'
             : 'No scene loaded'}

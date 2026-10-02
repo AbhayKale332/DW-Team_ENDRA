@@ -6,7 +6,7 @@ import { SIM_GLSL, SIM_UNIFORMS_GLSL, simUniforms } from '@/store/floodSim';
 
 /** Row order of the LUT atlas texture. */
 export const LUT_ROWS: ColormapId[] = ['turbo', 'terrain', 'viridis', 'cividis', 'grey', 'diverging', 'slope', 'confidence'];
-export const LAYER_INDEX: Record<DrapeLayer, number> = { tint: 0, optical: 1, height: 2, hillshade: 3, slope: 4, reference: 5, error: 6, classes: 7 };
+export const LAYER_INDEX: Record<DrapeLayer, number> = { tint: 0, optical: 1, height: 2, hillshade: 3, slope: 4, reference: 5, error: 6, classes: 7, uncertainty: 8 };
 
 export function createLutAtlas(): THREE.DataTexture {
   const data = new Uint8Array(256 * LUT_ROWS.length * 4);
@@ -21,12 +21,14 @@ export function createLutAtlas(): THREE.DataTexture {
   return tex;
 }
 
-/** Heights (relative to `base`) as a filterable half-float texture, row 0 first (flipY = false). */
-export function createHeightTexture(data: Float32Array, width: number, height: number, base: number): THREE.DataTexture {
+/** Heights (relative to `base`) as a filterable half-float texture, row 0 first (flipY = false). Non-finite values
+ *  become `fill`. */
+export function createHeightTexture(data: Float32Array, width: number, height: number, base: number, fill = 0): THREE.DataTexture {
   const half = new Uint16Array(data.length);
+  const nodata = THREE.DataUtils.toHalfFloat(fill);
   for (let i = 0; i < data.length; i++) {
     const v = data[i];
-    half[i] = THREE.DataUtils.toHalfFloat(Number.isFinite(v) ? v - base : 0);
+    half[i] = Number.isFinite(v) ? THREE.DataUtils.toHalfFloat(v - base) : nodata;
   }
   const tex = new THREE.DataTexture(half, width, height, THREE.RedFormat, THREE.HalfFloatType);
   tex.magFilter = THREE.LinearFilter;
@@ -83,6 +85,10 @@ export interface TerrainUniforms {
   uClass: THREE.IUniform<THREE.Texture | null>;
   uClassLut: THREE.IUniform<THREE.Texture | null>;
   uHasClass: THREE.IUniform<number>;
+  /** Per-pixel σ (metres, -1 = none), whether the scene has one, and the σ drawn fully red (twice the confident cut). */
+  uStd: THREE.IUniform<THREE.Texture | null>;
+  uHasStd: THREE.IUniform<number>;
+  uStdMax: THREE.IUniform<number>;
   /** Masked clouds (soft alpha) and whether to hatch them; see createCloudTexture. */
   uCloud: THREE.IUniform<THREE.Texture | null>;
   uHasCloud: THREE.IUniform<number>;
@@ -137,6 +143,9 @@ export function createUniforms(): TerrainUniforms {
     uClass: { value: null },
     uClassLut: { value: null },
     uHasClass: { value: 0 },
+    uStd: { value: null },
+    uHasStd: { value: 0 },
+    uStdMax: { value: 2 },
     uCloud: { value: null },
     uHasCloud: { value: 0 },
     uCloudPeriod: { value: 16 },
@@ -188,6 +197,9 @@ const fragmentShader = /* glsl */ `
   uniform sampler2D uClass;
   uniform sampler2D uClassLut;
   uniform float uHasClass;
+  uniform sampler2D uStd;
+  uniform float uHasStd;
+  uniform float uStdMax;
   uniform sampler2D uCloud;
   uniform float uHasCloud;
   uniform float uCloudPeriod;
@@ -269,6 +281,14 @@ const fragmentShader = /* glsl */ `
       vec3 c = texture2D(uClassLut, vec2((id + 0.5) / 256.0, 0.5)).rgb;
       // keep a little of the photo underneath so misclassifications are visible against it
       return mix(rgb, c, 0.7) * relief;
+    }
+    if (layer == 8) {
+      if (uHasStd < 0.5) return rgb;
+      float s = texture2D(uStd, g).r;
+      // no σ here (masked, under cloud): the photo, dimmed, never a colour that reads as confident
+      if (s < 0.0) return rgb * 0.45;
+      // green = confident, yellow = at the confident cut, red = twice it and beyond (as the v5 viewer)
+      return cmap(7.0, s / uStdMax) * relief;
     }
     // 0: optical + height tint — ground stays photographic, raised structures take the colormap.
     // On an absolute DSM the elevation range is terrain-dominated: tint by height above ground instead.

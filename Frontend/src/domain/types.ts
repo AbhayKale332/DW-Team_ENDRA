@@ -31,6 +31,13 @@ export interface HeightGrid {
   height: number;
 }
 
+/** Per-pixel uncertainty of the heights (`ndsm_std_m.npy`, v5 backends): the spread of the model's height bins, one
+ *  standard deviation in metres, on the height grid. NaN = none (masked, under cloud). */
+export interface UncertaintyGrid extends HeightGrid {
+  /** Pixels with σ at or below this are "confident": the backend's cut, max(1 m, the scene's median σ). */
+  confidentM: number;
+}
+
 /** Per-pixel object class from the model's segmentation head, on the height grid (`seg.png`). */
 export interface ClassMap {
   /** Class id per pixel, row-major, same width/height as the scene's HeightGrid. */
@@ -114,6 +121,13 @@ export interface SceneMeta {
     path?: string;
   };
   preproc?: Record<string, unknown>;
+  /** Summary of `ndsm_std_m.npy`, when the backend wrote one (v5 infer/predict.py `uncertainty_summary`). */
+  uncertainty?: {
+    std_median_m?: number;
+    std_p90_m?: number;
+    confident_threshold_m?: number;
+    confident_frac?: number;
+  };
   /** `seg.png` legend: pixel value (as a string key) -> class name. */
   classes?: Record<string, string>;
   class_fractions?: Record<string, number>;
@@ -214,6 +228,8 @@ export interface Scene {
   anchoring?: AnchoringInfo;
   /** Ground control points applied to a scene without its own georeferencing. */
   gcps?: GroundControlPoint[];
+  /** Per-pixel σ of the heights; absent when the backend did not return `ndsm_std_m.npy` (the v3 Space does not). */
+  uncertainty?: UncertaintyGrid | null;
   /** Object classes on the height grid; absent for older backends, samples and imported bundles. */
   classes?: ClassMap | null;
   /** Trees, buildings and water as 3D objects; absent for older backends, samples and imported bundles. */
@@ -259,6 +275,37 @@ export interface StratumMetrics extends Metrics {
   hi: number;
 }
 
+/** Sparsification curves of one scene, after Poggi et al., CVPR 2020 (arXiv 2005.06209), with the maths of their reference
+ *  code (mono-uncertainty `compute_aucs`): remove the most uncertain pixels first, 1/K at a time, and take the RMSE of the
+ *  rest. The oracle removes by the true error, the best any σ could do; random removal keeps the RMSE flat. */
+export interface Sparsification {
+  /** Share of pixels removed: 0, 1/K … 1. */
+  removed: number[];
+  /** RMSE of the pixels left, most uncertain removed first (ends at 0 at 1, as the reference code). */
+  bySigma: number[];
+  /** The same, removed by true error. */
+  oracle: number[];
+  /** RMSE of every pixel: the random-removal line. */
+  rmse: number;
+  /** Area between the σ curve and the oracle, metres: 0 = σ ranks pixels exactly as their error. */
+  ause: number;
+  /** RMSE minus the area under the σ curve, metres: > 0 = better than removing pixels at random. */
+  aurg: number;
+  /** Pixels used (evenly strided on big scenes). */
+  n: number;
+}
+
+/** What σ says about a validated scene: the error on its confident pixels, and its sparsification curves. */
+export interface UncertaintyValidation {
+  /** The confident cut, metres. */
+  confidentM: number;
+  /** Metrics on compared pixels with σ at or below the cut. */
+  confident: Metrics;
+  /** Share of compared pixels that are confident (pixels without σ count as not confident). */
+  coverage: number;
+  sparsification: Sparsification | null;
+}
+
 export interface ValidationResult {
   all: Metrics;
   strata: StratumMetrics[];
@@ -267,6 +314,8 @@ export interface ValidationResult {
   offset: number;
   scatter: { bins: number; lo: number; hi: number; counts: Uint32Array };
   errorHist: { lo: number; hi: number; counts: Uint32Array };
+  /** Only when the scene carries σ. */
+  uncertainty?: UncertaintyValidation | null;
 }
 
 export interface CameraBookmark {

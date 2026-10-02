@@ -300,6 +300,9 @@ def test_eval_test_scores_v4_and_v5_shaped_checkpoints(tmp_path, monkeypatch, de
     p = r["test_gamus_test_plain"]
     assert p["global"]["n"] == 4 * 64 * 64
     assert "edge_rmse_m" in p and "grad_ratio" in p
+    u = p["uncertainty"]                                    # Head B's b_std, tapped
+    assert u["n_tiles"] == 4 and np.isfinite(u["ause_rmse_m"]) and u["ause_rmse_m"] >= -1e-9
+    assert len(u["curve_rmse_m"]) == u["intervals"] + 1
     assert "test_gamus_test_tta" in r and "test_gamus_test_sliding_tta" in r
     assert len(list((out / "qual").glob("*.npz"))) == 2
     assert len(r["qualitative"]["tiles"]) == 2
@@ -337,7 +340,8 @@ def test_compare_writes_the_cross_version_table_and_strips(tmp_path):
         return {"test_gamus_test_plain": {
                     "global": {"rmse_m": rmse, "mae_m": rmse / 2, "pearson_r": 0.9},
                     "per_stratum": {"0-2m": {"n": 5, "rmse_m": rmse, "bias_m": 0.1}},
-                    "edge_rmse_m": edge, "grad_ratio": 0.8},
+                    "edge_rmse_m": edge, "grad_ratio": 0.8,
+                    "uncertainty": {"ause_rmse_m": edge / 10, "aurg_rmse_m": 0.25}},
                 "test_gamus_test_tta": {"global": {"rmse_m": rmse - 0.05}}}
 
     rng = np.random.default_rng(0)
@@ -355,6 +359,7 @@ def test_compare_writes_the_cross_version_table_and_strips(tmp_path):
     text = md.read_text()
     assert "| RMSE plain | 3.600 | 3.300 |" in text
     assert "| edge RMSE | 5.000 | 4.000 |" in text
+    assert "| sigma AUSE (RMSE) | 0.500 | 0.400 |" in text
     assert (tmp_path / "cmp" / "strips" / "strip_t0.png").is_file()
 
 

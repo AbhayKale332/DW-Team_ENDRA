@@ -1,5 +1,7 @@
+import { useMemo } from 'react';
 import { Checkbox, Group, RangeSlider, SegmentedControl, Select, Slider, Stack, Switch, Text, type SelectProps } from '@mantine/core';
 import { PanelSection } from '@/components/panel';
+import type { UncertaintyGrid } from '@/domain/types';
 import { useScene } from '@/store/scene';
 import { LAYER_LABELS, OBJECT_KIND_LABELS, OBJECT_KINDS, toggleObjectKind, useView, type DrapeLayer, type RangeMode } from '@/store/view';
 import { useSettings, type Quality } from '@/store/settings';
@@ -44,8 +46,32 @@ const SELECT_PROPS: Pick<SelectProps, 'size' | 'inputWrapperOrder' | 'styles'> =
   styles: { label: { marginBottom: 8, fontWeight: 500 }, description: { marginTop: 6, lineHeight: 1.5 } },
 };
 
-const LAYERS_3D: DrapeLayer[] = ['tint', 'optical', 'height', 'hillshade', 'slope', 'classes', 'reference', 'error'];
-const LAYERS_2D: DrapeLayer[] = ['height', 'hillshade', 'slope', 'classes', 'reference', 'error'];
+const LAYERS_3D: DrapeLayer[] = ['tint', 'optical', 'height', 'hillshade', 'slope', 'classes', 'uncertainty', 'reference', 'error'];
+const LAYERS_2D: DrapeLayer[] = ['height', 'hillshade', 'slope', 'classes', 'uncertainty', 'reference', 'error'];
+
+/** Share of the scene's pixels with σ at or below the confident cut. */
+function confidentShare(u: UncertaintyGrid) {
+  let n = 0;
+  let ok = 0;
+  for (let i = 0; i < u.data.length; i++) {
+    const v = u.data[i];
+    if (!Number.isFinite(v)) continue;
+    n++;
+    if (v <= u.confidentM) ok++;
+  }
+  return n ? ok / n : NaN;
+}
+
+/** What the uncertainty drape shows, under the layer picker while it is on. */
+function UncertaintyNote({ u }: { u: UncertaintyGrid }) {
+  const share = useMemo(() => confidentShare(u), [u]);
+  return (
+    <Text size="xs" c="dimmed" mt={-8}>
+      The model's own spread at each pixel (1σ). Green is confident (σ ≤ {u.confidentM.toFixed(1)} m, {(share * 100).toFixed(0)} % of the scene),
+      red is twice that or more. Check a reference in Validation to see how well it tracks the error.
+    </Text>
+  );
+}
 
 /** Map tiles and OpenStreetMap facilities around a georeferenced scene. */
 function SurroundingsSection() {
@@ -117,6 +143,7 @@ export function LayersTab() {
   const scene = useScene((s) => s.scene);
   const hasRef = useScene((s) => !!s.reference);
   const hasClasses = useScene((s) => !!s.scene?.classes);
+  const uncertainty = useScene((s) => s.scene?.uncertainty);
   const v = useView();
   const quality = useSettings((s) => s.quality);
   const postFx = useSettings((s) => s.postFx);
@@ -126,7 +153,7 @@ export function LayersTab() {
   const layerOptions = (is3d ? LAYERS_3D : LAYERS_2D).map((l) => ({
     value: l,
     label: LAYER_LABELS[l],
-    disabled: ((l === 'reference' || l === 'error') && !hasRef) || (l === 'classes' && !hasClasses),
+    disabled: ((l === 'reference' || l === 'error') && !hasRef) || (l === 'classes' && !hasClasses) || (l === 'uncertainty' && !uncertainty),
   }));
   const st = scene?.stats;
 
@@ -156,6 +183,7 @@ export function LayersTab() {
             value={layer}
             onChange={(l) => l && v.set(is3d ? { layer3d: l as DrapeLayer } : { layer2d: l as DrapeLayer })}
           />
+          {layer === 'uncertainty' && uncertainty && <UncertaintyNote u={uncertainty} />}
           <div>
             <Select
               {...SELECT_PROPS}

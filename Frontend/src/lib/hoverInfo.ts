@@ -3,6 +3,7 @@ import { sampleBilinear, slopeAspectAt } from './heights';
 import { formatLonLat, lonLatAt } from './georef';
 import type { OsmFeature } from './osm';
 import { classLabel } from '@/theme/classes';
+import { plusMinus, sigmaAt } from './uncertainty';
 
 /** What is under the pointer: a detected object (building / tree / water), an elevated area the object step
  *  did not extract, or plain surface — with its heights and whatever else is known about it. */
@@ -169,11 +170,15 @@ export function describeAt(scene: Scene, col: number, row: number, osm?: OsmFeat
   const y = row + 0.5;
   const height = sampleBilinear(scene.heights, col, row);
   const { slope } = slopeAspectAt(scene.heights, col, row, gsd);
+  // the model's own spread here, when it returned one: "12.3 m ± 0.8 m"
+  const pm = plusMinus(sigmaAt(scene, { col, row }));
   const pix = Math.min(H - 1, Math.max(0, Math.round(row))) * W + Math.min(W - 1, Math.max(0, Math.round(col)));
   const cls = scene.classes ? classLabel(scene.classes.names[scene.classes.data[pix]], scene.classes.data[pix]) : null;
 
   const tail: Array<[string, string]> = [
-    scene.product === 'DSM' ? ['Elevation here', `${height.toFixed(1)} m a.s.l.`] : ['Height here', scene.product === 'rDSM' ? `${m(height)} (relative)` : m(height)],
+    scene.product === 'DSM'
+      ? ['Elevation here', `${height.toFixed(1)} m a.s.l.${pm}`]
+      : ['Height here', scene.product === 'rDSM' ? `${m(height)}${pm} (relative)` : `${m(height)}${pm}`],
     ...(scene.product === 'DSM' && scene.ndsm ? ([['Above ground', m(sampleBilinear(scene.ndsm, col, row))]] as Array<[string, string]>) : []),
     ['Slope', `${slope.toFixed(0)}°`],
   ];

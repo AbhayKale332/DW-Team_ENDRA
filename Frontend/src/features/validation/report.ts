@@ -30,6 +30,11 @@ export async function exportValidationReport() {
     ['Balanced RMSE (mean over strata)', `${f2(validation.balancedRmse)} m`],
     ['Pixels compared', a.n.toLocaleString()],
   ];
+  const u = validation.uncertainty;
+  if (u) {
+    rows.push([`RMSE on confident pixels (σ ≤ ${u.confidentM.toFixed(2)} m)`, `${f2(u.confident.rmse)} m`], ['Confident share of compared pixels', `${(u.coverage * 100).toFixed(1)} %`]);
+    if (u.sparsification) rows.push(['σ AUSE / AURG (sparsification, Poggi et al. 2020)', `${f2(u.sparsification.ause)} / ${f2(u.sparsification.aurg)} m`]);
+  }
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>DepthWizard validation — ${esc(scene.name)}</title>
 <style>
 body{font:14px/1.5 Inter,Segoe UI,system-ui,sans-serif;color:#151a20;margin:32px auto;max-width:900px;padding:0 16px}
