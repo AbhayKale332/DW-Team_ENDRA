@@ -77,6 +77,7 @@ export default defineConfig({
 					items: [
 						'results/metrics',
 						'results/benchmarks',
+						'results/landscape-accuracy',
 						'results/error-analysis',
 						'results/lidar-validation',
 						'results/gallery',

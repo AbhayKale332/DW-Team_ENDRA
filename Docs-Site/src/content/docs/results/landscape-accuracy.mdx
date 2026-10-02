@@ -1,0 +1,120 @@
+---
+title: Accuracy by landscape
+description: Where the v5 urban, sparse, forested and overall RMSE, MAE and Pearson r come from, with the raw run log, the metrics file and a script that rebuilds the table.
+---
+
+import DataTable from '../../../components/DataTable.astro';
+import Stat from '../../../components/Stat.astro';
+import StatGrid from '../../../components/StatGrid.astro';
+import metrics from '../../../data/metrics.json';
+import { Aside, Code } from '@astrojs/starlight/components';
+import script from '../../../../scripts/reproduce_landscape_table.py?raw';
+
+export const L = metrics.v5_landscape;
+export const row = (k) => L.rows.find((r) => r.landscape === k);
+export const cap = (s) => s[0].toUpperCase() + s.slice(1);
+export const mpx = (n) => `${(n / 1e6).toFixed(1)} M`;
+
+This page traces every number in the v5 **DSM accuracy by landscape** table back to two files from the final H100 run on Modal: `run.log` and `metrics.json`. Both are linked below, unchanged. The table is computed from `metrics.json` when the site builds, so it cannot drift from the file.
+
+<StatGrid>
+	<Stat label="Overall RMSE" value={row('overall').rmse.toFixed(2)} unit="m" note={`MAE ${row('overall').mae.toFixed(2)} m · r ${row('overall').r.toFixed(2)}`} />
+	<Stat label="Pixels scored" value={mpx(row('overall').n)} note="718 validation tiles, 4 sources" />
+	<Stat label="Checkpoint" value={`epoch ${L.epoch}`} note={`best.pt · select score ${L.select_score.toFixed(3)} m`} />
+</StatGrid>
+
+## The table
+
+<DataTable
+	headers={['Landscape', 'RMSE (m) ↓', 'MAE (m) ↓', 'Pearson r ↑', 'GAMUS RMSE (m) ↓', 'Pixels', 'Pooled from']}
+	rows={L.rows.map((r) => [cap(r.landscape), r.rmse, r.mae, r.r, r.gamus_rmse, mpx(r.n), r.sets.join(', ')])}
+	digits={2}
+	caption="v5 best.pt (epoch 7), single pass, no test-time augmentation. The first three metric columns pool all four validation sets. The GAMUS column is GAMUS validation alone."
+	source={L.source[0]}
+/>
+
+<Aside type="caution" title="Held out from training, not a test split">
+These are the four **validation** splits. No tile in them was trained on, but they are not all independent of model selection:
+
+- **MVS3DM** (200 of 820 tiles) and **NEON** (all 118) chose the checkpoint. `best.pt` is the epoch with the lowest mean forested + sparse RMSE over these two sets.
+- **GAMUS** (200 of 859) and **US3D** (200 of 291) were only reported. The log marks them `reported, not selected on`.
+
+The fair held-out test, on the separate `test` splits, has not been run for v5 yet. See [Benchmarks](/results/benchmarks/) for v4's held-out test numbers.
+</Aside>
+
+## Where each row comes from
+
+Each validation tile gets a landscape label from its own ground-truth height map (see the [landscape classifier](/results/metrics/#landscape-classifier)). The evaluation then scores all pixels of each landscape together and writes `n`, RMSE, MAE and r per landscape into `metrics.json`. These are the per-set inputs at epoch 7:
+
+<DataTable
+	headers={['Set', 'Landscape', 'Tiles', 'Pixels', 'RMSE', 'MAE', 'r']}
+	rows={L.per_set.map((s) => [s.set, s.landscape, s.tiles ?? '—', s.n.toLocaleString('en'), s.rmse, s.mae, s.r])}
+	digits={3}
+	caption="history[6] in metrics.json, keys val (MVS3DM), val_neon, val_gamus and val_us3d. Overall rows are each set's global block."
+	source={L.source[0]}
+/>
+
+Some landscapes are missing from some sets:
+
+- **Urban** comes from GAMUS and US3D only. No MVS3DM validation tile is classed urban, and NEON is configured never to produce urban tiles (`landscape_no_urban_sources = neon`), because its closed forest canopy was being misread as rooftops.
+- **Forested** has no US3D rows, because none of the 200 sampled US3D tiles is classed forested.
+- **Hilly** is absent from the table on purpose. The model's target is height above ground, so terrain is subtracted from every label and no tile can be classed hilly.
+
+## How the sets are pooled
+
+Each set reports its own metrics, so the table combines them using the pixel counts:
+
+| Column | Formula | Exact? |
+|---|---|---|
+| RMSE | √( Σ nᵢ · RMSEᵢ² / Σ nᵢ ) | Yes. Identical to RMSE over all pixels at once. |
+| MAE | Σ nᵢ · MAEᵢ / Σ nᵢ | Yes. |
+| Pearson r | Σ nᵢ · rᵢ / Σ nᵢ | No. A pixel-weighted mean of per-set r. |
+
+<Aside>
+The exact pooled Pearson r would need each set's means and variances, and `metrics.json` does not store them. The weighted mean is an approximation. Its value also depends on the weighting: an unweighted mean of the per-set values gives 0.84 for forested and 0.89 overall, against 0.83 and 0.88 here. RMSE and MAE are exact.
+</Aside>
+
+## Find it in the run log
+
+The last evaluation in `run.log` (lines 757–763) prints the same per-landscape RMSEs, rounded to 0.01 m. In these lines `fore`, `spar` and `urba` are forested, sparse and urban:
+
+```text
+  eval e7  RMSE=1.545 MAE=0.815 r=0.816 d1=0.645 bal=4.280 tall_bias=-6.11 flat_bias=+0.36 edge=2.281 grad=0.23  [fore=1.95 spar=0.86]
+  eval e7  [neon] RMSE=3.444 MAE=1.830 r=0.953 d1=0.719 bal=3.641 tall_bias=-1.18 flat_bias=+0.43 edge=4.646 grad=0.66  [fore=4.11 spar=0.68]
+  eval e7  [neon @2x pooled] RMSE=3.416 MAE=1.817 r=0.954 d1=0.720 bal=3.608 tall_bias=-1.18 flat_bias=+0.43 edge=4.184 grad=0.63  [fore=4.08 spar=0.67]
+  eval e7  [gamus] RMSE=2.893 MAE=1.425 r=0.910 d1=0.654 bal=3.662 tall_bias=-1.89 flat_bias=+0.53 edge=3.771 grad=0.39  [fore=2.01 spar=3.15 urba=3.26]
+  eval e7  [us3d] RMSE=3.872 MAE=1.383 r=0.884 d1=0.715 bal=6.150 tall_bias=-5.58 flat_bias=+0.27 edge=5.780 grad=0.43  [spar=0.27 urba=4.19]
+  eval e7  select=2.481 m  (forested+sparse RMSE, mean over neon,mvs3dm)
+  new best 2.481 m -> best.pt
+```
+
+- The unlabelled first line is MVS3DM, the selection set.
+- `[neon @2x pooled]` scores NEON again at half resolution. The table does not use it. It uses the full-resolution `[neon]` line (`val_neon` in `metrics.json`).
+- The `[gamus]` line is the GAMUS column as it stands: 3.26 urban, 3.15 sparse, 2.01 forested, 2.893 overall.
+- Epoch 7 is the last epoch, and it is also the best. The run hit its 106-minute wall-clock cap during epoch 7 and then evaluated `best.pt` again (`[final] evaluating best.pt (epoch 7)`).
+- The log does not print pixel counts. Those are in `metrics.json`.
+
+## Reproduce it
+
+1. Download the two files from the run. They are the files the Modal job wrote to `depthwizard-results:/v5_final_forest/`, unchanged:
+   - <a href="/evidence/v5-final/metrics.json" download>metrics.json</a> (867 KB). SHA-256 `82d361b1a6caf7bf50e20cb485ea9fc57e3b6da52c29bb4b83140036e6a4f5fb`
+   - <a href="/evidence/v5-final/run.log" download>run.log</a> (110 KB). SHA-256 `e706a022bbae4ded1379e66160c2502bdc295166692e7ef648b81747a69d9ce2`
+2. Run the script below. It uses only the Python standard library:
+
+```sh
+python3 reproduce_landscape_table.py metrics.json
+```
+
+```text
+best.pt = epoch 7  (select score 2.481 m)
+
+landscape        pixels    RMSE     MAE       r   GAMUS  sets
+urban        73,554,308    3.85    1.69    0.90    3.26  GAMUS, US3D
+sparse       45,504,793    1.32    0.32    0.63    3.15  MVS3DM, NEON, GAMUS, US3D
+forested     64,658,637    2.85    1.60    0.83    2.01  MVS3DM, NEON, GAMUS
+overall     183,717,738    3.04    1.32    0.88    2.89  MVS3DM, NEON, GAMUS, US3D
+```
+
+<Code code={script} lang="python" title="Docs-Site/scripts/reproduce_landscape_table.py" />
+
+`scripts/extract_metrics.py` imports the same function to build this page's data, so the page and the script cannot disagree.

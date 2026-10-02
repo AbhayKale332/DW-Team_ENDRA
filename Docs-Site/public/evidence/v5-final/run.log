@@ -1,0 +1,778 @@
+[env] torch=2.10.0+cu128 cuda=True gpus=1
+[env]   GPU0: NVIDIA H100 80GB HBM3  79 GiB
+[preproc] image-processor lookup failed (
+AutoImageProcessor requires the Torchvision library but it was not found in your environment. Check out the instructions on the
+installation page: https://pytorch.org/get-started/locally/ and follow the ones that match your environment.
+Please note that you may need to restart your runtime after installation.
+); using defaults
+[preproc] 0.5 m/px, tile 512, stretch=True, mean=(0.43, 0.411, 0.296)
+[data] mvs3dm/train: 9194 tiles @ 512px / 0.5 m  gsd_jitter=0.30..0.50 m  seg=NO  [!] requested hi 1.20 unreachable
+[data] neon/train: 1846 tiles @ 1024px / 0.5 m  gsd_jitter=0.30..1.00 m  seg=NO  [!] requested hi 1.20 unreachable
+[data] gamus/train: 5004 tiles @ 1024px / 0.25 m  gsd_jitter=0.30..0.50 m  seg=yes  [!] requested hi 1.20 unreachable
+[data] us3d/train: 2492 tiles @ 1024px / 0.32 m  gsd_jitter=0.30..0.64 m  seg=yes  [!] requested hi 1.20 unreachable
+[data] synrs3d_g05/train: 6999 tiles @ 512px / 0.45 m  gsd_jitter=0.30..0.45 m  seg=yes  [!] requested hi 1.20 unreachable
+[data] synrs3d_g1/train: 5537 tiles @ 512px / 0.8 m  gsd_jitter=0.30..0.80 m  seg=yes  [!] requested hi 1.20 unreachable
+[data] w_seg=0.2; semantic labels only from ['gamus', 'us3d', 'synrs3d_g05', 'synrs3d_g1']
+[data] mvs3dm/train landscape: urban=274 (2% of draws)  sparse=1542 (13% of draws)  hilly=0 (0% of draws)  forested=7378 (85% of draws)
+[data] neon/train landscape: urban=0 (0% of draws)  sparse=429 (19% of draws)  hilly=0 (0% of draws)  forested=1417 (81% of draws)
+[data] gamus/train landscape: urban=2291 (31% of draws)  sparse=582 (12% of draws)  hilly=0 (0% of draws)  forested=2131 (57% of draws)
+[data] us3d/train landscape: urban=1367 (40% of draws)  sparse=314 (14% of draws)  hilly=0 (0% of draws)  forested=811 (47% of draws)
+[data] synrs3d_g05/train landscape: urban=2974 (27% of draws)  sparse=0 (0% of draws)  hilly=0 (0% of draws)  forested=4025 (73% of draws)
+[data] synrs3d_g1/train landscape: urban=1344 (14% of draws)  sparse=23 (0% of draws)  hilly=0 (0% of draws)  forested=4170 (86% of draws)
+[data] val: 200 tiles from mvs3dm (random 200 of 820, seed 42)  (2250 train steps/epoch)
+[data] val+ : 118 tiles from neon (all)  — reported, not selected on
+[data] val+ : 200 tiles from gamus (random 200 of 859, seed 42)  — reported, not selected on
+[data] val+ : 200 tiles from us3d (random 200 of 291, seed 42)  — reported, not selected on
+[perf] GPU augmentation on — workers hand over uint8 (512x512x3 = 0.8 MB/sample instead of 3.1 MB)
+[model] encoder FROZEN (0.0M grad params)
+[model] encoder=facebook/dinov3-vitl16-pretrain-sat493m hidden=1024 patch=16 blocks=24 taps=(6, 12, 18, 24)
+[resume] 408 encoder keys renamed across the transformers 4.x/5.x DINOv3 layout
+[resume] /mnt/depthwizard-data/prev/best.pt: warm start, missing 0, unexpected 0
+[model] encoder gradient checkpointing OFF
+[model] 3 unreachable encoder parameter(s) left frozen (never receive gradients, would hang DDP): embeddings.mask_token, norm.weight, norm.bias
+[model] encoder TRAINABLE (303.1M grad params)
+[optim] 52 groups, 323.7M trainable params, lr 2.39e-06..1.50e-04  (fused AdamW)
+[sched] 100 epochs, budget 90 min  ->  cosine reaches 100 %, decoder lr 1.50e-04 -> 1.50e-06
+/usr/local/lib/python3.12/site-packages/torch/utils/data/dataloader.py:1118: UserWarning: pin_memory_device is deprecated, the current accelerator will be used as the device,ignore pin_memory_device='cuda'.
+  super().__init__(loader)
+  e1 s0/2250 loss=6.827 (l1=1.77 sil=0.52 nrm=0.249 flat=0.056 bin=2.29 ent=3.12 seg=0.31 a=0.73 crs=2.92) lr=1.63e-05 0.3 img/s wait=48% vram=41G 1min
+  e1 s25/2250 loss=10.354 (l1=2.19 sil=0.51 nrm=0.195 flat=0.036 bin=1.44 ent=2.64 seg=0.43 a=0.66 crs=18.36) lr=7.21e-05 5.5 img/s wait=87% vram=45G 2min
+  e1 s50/2250 loss=9.054 (l1=2.22 sil=0.53 nrm=0.276 flat=0.067 bin=1.82 ent=2.73 seg=0.56 a=0.66 crs=9.71) lr=8.02e-05 27.2 img/s wait=34% vram=45G 2min
+  e1 s75/2250 loss=6.652 (l1=1.17 sil=0.45 nrm=0.166 flat=0.033 bin=2.00 ent=2.68 seg=0.26 a=0.76 crs=8.49) lr=8.57e-05 40.1 img/s wait=0% vram=45G 3min
+  e1 s100/2250 loss=10.864 (l1=2.56 sil=0.60 nrm=0.302 flat=0.073 bin=1.75 ent=2.74 seg=0.32 a=0.69 crs=12.52) lr=9.10e-05 41.1 img/s wait=0% vram=45G 3min
+  e1 s125/2250 loss=5.924 (l1=1.84 sil=0.48 nrm=0.184 flat=0.054 bin=1.86 ent=2.61 seg=0.31 a=0.75 crs=2.20) lr=9.64e-05 41.0 img/s wait=0% vram=45G 3min
+  e1 s150/2250 loss=9.217 (l1=2.12 sil=0.51 nrm=0.290 flat=0.038 bin=1.80 ent=2.70 seg=0.34 a=0.73 crs=11.47) lr=1.02e-04 40.9 img/s wait=0% vram=45G 3min
+  e1 s175/2250 loss=9.628 (l1=3.32 sil=0.58 nrm=0.251 flat=0.072 bin=1.96 ent=2.96 seg=0.44 a=0.68 crs=7.41) lr=1.07e-04 40.6 img/s wait=0% vram=45G 3min
+  e1 s200/2250 loss=9.826 (l1=2.29 sil=0.54 nrm=0.307 flat=0.035 bin=2.00 ent=2.84 seg=0.40 a=0.73 crs=11.10) lr=1.13e-04 41.0 img/s wait=0% vram=45G 3min
+  e1 s225/2250 loss=7.754 (l1=1.44 sil=0.49 nrm=0.186 flat=0.039 bin=1.99 ent=2.82 seg=0.61 a=0.76 crs=13.70) lr=1.18e-04 40.7 img/s wait=0% vram=45G 4min
+  e1 s250/2250 loss=9.421 (l1=1.85 sil=0.54 nrm=0.273 flat=0.054 bin=2.08 ent=2.79 seg=0.44 a=0.73 crs=20.84) lr=1.23e-04 41.0 img/s wait=0% vram=45G 4min
+  e1 s275/2250 loss=8.153 (l1=1.91 sil=0.54 nrm=0.257 flat=0.041 bin=2.05 ent=2.98 seg=0.43 a=0.74 crs=10.34) lr=1.29e-04 40.9 img/s wait=0% vram=45G 4min
+  e1 s300/2250 loss=7.688 (l1=1.86 sil=0.55 nrm=0.216 flat=0.044 bin=2.22 ent=2.81 seg=0.53 a=0.75 crs=8.47) lr=1.34e-04 40.7 img/s wait=0% vram=45G 4min
+  e1 s325/2250 loss=7.998 (l1=2.13 sil=0.52 nrm=0.183 flat=0.040 bin=1.94 ent=2.42 seg=0.36 a=0.76 crs=11.93) lr=1.39e-04 41.1 img/s wait=0% vram=45G 4min
+  e1 s350/2250 loss=7.829 (l1=1.91 sil=0.55 nrm=0.266 flat=0.059 bin=2.21 ent=2.65 seg=0.53 a=0.73 crs=0.00) lr=1.45e-04 40.9 img/s wait=0% vram=45G 4min
+  e1 s375/2250 loss=7.679 (l1=2.20 sil=0.54 nrm=0.178 flat=0.043 bin=1.76 ent=2.27 seg=0.39 a=0.80 crs=7.03) lr=1.50e-04 41.0 img/s wait=0% vram=45G 5min
+  e1 s400/2250 loss=10.560 (l1=2.18 sil=0.46 nrm=0.183 flat=0.074 bin=1.49 ent=2.35 seg=0.49 a=0.73 crs=14.86) lr=1.50e-04 40.9 img/s wait=0% vram=45G 5min
+  e1 s425/2250 loss=9.850 (l1=2.29 sil=0.56 nrm=0.214 flat=0.048 bin=1.82 ent=2.63 seg=0.47 a=0.75 crs=11.76) lr=1.50e-04 41.0 img/s wait=0% vram=45G 5min
+  e1 s450/2250 loss=7.252 (l1=1.96 sil=0.51 nrm=0.220 flat=0.048 bin=2.08 ent=2.38 seg=0.52 a=0.76 crs=3.36) lr=1.50e-04 40.6 img/s wait=0% vram=45G 5min
+  e1 s475/2250 loss=7.853 (l1=1.95 sil=0.51 nrm=0.233 flat=0.046 bin=2.09 ent=2.86 seg=0.54 a=0.73 crs=7.66) lr=1.50e-04 40.8 img/s wait=0% vram=45G 5min
+  e1 s500/2250 loss=7.596 (l1=2.31 sil=0.54 nrm=0.243 flat=0.047 bin=2.07 ent=2.95 seg=0.40 a=0.74 crs=4.08) lr=1.50e-04 41.0 img/s wait=0% vram=45G 5min
+  e1 s525/2250 loss=8.398 (l1=2.38 sil=0.58 nrm=0.285 flat=0.041 bin=1.98 ent=2.73 seg=0.48 a=0.77 crs=5.71) lr=1.50e-04 41.0 img/s wait=0% vram=45G 5min
+  e1 s550/2250 loss=7.732 (l1=1.20 sil=0.43 nrm=0.165 flat=0.042 bin=1.79 ent=2.50 seg=0.33 a=0.77 crs=24.45) lr=1.50e-04 40.9 img/s wait=0% vram=45G 6min
+  e1 s575/2250 loss=6.996 (l1=1.82 sil=0.47 nrm=0.196 flat=0.044 bin=1.82 ent=2.48 seg=0.46 a=0.77 crs=7.41) lr=1.50e-04 41.0 img/s wait=0% vram=45G 6min
+  e1 s600/2250 loss=5.848 (l1=0.71 sil=0.37 nrm=0.094 flat=0.021 bin=1.60 ent=2.01 seg=0.34 a=0.81 crs=15.09) lr=1.50e-04 40.8 img/s wait=0% vram=45G 6min
+  e1 s625/2250 loss=9.217 (l1=2.04 sil=0.55 nrm=0.222 flat=0.044 bin=1.91 ent=2.48 seg=0.46 a=0.75 crs=18.27) lr=1.50e-04 40.8 img/s wait=0% vram=45G 6min
+  e1 s650/2250 loss=7.965 (l1=2.25 sil=0.53 nrm=0.201 flat=0.043 bin=1.82 ent=2.42 seg=0.59 a=0.77 crs=7.61) lr=1.50e-04 41.0 img/s wait=0% vram=45G 6min
+  e1 s675/2250 loss=7.169 (l1=2.01 sil=0.53 nrm=0.280 flat=0.042 bin=2.33 ent=2.91 seg=0.53 a=0.73 crs=2.78) lr=1.50e-04 40.5 img/s wait=0% vram=45G 6min
+  e1 s700/2250 loss=7.895 (l1=2.42 sil=0.55 nrm=0.239 flat=0.070 bin=1.82 ent=2.42 seg=0.47 a=0.79 crs=3.00) lr=1.50e-04 40.8 img/s wait=0% vram=45G 7min
+  e1 s725/2250 loss=8.919 (l1=1.27 sil=0.47 nrm=0.202 flat=0.041 bin=1.35 ent=2.08 seg=0.42 a=0.77 crs=12.24) lr=1.50e-04 40.8 img/s wait=0% vram=45G 7min
+  e1 s750/2250 loss=7.876 (l1=2.37 sil=0.56 nrm=0.257 flat=0.048 bin=2.22 ent=2.74 seg=0.54 a=0.73 crs=3.33) lr=1.50e-04 40.9 img/s wait=0% vram=45G 7min
+  e1 s775/2250 loss=9.120 (l1=3.00 sil=0.58 nrm=0.229 flat=0.056 bin=1.97 ent=2.76 seg=0.56 a=0.74 crs=7.00) lr=1.50e-04 40.9 img/s wait=0% vram=45G 7min
+  e1 s800/2250 loss=9.096 (l1=2.27 sil=0.57 nrm=0.253 flat=0.077 bin=1.94 ent=2.71 seg=0.50 a=0.74 crs=11.05) lr=1.50e-04 40.9 img/s wait=0% vram=45G 7min
+  e1 s825/2250 loss=8.125 (l1=1.92 sil=0.51 nrm=0.241 flat=0.034 bin=1.87 ent=2.64 seg=0.42 a=0.74 crs=10.06) lr=1.50e-04 41.0 img/s wait=0% vram=45G 7min
+  e1 s850/2250 loss=8.351 (l1=2.08 sil=0.45 nrm=0.214 flat=0.023 bin=1.68 ent=2.31 seg=0.25 a=0.77 crs=9.69) lr=1.50e-04 40.9 img/s wait=0% vram=45G 8min
+  e1 s875/2250 loss=5.968 (l1=1.18 sil=0.46 nrm=0.184 flat=0.039 bin=1.72 ent=2.46 seg=0.41 a=0.79 crs=5.93) lr=1.49e-04 40.7 img/s wait=0% vram=45G 8min
+  e1 s900/2250 loss=7.995 (l1=1.80 sil=0.51 nrm=0.193 flat=0.050 bin=1.94 ent=2.48 seg=0.42 a=0.72 crs=9.90) lr=1.49e-04 40.8 img/s wait=0% vram=45G 8min
+  e1 s925/2250 loss=7.121 (l1=1.80 sil=0.44 nrm=0.165 flat=0.049 bin=1.29 ent=1.91 seg=0.30 a=0.82 crs=8.67) lr=1.49e-04 40.8 img/s wait=0% vram=45G 8min
+  e1 s950/2250 loss=6.624 (l1=1.74 sil=0.50 nrm=0.208 flat=0.052 bin=2.22 ent=2.69 seg=0.44 a=0.81 crs=4.04) lr=1.49e-04 41.1 img/s wait=0% vram=45G 8min
+  e1 s975/2250 loss=7.091 (l1=1.58 sil=0.52 nrm=0.186 flat=0.041 bin=2.07 ent=2.63 seg=0.47 a=0.78 crs=11.17) lr=1.49e-04 40.9 img/s wait=0% vram=45G 8min
+  e1 s1000/2250 loss=8.674 (l1=2.39 sil=0.54 nrm=0.206 flat=0.047 bin=1.99 ent=2.91 seg=0.43 a=0.73 crs=8.77) lr=1.49e-04 40.9 img/s wait=0% vram=45G 9min
+  e1 s1025/2250 loss=7.217 (l1=1.58 sil=0.48 nrm=0.183 flat=0.043 bin=1.56 ent=2.26 seg=0.37 a=0.80 crs=8.64) lr=1.49e-04 40.8 img/s wait=0% vram=45G 9min
+  e1 s1050/2250 loss=7.840 (l1=2.48 sil=0.53 nrm=0.257 flat=0.070 bin=1.83 ent=2.57 seg=0.47 a=0.80 crs=5.43) lr=1.49e-04 40.9 img/s wait=0% vram=45G 9min
+  e1 s1075/2250 loss=8.267 (l1=2.17 sil=0.58 nrm=0.274 flat=0.049 bin=2.22 ent=2.57 seg=0.46 a=0.79 crs=6.03) lr=1.49e-04 40.8 img/s wait=0% vram=45G 9min
+  e1 s1100/2250 loss=12.322 (l1=2.38 sil=0.57 nrm=0.301 flat=0.060 bin=2.12 ent=2.96 seg=0.46 a=0.73 crs=18.34) lr=1.49e-04 40.9 img/s wait=0% vram=45G 9min
+  e1 s1125/2250 loss=10.116 (l1=2.56 sil=0.55 nrm=0.237 flat=0.051 bin=2.23 ent=2.94 seg=0.58 a=0.76 crs=12.28) lr=1.49e-04 40.9 img/s wait=0% vram=45G 9min
+  e1 s1150/2250 loss=7.347 (l1=1.39 sil=0.49 nrm=0.188 flat=0.029 bin=1.68 ent=2.09 seg=0.46 a=0.81 crs=10.77) lr=1.49e-04 40.8 img/s wait=0% vram=45G 10min
+  e1 s1175/2250 loss=7.582 (l1=2.46 sil=0.52 nrm=0.193 flat=0.044 bin=1.68 ent=2.28 seg=0.41 a=0.84 crs=3.75) lr=1.49e-04 40.8 img/s wait=0% vram=45G 10min
+  e1 s1200/2250 loss=9.869 (l1=2.03 sil=0.55 nrm=0.252 flat=0.062 bin=2.01 ent=2.65 seg=0.53 a=0.73 crs=11.29) lr=1.49e-04 40.7 img/s wait=0% vram=45G 10min
+  e1 s1225/2250 loss=7.627 (l1=1.30 sil=0.48 nrm=0.207 flat=0.036 bin=1.62 ent=2.38 seg=0.46 a=0.73 crs=10.54) lr=1.48e-04 41.0 img/s wait=0% vram=45G 10min
+  e1 s1250/2250 loss=7.911 (l1=1.95 sil=0.45 nrm=0.211 flat=0.055 bin=1.67 ent=2.61 seg=0.31 a=0.75 crs=8.03) lr=1.48e-04 40.8 img/s wait=0% vram=45G 10min
+  e1 s1275/2250 loss=8.179 (l1=2.14 sil=0.55 nrm=0.232 flat=0.064 bin=2.06 ent=2.66 seg=0.39 a=0.74 crs=7.07) lr=1.48e-04 40.9 img/s wait=0% vram=45G 10min
+  e1 s1300/2250 loss=7.728 (l1=1.61 sil=0.50 nrm=0.232 flat=0.038 bin=1.90 ent=2.79 seg=0.59 a=0.75 crs=9.88) lr=1.48e-04 40.7 img/s wait=0% vram=45G 11min
+  e1 s1325/2250 loss=6.228 (l1=1.47 sil=0.49 nrm=0.188 flat=0.028 bin=2.08 ent=2.51 seg=0.27 a=0.84 crs=5.27) lr=1.48e-04 41.0 img/s wait=0% vram=45G 11min
+  e1 s1350/2250 loss=6.763 (l1=2.11 sil=0.52 nrm=0.175 flat=0.049 bin=1.97 ent=2.50 seg=0.31 a=0.81 crs=4.85) lr=1.48e-04 40.9 img/s wait=0% vram=45G 11min
+  e1 s1375/2250 loss=8.428 (l1=2.53 sil=0.57 nrm=0.199 flat=0.063 bin=1.75 ent=2.41 seg=0.40 a=0.80 crs=6.04) lr=1.48e-04 40.8 img/s wait=0% vram=45G 11min
+  e1 s1400/2250 loss=8.193 (l1=2.37 sil=0.57 nrm=0.251 flat=0.041 bin=2.40 ent=2.98 seg=0.40 a=0.76 crs=6.21) lr=1.48e-04 40.7 img/s wait=0% vram=45G 11min
+  e1 s1425/2250 loss=9.086 (l1=1.97 sil=0.50 nrm=0.261 flat=0.032 bin=1.58 ent=2.47 seg=0.38 a=0.74 crs=9.41) lr=1.48e-04 40.9 img/s wait=0% vram=45G 11min
+  e1 s1450/2250 loss=6.832 (l1=2.10 sil=0.54 nrm=0.179 flat=0.047 bin=1.68 ent=2.21 seg=0.34 a=0.78 crs=4.58) lr=1.48e-04 40.8 img/s wait=0% vram=45G 12min
+  e1 s1475/2250 loss=7.915 (l1=1.54 sil=0.53 nrm=0.238 flat=0.040 bin=2.47 ent=2.90 seg=0.39 a=0.74 crs=11.20) lr=1.47e-04 40.4 img/s wait=0% vram=45G 12min
+  e1 s1500/2250 loss=7.542 (l1=1.82 sil=0.55 nrm=0.220 flat=0.038 bin=2.30 ent=2.95 seg=0.30 a=0.78 crs=7.46) lr=1.47e-04 40.9 img/s wait=0% vram=45G 12min
+  e1 s1525/2250 loss=9.661 (l1=2.57 sil=0.54 nrm=0.210 flat=0.045 bin=1.86 ent=2.71 seg=0.41 a=0.74 crs=12.75) lr=1.47e-04 40.9 img/s wait=0% vram=45G 12min
+  e1 s1550/2250 loss=6.523 (l1=1.66 sil=0.46 nrm=0.176 flat=0.040 bin=1.87 ent=2.60 seg=0.29 a=0.75 crs=6.72) lr=1.47e-04 40.7 img/s wait=0% vram=45G 12min
+  e1 s1575/2250 loss=6.897 (l1=1.33 sil=0.42 nrm=0.184 flat=0.052 bin=1.64 ent=2.39 seg=0.34 a=0.81 crs=8.74) lr=1.47e-04 41.0 img/s wait=0% vram=45G 12min
+  e1 s1600/2250 loss=9.575 (l1=2.72 sil=0.50 nrm=0.148 flat=0.058 bin=1.43 ent=2.07 seg=0.35 a=0.78 crs=10.04) lr=1.47e-04 40.8 img/s wait=0% vram=45G 13min
+  e1 s1625/2250 loss=8.585 (l1=1.72 sil=0.50 nrm=0.233 flat=0.040 bin=2.04 ent=2.91 seg=0.40 a=0.71 crs=13.99) lr=1.47e-04 40.8 img/s wait=0% vram=45G 13min
+  e1 s1650/2250 loss=8.725 (l1=1.36 sil=0.46 nrm=0.219 flat=0.051 bin=1.93 ent=2.74 seg=0.46 a=0.72 crs=19.66) lr=1.47e-04 40.9 img/s wait=0% vram=45G 13min
+  e1 s1675/2250 loss=8.017 (l1=1.72 sil=0.53 nrm=0.205 flat=0.041 bin=2.21 ent=2.94 seg=0.46 a=0.71 crs=15.37) lr=1.46e-04 41.1 img/s wait=0% vram=45G 13min
+  e1 s1700/2250 loss=7.686 (l1=2.48 sil=0.54 nrm=0.278 flat=0.051 bin=1.98 ent=2.85 seg=0.36 a=0.77 crs=3.06) lr=1.46e-04 40.9 img/s wait=0% vram=45G 13min
+  e1 s1725/2250 loss=7.946 (l1=2.26 sil=0.54 nrm=0.234 flat=0.056 bin=2.18 ent=2.79 seg=0.52 a=0.76 crs=3.96) lr=1.46e-04 40.8 img/s wait=0% vram=45G 13min
+  e1 s1750/2250 loss=7.557 (l1=1.69 sil=0.54 nrm=0.247 flat=0.053 bin=1.93 ent=2.67 seg=0.51 a=0.75 crs=9.71) lr=1.46e-04 40.9 img/s wait=0% vram=45G 13min
+  e1 s1775/2250 loss=9.925 (l1=2.27 sil=0.51 nrm=0.222 flat=0.058 bin=1.70 ent=2.35 seg=0.42 a=0.78 crs=12.95) lr=1.46e-04 40.8 img/s wait=0% vram=45G 14min
+  e1 s1800/2250 loss=6.429 (l1=1.59 sil=0.48 nrm=0.183 flat=0.032 bin=1.97 ent=2.42 seg=0.60 a=0.80 crs=5.88) lr=1.46e-04 41.0 img/s wait=0% vram=45G 14min
+  e1 s1825/2250 loss=7.286 (l1=1.67 sil=0.52 nrm=0.250 flat=0.058 bin=2.21 ent=2.53 seg=0.66 a=0.82 crs=6.10) lr=1.46e-04 40.9 img/s wait=0% vram=45G 14min
+  e1 s1850/2250 loss=7.247 (l1=1.89 sil=0.46 nrm=0.230 flat=0.033 bin=1.85 ent=2.56 seg=0.34 a=0.79 crs=6.29) lr=1.45e-04 41.0 img/s wait=0% vram=45G 14min
+  e1 s1875/2250 loss=9.216 (l1=2.64 sil=0.58 nrm=0.279 flat=0.064 bin=1.64 ent=2.63 seg=0.38 a=0.75 crs=7.53) lr=1.45e-04 41.1 img/s wait=0% vram=45G 14min
+  e1 s1900/2250 loss=7.022 (l1=1.43 sil=0.51 nrm=0.158 flat=0.036 bin=1.90 ent=2.61 seg=0.25 a=0.75 crs=8.66) lr=1.45e-04 41.0 img/s wait=0% vram=45G 14min
+  e1 s1925/2250 loss=6.973 (l1=1.94 sil=0.55 nrm=0.215 flat=0.052 bin=2.52 ent=2.98 seg=0.45 a=0.74 crs=1.91) lr=1.45e-04 41.0 img/s wait=0% vram=45G 15min
+  e1 s1950/2250 loss=7.741 (l1=2.44 sil=0.49 nrm=0.204 flat=0.062 bin=1.67 ent=2.33 seg=0.37 a=0.78 crs=5.67) lr=1.45e-04 40.9 img/s wait=0% vram=45G 15min
+  e1 s1975/2250 loss=7.193 (l1=2.13 sil=0.47 nrm=0.191 flat=0.047 bin=1.81 ent=2.33 seg=0.33 a=0.78 crs=3.63) lr=1.45e-04 40.9 img/s wait=0% vram=45G 15min
+  e1 s2000/2250 loss=9.071 (l1=1.97 sil=0.58 nrm=0.284 flat=0.029 bin=2.21 ent=2.71 seg=0.59 a=0.76 crs=10.40) lr=1.44e-04 40.8 img/s wait=0% vram=45G 15min
+  e1 s2025/2250 loss=6.971 (l1=1.50 sil=0.47 nrm=0.222 flat=0.046 bin=2.02 ent=2.56 seg=0.44 a=0.78 crs=7.41) lr=1.44e-04 40.9 img/s wait=0% vram=45G 15min
+  e1 s2050/2250 loss=8.525 (l1=2.52 sil=0.54 nrm=0.259 flat=0.062 bin=1.56 ent=2.30 seg=0.34 a=0.81 crs=4.45) lr=1.44e-04 40.6 img/s wait=0% vram=45G 15min
+  e1 s2075/2250 loss=7.756 (l1=0.93 sil=0.40 nrm=0.141 flat=0.030 bin=1.58 ent=2.40 seg=0.40 a=0.78 crs=17.47) lr=1.44e-04 40.7 img/s wait=0% vram=45G 16min
+  e1 s2100/2250 loss=7.897 (l1=1.47 sil=0.53 nrm=0.233 flat=0.049 bin=2.06 ent=2.91 seg=0.41 a=0.80 crs=8.87) lr=1.44e-04 40.6 img/s wait=0% vram=45G 16min
+  e1 s2125/2250 loss=9.846 (l1=2.00 sil=0.56 nrm=0.287 flat=0.043 bin=1.97 ent=2.70 seg=0.46 a=0.74 crs=13.07) lr=1.44e-04 40.8 img/s wait=0% vram=45G 16min
+  e1 s2150/2250 loss=8.504 (l1=2.08 sil=0.51 nrm=0.203 flat=0.071 bin=1.73 ent=2.55 seg=0.43 a=0.74 crs=10.96) lr=1.43e-04 40.8 img/s wait=0% vram=45G 16min
+  e1 s2175/2250 loss=8.701 (l1=2.05 sil=0.56 nrm=0.191 flat=0.033 bin=2.29 ent=2.82 seg=0.37 a=0.73 crs=11.96) lr=1.43e-04 40.5 img/s wait=0% vram=45G 16min
+  e1 s2200/2250 loss=9.260 (l1=3.02 sil=0.61 nrm=0.235 flat=0.049 bin=1.97 ent=2.64 seg=0.44 a=0.78 crs=5.67) lr=1.43e-04 40.8 img/s wait=0% vram=45G 16min
+  e1 s2225/2250 loss=9.521 (l1=2.20 sil=0.55 nrm=0.252 flat=0.069 bin=2.02 ent=2.87 seg=0.41 a=0.73 crs=13.46) lr=1.43e-04 40.9 img/s wait=0% vram=45G 17min
+  eval e1  RMSE=1.602 MAE=0.857 r=0.800 d1=0.631 bal=4.375 tall_bias=-6.41 flat_bias=+0.39 edge=2.358 grad=0.23  [fore=2.02 spar=0.91]
+  eval e1  [neon] RMSE=3.861 MAE=2.106 r=0.941 d1=0.683 bal=4.122 tall_bias=-0.69 flat_bias=+0.50 edge=5.156 grad=0.66  [fore=4.61 spar=0.75]
+  eval e1  [neon @2x pooled] RMSE=3.832 MAE=2.092 r=0.942 d1=0.683 bal=4.088 tall_bias=-0.69 flat_bias=+0.50 edge=4.688 grad=0.63  [fore=4.58 spar=0.74]
+  eval e1  [gamus] RMSE=2.937 MAE=1.461 r=0.907 d1=0.647 bal=3.704 tall_bias=-2.14 flat_bias=+0.57 edge=3.805 grad=0.38  [fore=2.03 spar=3.27 urba=3.30]
+  eval e1  [us3d] RMSE=3.953 MAE=1.428 r=0.881 d1=0.705 bal=6.260 tall_bias=-6.58 flat_bias=+0.27 edge=6.002 grad=0.41  [spar=0.27 urba=4.27]
+  eval e1  select=2.717 m  (forested+sparse RMSE, mean over neon,mvs3dm)
+  new best 2.717 m -> best.pt
+  e2 s0/2250 loss=7.075 (l1=1.66 sil=0.49 nrm=0.193 flat=0.045 bin=2.15 ent=2.48 seg=0.28 a=0.82 crs=7.58) lr=1.40e-04 21.4 img/s wait=28% vram=45G 19min
+  e2 s25/2250 loss=6.960 (l1=2.13 sil=0.48 nrm=0.209 flat=0.048 bin=1.86 ent=2.54 seg=0.35 a=0.78 crs=1.40) lr=1.40e-04 40.4 img/s wait=0% vram=45G 19min
+  e2 s50/2250 loss=8.293 (l1=2.16 sil=0.53 nrm=0.288 flat=0.055 bin=1.99 ent=2.76 seg=0.25 a=0.78 crs=7.05) lr=1.40e-04 41.2 img/s wait=0% vram=45G 19min
+  e2 s75/2250 loss=6.455 (l1=1.65 sil=0.51 nrm=0.222 flat=0.056 bin=1.95 ent=2.64 seg=0.47 a=0.78 crs=0.84) lr=1.39e-04 41.0 img/s wait=0% vram=45G 19min
+  e2 s100/2250 loss=8.183 (l1=2.18 sil=0.53 nrm=0.207 flat=0.054 bin=2.18 ent=2.84 seg=0.33 a=0.76 crs=13.14) lr=1.39e-04 41.1 img/s wait=0% vram=45G 19min
+  e2 s125/2250 loss=6.508 (l1=1.57 sil=0.51 nrm=0.220 flat=0.056 bin=2.02 ent=2.78 seg=0.53 a=0.75 crs=5.15) lr=1.39e-04 41.1 img/s wait=0% vram=45G 20min
+  e2 s150/2250 loss=7.791 (l1=1.80 sil=0.54 nrm=0.286 flat=0.057 bin=2.15 ent=2.85 seg=0.46 a=0.76 crs=8.26) lr=1.39e-04 41.2 img/s wait=0% vram=45G 20min
+  e2 s175/2250 loss=6.521 (l1=1.71 sil=0.51 nrm=0.216 flat=0.053 bin=2.01 ent=2.82 seg=0.45 a=0.74 crs=3.79) lr=1.39e-04 41.0 img/s wait=0% vram=45G 20min
+  e2 s200/2250 loss=7.444 (l1=1.26 sil=0.49 nrm=0.210 flat=0.038 bin=2.25 ent=3.04 seg=0.45 a=0.72 crs=8.20) lr=1.38e-04 40.9 img/s wait=0% vram=45G 20min
+  e2 s225/2250 loss=7.806 (l1=2.33 sil=0.53 nrm=0.199 flat=0.048 bin=1.67 ent=2.40 seg=0.45 a=0.76 crs=6.28) lr=1.38e-04 41.0 img/s wait=0% vram=45G 20min
+  e2 s250/2250 loss=7.479 (l1=1.31 sil=0.50 nrm=0.187 flat=0.024 bin=2.00 ent=2.80 seg=0.23 a=0.78 crs=11.62) lr=1.38e-04 40.9 img/s wait=0% vram=45G 20min
+  e2 s275/2250 loss=7.329 (l1=1.68 sil=0.53 nrm=0.231 flat=0.059 bin=2.14 ent=2.92 seg=0.43 a=0.75 crs=8.53) lr=1.38e-04 41.1 img/s wait=0% vram=45G 20min
+  e2 s300/2250 loss=6.954 (l1=1.78 sil=0.50 nrm=0.196 flat=0.046 bin=1.98 ent=2.53 seg=0.38 a=0.81 crs=6.13) lr=1.37e-04 41.0 img/s wait=0% vram=45G 21min
+  e2 s325/2250 loss=5.856 (l1=1.39 sil=0.47 nrm=0.172 flat=0.050 bin=1.90 ent=2.42 seg=0.42 a=0.82 crs=4.86) lr=1.37e-04 40.7 img/s wait=0% vram=45G 21min
+  e2 s350/2250 loss=7.758 (l1=2.06 sil=0.55 nrm=0.234 flat=0.054 bin=2.05 ent=2.89 seg=0.49 a=0.74 crs=6.50) lr=1.37e-04 41.0 img/s wait=0% vram=45G 21min
+  e2 s375/2250 loss=7.547 (l1=2.02 sil=0.56 nrm=0.217 flat=0.049 bin=2.01 ent=2.60 seg=0.39 a=0.78 crs=10.12) lr=1.37e-04 41.1 img/s wait=0% vram=45G 21min
+  e2 s400/2250 loss=7.194 (l1=1.51 sil=0.52 nrm=0.249 flat=0.037 bin=2.36 ent=3.07 seg=0.36 a=0.73 crs=7.22) lr=1.36e-04 41.3 img/s wait=0% vram=45G 21min
+  e2 s425/2250 loss=6.768 (l1=1.48 sil=0.52 nrm=0.213 flat=0.039 bin=2.18 ent=2.93 seg=0.44 a=0.77 crs=6.33) lr=1.36e-04 41.0 img/s wait=0% vram=45G 21min
+  e2 s450/2250 loss=8.397 (l1=1.47 sil=0.49 nrm=0.225 flat=0.045 bin=1.96 ent=2.78 seg=0.37 a=0.71 crs=21.04) lr=1.36e-04 41.3 img/s wait=0% vram=45G 22min
+  e2 s475/2250 loss=9.384 (l1=2.79 sil=0.55 nrm=0.302 flat=0.046 bin=1.75 ent=2.48 seg=0.39 a=0.78 crs=7.25) lr=1.36e-04 41.1 img/s wait=0% vram=45G 22min
+  e2 s500/2250 loss=7.890 (l1=1.70 sil=0.53 nrm=0.214 flat=0.043 bin=2.03 ent=2.49 seg=0.50 a=0.74 crs=10.97) lr=1.35e-04 41.0 img/s wait=0% vram=45G 22min
+  e2 s525/2250 loss=9.399 (l1=2.41 sil=0.55 nrm=0.217 flat=0.064 bin=1.74 ent=2.29 seg=0.49 a=0.79 crs=10.16) lr=1.35e-04 40.8 img/s wait=0% vram=45G 22min
+  e2 s550/2250 loss=6.967 (l1=1.31 sil=0.46 nrm=0.174 flat=0.036 bin=1.77 ent=2.53 seg=0.39 a=0.73 crs=10.34) lr=1.35e-04 40.4 img/s wait=0% vram=45G 22min
+  e2 s575/2250 loss=6.876 (l1=0.79 sil=0.39 nrm=0.148 flat=0.018 bin=1.64 ent=2.01 seg=0.32 a=0.83 crs=14.71) lr=1.34e-04 41.2 img/s wait=0% vram=45G 22min
+  e2 s600/2250 loss=8.046 (l1=1.95 sil=0.55 nrm=0.312 flat=0.052 bin=2.21 ent=2.95 seg=0.34 a=0.75 crs=5.92) lr=1.34e-04 41.0 img/s wait=0% vram=45G 23min
+  e2 s625/2250 loss=7.912 (l1=2.19 sil=0.50 nrm=0.226 flat=0.046 bin=1.86 ent=2.53 seg=0.37 a=0.78 crs=0.00) lr=1.34e-04 41.2 img/s wait=0% vram=45G 23min
+  e2 s650/2250 loss=8.309 (l1=1.89 sil=0.50 nrm=0.205 flat=0.040 bin=1.51 ent=2.23 seg=0.35 a=0.78 crs=9.37) lr=1.34e-04 41.2 img/s wait=0% vram=45G 23min
+  e2 s675/2250 loss=7.006 (l1=1.52 sil=0.44 nrm=0.171 flat=0.053 bin=1.73 ent=2.65 seg=0.27 a=0.78 crs=8.99) lr=1.33e-04 40.8 img/s wait=0% vram=45G 23min
+  e2 s700/2250 loss=6.653 (l1=1.52 sil=0.41 nrm=0.164 flat=0.035 bin=1.45 ent=2.49 seg=0.36 a=0.80 crs=8.93) lr=1.33e-04 40.9 img/s wait=0% vram=45G 23min
+  e2 s725/2250 loss=8.231 (l1=2.30 sil=0.50 nrm=0.255 flat=0.060 bin=1.83 ent=2.59 seg=0.42 a=0.79 crs=6.84) lr=1.33e-04 40.7 img/s wait=0% vram=45G 23min
+  e2 s750/2250 loss=7.699 (l1=1.33 sil=0.50 nrm=0.193 flat=0.045 bin=2.31 ent=2.89 seg=0.25 a=0.74 crs=10.07) lr=1.33e-04 41.1 img/s wait=0% vram=45G 24min
+  e2 s775/2250 loss=7.551 (l1=2.13 sil=0.57 nrm=0.242 flat=0.055 bin=2.08 ent=2.66 seg=0.43 a=0.76 crs=4.56) lr=1.32e-04 40.8 img/s wait=0% vram=45G 24min
+  e2 s800/2250 loss=8.533 (l1=2.84 sil=0.49 nrm=0.214 flat=0.043 bin=1.54 ent=2.10 seg=0.33 a=0.81 crs=6.97) lr=1.32e-04 40.8 img/s wait=0% vram=45G 24min
+  e2 s825/2250 loss=8.816 (l1=2.37 sil=0.56 nrm=0.256 flat=0.067 bin=1.67 ent=2.32 seg=0.48 a=0.81 crs=8.41) lr=1.32e-04 40.9 img/s wait=0% vram=45G 24min
+  e2 s850/2250 loss=8.689 (l1=2.00 sil=0.54 nrm=0.247 flat=0.060 bin=1.62 ent=2.64 seg=0.43 a=0.73 crs=9.80) lr=1.31e-04 40.9 img/s wait=0% vram=45G 24min
+  e2 s875/2250 loss=7.333 (l1=1.87 sil=0.53 nrm=0.281 flat=0.038 bin=2.29 ent=2.75 seg=0.42 a=0.81 crs=0.06) lr=1.31e-04 41.1 img/s wait=0% vram=45G 24min
+  e2 s900/2250 loss=7.413 (l1=2.09 sil=0.48 nrm=0.193 flat=0.029 bin=1.85 ent=2.53 seg=0.28 a=0.77 crs=7.91) lr=1.31e-04 40.9 img/s wait=0% vram=45G 25min
+  e2 s925/2250 loss=8.907 (l1=2.86 sil=0.55 nrm=0.210 flat=0.055 bin=1.96 ent=2.79 seg=0.45 a=0.73 crs=3.72) lr=1.30e-04 40.9 img/s wait=0% vram=45G 25min
+  e2 s950/2250 loss=8.507 (l1=2.33 sil=0.53 nrm=0.290 flat=0.055 bin=2.09 ent=2.92 seg=0.33 a=0.76 crs=5.54) lr=1.30e-04 41.0 img/s wait=0% vram=45G 25min
+  e2 s975/2250 loss=6.415 (l1=1.61 sil=0.47 nrm=0.197 flat=0.034 bin=1.99 ent=2.63 seg=0.48 a=0.76 crs=5.58) lr=1.30e-04 40.9 img/s wait=0% vram=45G 25min
+  e2 s1000/2250 loss=7.900 (l1=1.41 sil=0.53 nrm=0.215 flat=0.034 bin=2.06 ent=2.77 seg=0.42 a=0.76 crs=10.17) lr=1.30e-04 40.9 img/s wait=0% vram=45G 25min
+  e2 s1025/2250 loss=9.556 (l1=1.90 sil=0.49 nrm=0.265 flat=0.035 bin=1.78 ent=2.61 seg=0.32 a=0.75 crs=11.34) lr=1.29e-04 41.1 img/s wait=0% vram=45G 25min
+  e2 s1050/2250 loss=8.358 (l1=1.91 sil=0.49 nrm=0.241 flat=0.081 bin=1.58 ent=2.44 seg=0.39 a=0.76 crs=12.07) lr=1.29e-04 40.8 img/s wait=0% vram=45G 26min
+  e2 s1075/2250 loss=6.708 (l1=1.75 sil=0.47 nrm=0.187 flat=0.037 bin=1.87 ent=2.65 seg=0.32 a=0.74 crs=6.09) lr=1.29e-04 40.9 img/s wait=0% vram=45G 26min
+  e2 s1100/2250 loss=7.426 (l1=1.39 sil=0.50 nrm=0.208 flat=0.047 bin=1.64 ent=2.37 seg=0.52 a=0.80 crs=8.66) lr=1.28e-04 41.0 img/s wait=0% vram=45G 26min
+  e2 s1125/2250 loss=8.280 (l1=2.11 sil=0.60 nrm=0.264 flat=0.059 bin=2.05 ent=2.96 seg=0.54 a=0.77 crs=6.77) lr=1.28e-04 41.0 img/s wait=0% vram=45G 26min
+  e2 s1150/2250 loss=7.349 (l1=1.90 sil=0.54 nrm=0.223 flat=0.075 bin=2.03 ent=2.82 seg=0.51 a=0.75 crs=5.47) lr=1.28e-04 41.1 img/s wait=0% vram=45G 26min
+  e2 s1175/2250 loss=8.127 (l1=1.56 sil=0.52 nrm=0.231 flat=0.048 bin=2.06 ent=2.73 seg=0.45 a=0.78 crs=7.79) lr=1.27e-04 40.8 img/s wait=0% vram=45G 26min
+  e2 s1200/2250 loss=7.431 (l1=1.78 sil=0.48 nrm=0.190 flat=0.057 bin=1.91 ent=2.78 seg=0.39 a=0.73 crs=8.52) lr=1.27e-04 41.2 img/s wait=0% vram=45G 27min
+  e2 s1225/2250 loss=7.753 (l1=1.61 sil=0.51 nrm=0.195 flat=0.044 bin=1.89 ent=2.67 seg=0.37 a=0.74 crs=12.71) lr=1.27e-04 40.7 img/s wait=0% vram=45G 27min
+  e2 s1250/2250 loss=7.219 (l1=1.93 sil=0.57 nrm=0.224 flat=0.048 bin=1.83 ent=2.53 seg=0.52 a=0.80 crs=5.66) lr=1.26e-04 40.8 img/s wait=0% vram=45G 27min
+  e2 s1275/2250 loss=8.432 (l1=1.71 sil=0.50 nrm=0.234 flat=0.036 bin=1.88 ent=2.78 seg=0.42 a=0.77 crs=10.69) lr=1.26e-04 41.0 img/s wait=0% vram=45G 27min
+  e2 s1300/2250 loss=6.589 (l1=1.96 sil=0.51 nrm=0.239 flat=0.056 bin=2.06 ent=2.86 seg=0.38 a=0.77 crs=2.95) lr=1.26e-04 41.1 img/s wait=0% vram=45G 27min
+  e2 s1325/2250 loss=8.013 (l1=1.73 sil=0.49 nrm=0.273 flat=0.034 bin=1.70 ent=2.44 seg=0.37 a=0.81 crs=9.47) lr=1.25e-04 40.7 img/s wait=0% vram=45G 27min
+  e2 s1350/2250 loss=6.864 (l1=1.56 sil=0.50 nrm=0.216 flat=0.044 bin=1.73 ent=2.51 seg=0.41 a=0.80 crs=7.12) lr=1.25e-04 41.3 img/s wait=0% vram=45G 27min
+  e2 s1375/2250 loss=6.945 (l1=2.00 sil=0.50 nrm=0.234 flat=0.061 bin=2.33 ent=2.82 seg=0.34 a=0.76 crs=3.30) lr=1.25e-04 41.2 img/s wait=0% vram=45G 28min
+  e2 s1400/2250 loss=7.194 (l1=2.15 sil=0.49 nrm=0.189 flat=0.061 bin=1.82 ent=2.57 seg=0.38 a=0.76 crs=0.99) lr=1.24e-04 41.0 img/s wait=0% vram=45G 28min
+  e2 s1425/2250 loss=6.797 (l1=1.58 sil=0.49 nrm=0.189 flat=0.041 bin=2.41 ent=3.06 seg=0.42 a=0.73 crs=8.54) lr=1.24e-04 41.0 img/s wait=0% vram=45G 28min
+  e2 s1450/2250 loss=7.872 (l1=2.11 sil=0.55 nrm=0.227 flat=0.067 bin=1.74 ent=2.43 seg=0.41 a=0.76 crs=7.02) lr=1.24e-04 40.9 img/s wait=0% vram=45G 28min
+  e2 s1475/2250 loss=8.657 (l1=1.70 sil=0.48 nrm=0.278 flat=0.052 bin=1.74 ent=2.46 seg=0.31 a=0.76 crs=12.00) lr=1.23e-04 41.1 img/s wait=0% vram=45G 28min
+  e2 s1500/2250 loss=8.493 (l1=1.93 sil=0.52 nrm=0.234 flat=0.072 bin=1.85 ent=2.61 seg=0.43 a=0.76 crs=8.63) lr=1.23e-04 41.1 img/s wait=0% vram=45G 28min
+  e2 s1525/2250 loss=7.634 (l1=2.33 sil=0.53 nrm=0.222 flat=0.053 bin=1.97 ent=2.80 seg=0.56 a=0.70 crs=4.39) lr=1.23e-04 41.1 img/s wait=0% vram=45G 29min
+  e2 s1550/2250 loss=10.164 (l1=1.89 sil=0.56 nrm=0.248 flat=0.035 bin=1.95 ent=2.97 seg=0.34 a=0.76 crs=14.78) lr=1.22e-04 41.0 img/s wait=0% vram=45G 29min
+  e2 s1575/2250 loss=6.579 (l1=1.83 sil=0.48 nrm=0.217 flat=0.039 bin=2.11 ent=2.42 seg=0.39 a=0.80 crs=1.58) lr=1.22e-04 40.9 img/s wait=0% vram=45G 29min
+  e2 s1600/2250 loss=8.797 (l1=2.09 sil=0.51 nrm=0.228 flat=0.043 bin=1.49 ent=2.25 seg=0.38 a=0.79 crs=10.40) lr=1.22e-04 40.9 img/s wait=0% vram=45G 29min
+  e2 s1625/2250 loss=6.886 (l1=1.61 sil=0.55 nrm=0.213 flat=0.039 bin=2.41 ent=2.81 seg=0.43 a=0.77 crs=6.40) lr=1.21e-04 41.0 img/s wait=0% vram=45G 29min
+  e2 s1650/2250 loss=8.236 (l1=2.52 sil=0.52 nrm=0.216 flat=0.051 bin=2.12 ent=2.64 seg=0.44 a=0.78 crs=4.59) lr=1.21e-04 41.2 img/s wait=0% vram=45G 29min
+  e2 s1675/2250 loss=8.133 (l1=2.10 sil=0.55 nrm=0.222 flat=0.076 bin=1.82 ent=2.58 seg=0.42 a=0.77 crs=8.58) lr=1.21e-04 40.8 img/s wait=0% vram=45G 30min
+  e2 s1700/2250 loss=9.940 (l1=3.33 sil=0.57 nrm=0.186 flat=0.047 bin=1.60 ent=2.34 seg=0.31 a=0.79 crs=8.19) lr=1.20e-04 40.8 img/s wait=0% vram=45G 30min
+  e2 s1725/2250 loss=7.517 (l1=1.53 sil=0.44 nrm=0.194 flat=0.044 bin=1.60 ent=2.41 seg=0.40 a=0.81 crs=11.13) lr=1.20e-04 41.0 img/s wait=0% vram=45G 30min
+  e2 s1750/2250 loss=7.962 (l1=1.55 sil=0.53 nrm=0.236 flat=0.040 bin=1.96 ent=2.85 seg=0.63 a=0.76 crs=10.27) lr=1.20e-04 41.2 img/s wait=0% vram=45G 30min
+  e2 s1775/2250 loss=9.760 (l1=2.47 sil=0.60 nrm=0.275 flat=0.045 bin=2.20 ent=3.14 seg=0.52 a=0.71 crs=9.32) lr=1.19e-04 40.9 img/s wait=0% vram=45G 30min
+  e2 s1800/2250 loss=9.127 (l1=2.75 sil=0.53 nrm=0.302 flat=0.061 bin=1.80 ent=2.74 seg=0.32 a=0.78 crs=5.67) lr=1.19e-04 41.0 img/s wait=0% vram=45G 30min
+  e2 s1825/2250 loss=7.795 (l1=1.76 sil=0.53 nrm=0.225 flat=0.040 bin=1.94 ent=2.74 seg=0.48 a=0.78 crs=8.74) lr=1.18e-04 40.9 img/s wait=0% vram=45G 31min
+  e2 s1850/2250 loss=8.607 (l1=1.98 sil=0.54 nrm=0.211 flat=0.044 bin=2.35 ent=2.93 seg=0.37 a=0.75 crs=10.81) lr=1.18e-04 41.0 img/s wait=0% vram=45G 31min
+  e2 s1875/2250 loss=7.569 (l1=2.49 sil=0.46 nrm=0.194 flat=0.048 bin=1.53 ent=2.40 seg=0.30 a=0.82 crs=1.74) lr=1.18e-04 41.2 img/s wait=0% vram=45G 31min
+  e2 s1900/2250 loss=8.782 (l1=2.60 sil=0.58 nrm=0.264 flat=0.082 bin=2.08 ent=2.93 seg=0.40 a=0.75 crs=4.97) lr=1.17e-04 41.2 img/s wait=0% vram=45G 31min
+  e2 s1925/2250 loss=7.312 (l1=1.94 sil=0.50 nrm=0.236 flat=0.035 bin=1.86 ent=2.36 seg=0.52 a=0.82 crs=5.94) lr=1.17e-04 41.1 img/s wait=0% vram=45G 31min
+  e2 s1950/2250 loss=7.802 (l1=1.82 sil=0.52 nrm=0.288 flat=0.062 bin=2.03 ent=2.77 seg=0.32 a=0.80 crs=6.81) lr=1.17e-04 40.2 img/s wait=0% vram=45G 31min
+  e2 s1975/2250 loss=6.659 (l1=1.26 sil=0.44 nrm=0.176 flat=0.050 bin=1.55 ent=2.35 seg=0.41 a=0.78 crs=9.44) lr=1.16e-04 40.9 img/s wait=0% vram=45G 32min
+  e2 s2000/2250 loss=8.230 (l1=2.20 sil=0.55 nrm=0.268 flat=0.038 bin=2.12 ent=2.82 seg=0.39 a=0.74 crs=6.79) lr=1.16e-04 41.1 img/s wait=0% vram=45G 32min
+  e2 s2025/2250 loss=7.059 (l1=1.66 sil=0.54 nrm=0.190 flat=0.031 bin=1.72 ent=2.43 seg=0.24 a=0.79 crs=7.36) lr=1.16e-04 40.8 img/s wait=0% vram=45G 32min
+  e2 s2050/2250 loss=8.407 (l1=1.99 sil=0.56 nrm=0.271 flat=0.048 bin=1.92 ent=2.78 seg=0.36 a=0.78 crs=8.55) lr=1.15e-04 41.2 img/s wait=0% vram=45G 32min
+  e2 s2075/2250 loss=7.957 (l1=1.85 sil=0.51 nrm=0.280 flat=0.050 bin=1.89 ent=2.68 seg=0.43 a=0.78 crs=8.66) lr=1.15e-04 40.9 img/s wait=0% vram=45G 32min
+  e2 s2100/2250 loss=8.119 (l1=1.71 sil=0.54 nrm=0.248 flat=0.050 bin=1.87 ent=2.53 seg=0.35 a=0.78 crs=13.36) lr=1.14e-04 41.0 img/s wait=0% vram=45G 32min
+  e2 s2125/2250 loss=7.005 (l1=1.57 sil=0.47 nrm=0.243 flat=0.026 bin=1.94 ent=2.66 seg=0.26 a=0.79 crs=6.92) lr=1.14e-04 40.7 img/s wait=0% vram=45G 33min
+  e2 s2150/2250 loss=7.090 (l1=1.87 sil=0.54 nrm=0.265 flat=0.053 bin=2.29 ent=2.99 seg=0.46 a=0.77 crs=4.87) lr=1.14e-04 41.0 img/s wait=0% vram=45G 33min
+  e2 s2175/2250 loss=9.766 (l1=1.40 sil=0.50 nrm=0.216 flat=0.050 bin=2.06 ent=2.70 seg=0.37 a=0.69 crs=21.81) lr=1.13e-04 41.2 img/s wait=0% vram=45G 33min
+  e2 s2200/2250 loss=8.655 (l1=2.33 sil=0.53 nrm=0.224 flat=0.030 bin=1.99 ent=2.71 seg=0.40 a=0.73 crs=8.56) lr=1.13e-04 41.1 img/s wait=0% vram=45G 33min
+  e2 s2225/2250 loss=7.920 (l1=1.24 sil=0.47 nrm=0.220 flat=0.042 bin=1.91 ent=3.03 seg=0.42 a=0.74 crs=8.82) lr=1.12e-04 40.9 img/s wait=0% vram=45G 33min
+  eval e2  RMSE=1.580 MAE=0.841 r=0.806 d1=0.634 bal=4.347 tall_bias=-6.39 flat_bias=+0.38 edge=2.328 grad=0.23  [fore=1.99 spar=0.88]
+  eval e2  [neon] RMSE=3.647 MAE=1.943 r=0.947 d1=0.703 bal=3.862 tall_bias=-1.12 flat_bias=+0.46 edge=4.913 grad=0.65  [fore=4.35 spar=0.71]
+  eval e2  [neon @2x pooled] RMSE=3.616 MAE=1.928 r=0.948 d1=0.704 bal=3.826 tall_bias=-1.12 flat_bias=+0.46 edge=4.429 grad=0.63  [fore=4.32 spar=0.70]
+  eval e2  [gamus] RMSE=2.944 MAE=1.454 r=0.907 d1=0.649 bal=3.701 tall_bias=-1.97 flat_bias=+0.57 edge=3.801 grad=0.38  [fore=2.01 spar=3.38 urba=3.30]
+  eval e2  [us3d] RMSE=3.899 MAE=1.405 r=0.883 d1=0.711 bal=6.199 tall_bias=-6.00 flat_bias=+0.28 edge=5.835 grad=0.42  [spar=0.27 urba=4.22]
+  eval e2  select=2.598 m  (forested+sparse RMSE, mean over neon,mvs3dm)
+  new best 2.598 m -> best.pt
+  full state -> last_full.pt (epoch 2, 6.0 GB)
+  e3 s0/2250 loss=7.813 (l1=2.21 sil=0.50 nrm=0.232 flat=0.059 bin=1.98 ent=2.79 seg=0.39 a=0.75 crs=6.05) lr=1.10e-04 23.1 img/s wait=32% vram=45G 34min
+  e3 s25/2250 loss=7.691 (l1=2.57 sil=0.53 nrm=0.258 flat=0.046 bin=2.09 ent=2.71 seg=0.30 a=0.75 crs=3.06) lr=1.10e-04 40.4 img/s wait=0% vram=45G 34min
+  e3 s50/2250 loss=6.543 (l1=1.76 sil=0.49 nrm=0.216 flat=0.037 bin=1.79 ent=2.26 seg=0.36 a=0.82 crs=4.64) lr=1.10e-04 40.9 img/s wait=0% vram=45G 34min
+  e3 s75/2250 loss=7.964 (l1=2.27 sil=0.56 nrm=0.201 flat=0.048 bin=1.92 ent=2.58 seg=0.57 a=0.78 crs=6.50) lr=1.09e-04 41.0 img/s wait=0% vram=45G 35min
+  e3 s100/2250 loss=8.433 (l1=2.12 sil=0.56 nrm=0.272 flat=0.048 bin=1.99 ent=2.71 seg=0.35 a=0.78 crs=7.93) lr=1.09e-04 40.9 img/s wait=0% vram=45G 35min
+  e3 s125/2250 loss=7.994 (l1=2.11 sil=0.48 nrm=0.235 flat=0.052 bin=1.75 ent=2.57 seg=0.39 a=0.77 crs=8.43) lr=1.08e-04 41.1 img/s wait=0% vram=45G 35min
+  e3 s150/2250 loss=7.439 (l1=2.00 sil=0.50 nrm=0.250 flat=0.039 bin=1.67 ent=2.57 seg=0.33 a=0.79 crs=6.08) lr=1.08e-04 40.9 img/s wait=0% vram=45G 35min
+  e3 s175/2250 loss=7.952 (l1=2.76 sil=0.51 nrm=0.283 flat=0.046 bin=1.94 ent=2.69 seg=0.32 a=0.78 crs=3.84) lr=1.08e-04 41.0 img/s wait=0% vram=45G 35min
+  e3 s200/2250 loss=9.150 (l1=1.99 sil=0.54 nrm=0.210 flat=0.037 bin=1.95 ent=2.41 seg=0.38 a=0.77 crs=11.89) lr=1.07e-04 40.8 img/s wait=0% vram=45G 35min
+  e3 s225/2250 loss=8.267 (l1=2.16 sil=0.57 nrm=0.229 flat=0.050 bin=2.33 ent=3.04 seg=0.39 a=0.72 crs=10.75) lr=1.07e-04 41.0 img/s wait=0% vram=45G 36min
+  e3 s250/2250 loss=9.049 (l1=2.66 sil=0.64 nrm=0.322 flat=0.052 bin=2.18 ent=2.55 seg=0.47 a=0.80 crs=5.71) lr=1.06e-04 40.6 img/s wait=0% vram=45G 36min
+  e3 s275/2250 loss=8.125 (l1=2.22 sil=0.50 nrm=0.197 flat=0.045 bin=1.86 ent=2.67 seg=0.35 a=0.76 crs=15.58) lr=1.06e-04 41.0 img/s wait=0% vram=45G 36min
+  e3 s300/2250 loss=7.775 (l1=1.78 sil=0.54 nrm=0.249 flat=0.029 bin=2.13 ent=2.75 seg=0.46 a=0.77 crs=10.16) lr=1.06e-04 41.2 img/s wait=0% vram=45G 36min
+  e3 s325/2250 loss=8.043 (l1=2.80 sil=0.63 nrm=0.216 flat=0.057 bin=2.26 ent=2.96 seg=0.34 a=0.76 crs=4.40) lr=1.05e-04 40.9 img/s wait=0% vram=45G 36min
+  e3 s350/2250 loss=8.165 (l1=2.14 sil=0.54 nrm=0.237 flat=0.045 bin=2.22 ent=2.85 seg=0.40 a=0.77 crs=7.07) lr=1.05e-04 41.1 img/s wait=0% vram=45G 36min
+  e3 s375/2250 loss=5.928 (l1=1.90 sil=0.52 nrm=0.197 flat=0.040 bin=2.06 ent=2.73 seg=0.39 a=0.81 crs=1.58) lr=1.04e-04 40.7 img/s wait=0% vram=45G 37min
+  e3 s400/2250 loss=7.780 (l1=1.98 sil=0.49 nrm=0.228 flat=0.050 bin=1.74 ent=2.46 seg=0.41 a=0.77 crs=9.79) lr=1.04e-04 41.0 img/s wait=0% vram=45G 37min
+  e3 s425/2250 loss=9.368 (l1=2.14 sil=0.58 nrm=0.265 flat=0.057 bin=2.11 ent=2.73 seg=0.38 a=0.74 crs=14.75) lr=1.03e-04 40.8 img/s wait=0% vram=45G 37min
+  e3 s450/2250 loss=7.596 (l1=2.15 sil=0.59 nrm=0.187 flat=0.028 bin=2.13 ent=2.85 seg=0.58 a=0.75 crs=6.75) lr=1.03e-04 40.9 img/s wait=0% vram=45G 37min
+  e3 s475/2250 loss=7.384 (l1=1.97 sil=0.48 nrm=0.170 flat=0.044 bin=1.83 ent=2.29 seg=0.41 a=0.77 crs=9.53) lr=1.03e-04 41.0 img/s wait=0% vram=45G 37min
+  e3 s500/2250 loss=8.062 (l1=2.77 sil=0.57 nrm=0.316 flat=0.052 bin=1.75 ent=2.57 seg=0.38 a=0.81 crs=5.25) lr=1.02e-04 40.9 img/s wait=0% vram=45G 37min
+  e3 s525/2250 loss=6.859 (l1=1.03 sil=0.46 nrm=0.144 flat=0.029 bin=1.73 ent=2.58 seg=0.56 a=0.74 crs=15.07) lr=1.02e-04 40.9 img/s wait=0% vram=45G 37min
+  e3 s550/2250 loss=6.874 (l1=1.66 sil=0.43 nrm=0.177 flat=0.039 bin=1.76 ent=2.83 seg=0.36 a=0.75 crs=10.44) lr=1.01e-04 40.8 img/s wait=0% vram=45G 38min
+  e3 s575/2250 loss=7.301 (l1=1.60 sil=0.52 nrm=0.212 flat=0.048 bin=2.18 ent=2.86 seg=0.42 a=0.75 crs=7.74) lr=1.01e-04 40.9 img/s wait=0% vram=45G 38min
+  e3 s600/2250 loss=4.695 (l1=1.07 sil=0.40 nrm=0.142 flat=0.025 bin=1.81 ent=2.30 seg=0.28 a=0.78 crs=3.96) lr=1.01e-04 41.0 img/s wait=0% vram=45G 38min
+  e3 s625/2250 loss=6.691 (l1=1.42 sil=0.50 nrm=0.197 flat=0.048 bin=2.03 ent=2.84 seg=0.29 a=0.74 crs=14.01) lr=1.00e-04 40.8 img/s wait=0% vram=45G 38min
+  e3 s650/2250 loss=8.011 (l1=2.26 sil=0.50 nrm=0.205 flat=0.039 bin=1.58 ent=2.40 seg=0.31 a=0.78 crs=9.24) lr=9.97e-05 41.1 img/s wait=0% vram=45G 38min
+  e3 s675/2250 loss=7.527 (l1=2.23 sil=0.56 nrm=0.237 flat=0.044 bin=2.22 ent=2.87 seg=0.48 a=0.76 crs=3.47) lr=9.93e-05 41.0 img/s wait=0% vram=45G 38min
+  e3 s700/2250 loss=7.763 (l1=1.46 sil=0.54 nrm=0.228 flat=0.048 bin=2.42 ent=3.11 seg=0.48 a=0.68 crs=11.03) lr=9.89e-05 41.1 img/s wait=0% vram=45G 39min
+  e3 s725/2250 loss=7.468 (l1=1.49 sil=0.48 nrm=0.229 flat=0.048 bin=1.82 ent=2.65 seg=0.37 a=0.78 crs=9.56) lr=9.84e-05 40.7 img/s wait=0% vram=45G 39min
+  e3 s750/2250 loss=7.530 (l1=1.77 sil=0.48 nrm=0.196 flat=0.059 bin=1.51 ent=2.45 seg=0.37 a=0.77 crs=10.09) lr=9.80e-05 40.8 img/s wait=0% vram=45G 39min
+  e3 s775/2250 loss=6.693 (l1=1.30 sil=0.48 nrm=0.209 flat=0.048 bin=2.07 ent=2.70 seg=0.42 a=0.79 crs=7.08) lr=9.76e-05 41.1 img/s wait=0% vram=45G 39min
+  e3 s800/2250 loss=6.315 (l1=1.60 sil=0.47 nrm=0.232 flat=0.049 bin=2.25 ent=2.84 seg=0.35 a=0.73 crs=2.97) lr=9.72e-05 40.9 img/s wait=0% vram=45G 39min
+  e3 s825/2250 loss=7.081 (l1=1.88 sil=0.54 nrm=0.241 flat=0.046 bin=1.93 ent=2.62 seg=0.39 a=0.79 crs=1.66) lr=9.67e-05 40.5 img/s wait=0% vram=45G 39min
+  e3 s850/2250 loss=8.099 (l1=1.82 sil=0.55 nrm=0.251 flat=0.065 bin=2.05 ent=2.72 seg=0.36 a=0.75 crs=8.73) lr=9.63e-05 40.7 img/s wait=0% vram=45G 40min
+  e3 s875/2250 loss=9.660 (l1=2.36 sil=0.54 nrm=0.191 flat=0.053 bin=1.51 ent=2.42 seg=0.41 a=0.77 crs=10.67) lr=9.59e-05 40.8 img/s wait=0% vram=45G 40min
+  e3 s900/2250 loss=6.891 (l1=1.44 sil=0.45 nrm=0.179 flat=0.037 bin=1.73 ent=2.65 seg=0.51 a=0.75 crs=8.86) lr=9.55e-05 41.0 img/s wait=0% vram=45G 40min
+  e3 s925/2250 loss=8.289 (l1=1.50 sil=0.55 nrm=0.239 flat=0.050 bin=2.02 ent=2.88 seg=0.29 a=0.74 crs=9.94) lr=9.50e-05 40.9 img/s wait=0% vram=45G 40min
+  e3 s950/2250 loss=7.899 (l1=2.14 sil=0.48 nrm=0.310 flat=0.050 bin=1.65 ent=2.48 seg=0.31 a=0.78 crs=5.56) lr=9.46e-05 40.8 img/s wait=0% vram=45G 40min
+  e3 s975/2250 loss=6.890 (l1=1.84 sil=0.54 nrm=0.221 flat=0.055 bin=2.17 ent=2.75 seg=0.30 a=0.78 crs=3.56) lr=9.42e-05 40.7 img/s wait=0% vram=45G 40min
+  e3 s1000/2250 loss=9.565 (l1=1.86 sil=0.52 nrm=0.211 flat=0.043 bin=1.55 ent=2.77 seg=0.46 a=0.71 crs=13.58) lr=9.37e-05 41.1 img/s wait=0% vram=45G 41min
+  e3 s1025/2250 loss=6.850 (l1=2.15 sil=0.53 nrm=0.195 flat=0.057 bin=1.78 ent=2.45 seg=0.33 a=0.81 crs=3.12) lr=9.33e-05 41.1 img/s wait=0% vram=45G 41min
+  e3 s1050/2250 loss=6.949 (l1=1.85 sil=0.52 nrm=0.269 flat=0.053 bin=2.08 ent=2.80 seg=0.34 a=0.78 crs=4.18) lr=9.29e-05 40.9 img/s wait=0% vram=45G 41min
+  e3 s1075/2250 loss=7.551 (l1=2.12 sil=0.51 nrm=0.228 flat=0.041 bin=1.59 ent=2.51 seg=0.51 a=0.77 crs=6.22) lr=9.24e-05 40.8 img/s wait=0% vram=45G 41min
+  e3 s1100/2250 loss=7.558 (l1=1.29 sil=0.49 nrm=0.217 flat=0.042 bin=2.36 ent=3.08 seg=0.45 a=0.73 crs=9.48) lr=9.20e-05 40.9 img/s wait=0% vram=45G 41min
+  e3 s1125/2250 loss=6.714 (l1=1.63 sil=0.48 nrm=0.187 flat=0.042 bin=1.88 ent=2.51 seg=0.30 a=0.81 crs=7.39) lr=9.16e-05 41.2 img/s wait=0% vram=45G 41min
+  e3 s1150/2250 loss=6.919 (l1=2.14 sil=0.48 nrm=0.209 flat=0.038 bin=1.43 ent=2.19 seg=0.26 a=0.78 crs=5.22) lr=9.11e-05 40.8 img/s wait=0% vram=45G 42min
+  e3 s1175/2250 loss=6.501 (l1=1.74 sil=0.46 nrm=0.173 flat=0.056 bin=1.78 ent=2.28 seg=0.30 a=0.83 crs=5.17) lr=9.07e-05 41.1 img/s wait=0% vram=45G 42min
+  e3 s1200/2250 loss=7.503 (l1=2.41 sil=0.50 nrm=0.206 flat=0.071 bin=1.62 ent=2.43 seg=0.34 a=0.77 crs=2.73) lr=9.03e-05 41.0 img/s wait=0% vram=45G 42min
+  e3 s1225/2250 loss=7.360 (l1=1.86 sil=0.54 nrm=0.218 flat=0.039 bin=2.34 ent=3.07 seg=0.41 a=0.75 crs=6.06) lr=8.98e-05 40.9 img/s wait=0% vram=45G 42min
+  e3 s1250/2250 loss=7.976 (l1=1.97 sil=0.57 nrm=0.238 flat=0.044 bin=1.71 ent=2.49 seg=0.36 a=0.76 crs=8.00) lr=8.94e-05 41.1 img/s wait=0% vram=45G 42min
+  e3 s1275/2250 loss=6.592 (l1=1.91 sil=0.51 nrm=0.237 flat=0.069 bin=1.95 ent=2.54 seg=0.48 a=0.80 crs=3.00) lr=8.90e-05 41.0 img/s wait=0% vram=45G 42min
+  e3 s1300/2250 loss=8.620 (l1=2.39 sil=0.53 nrm=0.249 flat=0.064 bin=1.57 ent=2.32 seg=0.41 a=0.81 crs=8.10) lr=8.85e-05 40.9 img/s wait=0% vram=45G 43min
+  e3 s1325/2250 loss=7.291 (l1=1.86 sil=0.51 nrm=0.230 flat=0.053 bin=2.07 ent=2.87 seg=0.50 a=0.73 crs=5.88) lr=8.81e-05 41.0 img/s wait=0% vram=45G 43min
+  e3 s1350/2250 loss=6.811 (l1=1.41 sil=0.47 nrm=0.173 flat=0.032 bin=2.03 ent=2.88 seg=0.37 a=0.75 crs=7.96) lr=8.76e-05 41.0 img/s wait=0% vram=45G 43min
+  e3 s1375/2250 loss=6.975 (l1=1.62 sil=0.54 nrm=0.219 flat=0.063 bin=2.07 ent=2.72 seg=0.37 a=0.79 crs=5.84) lr=8.72e-05 41.0 img/s wait=0% vram=45G 43min
+  e3 s1400/2250 loss=6.977 (l1=1.97 sil=0.46 nrm=0.265 flat=0.043 bin=2.11 ent=2.86 seg=0.53 a=0.78 crs=1.81) lr=8.68e-05 41.1 img/s wait=0% vram=45G 43min
+  e3 s1425/2250 loss=6.736 (l1=1.63 sil=0.51 nrm=0.169 flat=0.040 bin=2.09 ent=2.61 seg=0.37 a=0.77 crs=6.20) lr=8.63e-05 40.7 img/s wait=0% vram=45G 43min
+  e3 s1450/2250 loss=6.312 (l1=1.64 sil=0.49 nrm=0.221 flat=0.048 bin=2.03 ent=2.62 seg=0.40 a=0.81 crs=4.19) lr=8.59e-05 41.2 img/s wait=0% vram=45G 44min
+  e3 s1475/2250 loss=7.814 (l1=1.82 sil=0.53 nrm=0.253 flat=0.058 bin=2.01 ent=2.80 seg=0.29 a=0.82 crs=7.64) lr=8.55e-05 40.9 img/s wait=0% vram=45G 44min
+  e3 s1500/2250 loss=7.490 (l1=2.01 sil=0.55 nrm=0.265 flat=0.056 bin=2.45 ent=3.04 seg=0.49 a=0.76 crs=3.60) lr=8.50e-05 40.9 img/s wait=0% vram=45G 44min
+  e3 s1525/2250 loss=6.568 (l1=1.68 sil=0.45 nrm=0.182 flat=0.049 bin=1.70 ent=2.54 seg=0.40 a=0.78 crs=6.23) lr=8.46e-05 41.0 img/s wait=0% vram=45G 44min
+  e3 s1550/2250 loss=8.934 (l1=2.70 sil=0.55 nrm=0.252 flat=0.050 bin=1.74 ent=2.50 seg=0.34 a=0.77 crs=7.20) lr=8.41e-05 41.1 img/s wait=0% vram=45G 44min
+  e3 s1575/2250 loss=9.469 (l1=2.59 sil=0.55 nrm=0.236 flat=0.075 bin=1.87 ent=2.69 seg=0.38 a=0.75 crs=9.13) lr=8.37e-05 40.9 img/s wait=0% vram=45G 44min
+  e3 s1600/2250 loss=6.339 (l1=1.53 sil=0.41 nrm=0.167 flat=0.032 bin=1.72 ent=2.55 seg=0.32 a=0.77 crs=6.24) lr=8.32e-05 41.0 img/s wait=0% vram=45G 45min
+  e3 s1625/2250 loss=8.147 (l1=1.55 sil=0.52 nrm=0.263 flat=0.036 bin=2.42 ent=2.90 seg=0.29 a=0.76 crs=8.61) lr=8.28e-05 40.9 img/s wait=0% vram=45G 45min
+  e3 s1650/2250 loss=8.420 (l1=2.85 sil=0.57 nrm=0.279 flat=0.072 bin=1.83 ent=2.54 seg=0.36 a=0.79 crs=4.70) lr=8.24e-05 40.8 img/s wait=0% vram=45G 45min
+  e3 s1675/2250 loss=5.968 (l1=1.42 sil=0.45 nrm=0.203 flat=0.052 bin=2.11 ent=2.81 seg=0.28 a=0.77 crs=4.21) lr=8.19e-05 40.8 img/s wait=0% vram=45G 45min
+  e3 s1700/2250 loss=6.210 (l1=1.08 sil=0.41 nrm=0.149 flat=0.039 bin=1.93 ent=2.52 seg=0.30 a=0.78 crs=26.22) lr=8.15e-05 41.2 img/s wait=0% vram=45G 45min
+  e3 s1725/2250 loss=6.998 (l1=1.60 sil=0.49 nrm=0.216 flat=0.038 bin=1.84 ent=2.61 seg=0.34 a=0.80 crs=7.44) lr=8.10e-05 40.7 img/s wait=0% vram=45G 45min
+  e3 s1750/2250 loss=7.472 (l1=2.02 sil=0.52 nrm=0.233 flat=0.048 bin=2.03 ent=2.75 seg=0.37 a=0.78 crs=5.56) lr=8.06e-05 41.0 img/s wait=0% vram=45G 45min
+  e3 s1775/2250 loss=7.876 (l1=1.81 sil=0.53 nrm=0.194 flat=0.050 bin=2.02 ent=2.95 seg=0.42 a=0.72 crs=11.65) lr=8.01e-05 41.0 img/s wait=0% vram=45G 46min
+  e3 s1800/2250 loss=7.089 (l1=2.01 sil=0.50 nrm=0.216 flat=0.048 bin=1.69 ent=2.45 seg=0.40 a=0.78 crs=5.00) lr=7.97e-05 41.0 img/s wait=0% vram=45G 46min
+  e3 s1825/2250 loss=8.511 (l1=1.39 sil=0.50 nrm=0.170 flat=0.039 bin=1.65 ent=2.57 seg=0.67 a=0.78 crs=9.00) lr=7.93e-05 41.0 img/s wait=0% vram=45G 46min
+  e3 s1850/2250 loss=8.390 (l1=2.37 sil=0.54 nrm=0.285 flat=0.062 bin=1.95 ent=2.73 seg=0.43 a=0.79 crs=0.67) lr=7.88e-05 40.9 img/s wait=0% vram=45G 46min
+  e3 s1875/2250 loss=8.899 (l1=2.04 sil=0.54 nrm=0.263 flat=0.053 bin=1.95 ent=2.84 seg=0.43 a=0.75 crs=10.32) lr=7.84e-05 40.9 img/s wait=0% vram=45G 46min
+  e3 s1900/2250 loss=6.250 (l1=1.11 sil=0.46 nrm=0.166 flat=0.043 bin=1.86 ent=2.63 seg=0.39 a=0.80 crs=9.97) lr=7.79e-05 40.9 img/s wait=0% vram=45G 46min
+  e3 s1925/2250 loss=5.898 (l1=1.31 sil=0.45 nrm=0.178 flat=0.031 bin=1.92 ent=2.58 seg=0.39 a=0.81 crs=6.46) lr=7.75e-05 40.7 img/s wait=0% vram=45G 47min
+  e3 s1950/2250 loss=6.252 (l1=1.42 sil=0.46 nrm=0.195 flat=0.038 bin=1.81 ent=2.44 seg=0.47 a=0.81 crs=9.70) lr=7.70e-05 41.0 img/s wait=0% vram=45G 47min
+  e3 s1975/2250 loss=7.525 (l1=1.60 sil=0.47 nrm=0.200 flat=0.032 bin=2.14 ent=2.91 seg=0.45 a=0.71 crs=23.33) lr=7.66e-05 40.9 img/s wait=0% vram=45G 47min
+  e3 s2000/2250 loss=7.155 (l1=1.95 sil=0.48 nrm=0.239 flat=0.038 bin=2.03 ent=2.66 seg=0.30 a=0.75 crs=4.79) lr=7.61e-05 40.9 img/s wait=0% vram=45G 47min
+  e3 s2025/2250 loss=5.981 (l1=1.60 sil=0.47 nrm=0.181 flat=0.035 bin=1.89 ent=2.40 seg=0.35 a=0.82 crs=4.40) lr=7.57e-05 40.9 img/s wait=0% vram=45G 47min
+  e3 s2050/2250 loss=7.636 (l1=1.68 sil=0.47 nrm=0.224 flat=0.039 bin=1.81 ent=2.62 seg=0.33 a=0.76 crs=9.50) lr=7.53e-05 41.0 img/s wait=0% vram=45G 47min
+  e3 s2075/2250 loss=9.064 (l1=3.09 sil=0.52 nrm=0.278 flat=0.071 bin=1.16 ent=2.25 seg=0.35 a=0.79 crs=6.90) lr=7.48e-05 40.9 img/s wait=0% vram=45G 48min
+  e3 s2100/2250 loss=5.522 (l1=1.24 sil=0.43 nrm=0.159 flat=0.033 bin=1.77 ent=2.46 seg=0.31 a=0.79 crs=5.43) lr=7.44e-05 40.9 img/s wait=0% vram=45G 48min
+  e3 s2125/2250 loss=6.320 (l1=1.48 sil=0.47 nrm=0.194 flat=0.035 bin=2.00 ent=2.69 seg=0.36 a=0.79 crs=6.30) lr=7.39e-05 41.0 img/s wait=0% vram=45G 48min
+  e3 s2150/2250 loss=8.815 (l1=1.90 sil=0.51 nrm=0.201 flat=0.059 bin=1.55 ent=2.46 seg=0.37 a=0.75 crs=11.44) lr=7.35e-05 40.9 img/s wait=0% vram=45G 48min
+  e3 s2175/2250 loss=7.182 (l1=1.73 sil=0.48 nrm=0.178 flat=0.056 bin=1.68 ent=2.35 seg=0.22 a=0.81 crs=8.88) lr=7.30e-05 40.5 img/s wait=0% vram=45G 48min
+  e3 s2200/2250 loss=6.591 (l1=1.54 sil=0.47 nrm=0.232 flat=0.039 bin=1.97 ent=2.67 seg=0.55 a=0.80 crs=6.32) lr=7.26e-05 40.7 img/s wait=0% vram=45G 48min
+  e3 s2225/2250 loss=9.417 (l1=2.72 sil=0.57 nrm=0.264 flat=0.061 bin=1.66 ent=2.69 seg=0.34 a=0.74 crs=8.58) lr=7.21e-05 40.9 img/s wait=0% vram=45G 49min
+  eval e3  RMSE=1.562 MAE=0.827 r=0.811 d1=0.641 bal=4.293 tall_bias=-6.15 flat_bias=+0.37 edge=2.306 grad=0.23  [fore=1.97 spar=0.87]
+  eval e3  [neon] RMSE=3.549 MAE=1.888 r=0.950 d1=0.712 bal=3.745 tall_bias=-1.16 flat_bias=+0.44 edge=4.782 grad=0.65  [fore=4.24 spar=0.69]
+  eval e3  [neon @2x pooled] RMSE=3.519 MAE=1.874 r=0.951 d1=0.712 bal=3.709 tall_bias=-1.16 flat_bias=+0.44 edge=4.310 grad=0.63  [fore=4.20 spar=0.68]
+  eval e3  [gamus] RMSE=2.913 MAE=1.439 r=0.909 d1=0.651 bal=3.676 tall_bias=-1.89 flat_bias=+0.55 edge=3.785 grad=0.39  [fore=2.01 spar=3.22 urba=3.28]
+  eval e3  [us3d] RMSE=3.841 MAE=1.388 r=0.886 d1=0.712 bal=6.106 tall_bias=-5.34 flat_bias=+0.27 edge=5.743 grad=0.42  [spar=0.27 urba=4.15]
+  eval e3  select=2.541 m  (forested+sparse RMSE, mean over neon,mvs3dm)
+  new best 2.541 m -> best.pt
+  e4 s0/2250 loss=8.899 (l1=3.21 sil=0.67 nrm=0.263 flat=0.070 bin=2.15 ent=2.71 seg=0.39 a=0.77 crs=4.55) lr=7.02e-05 16.0 img/s wait=22% vram=45G 49min
+  e4 s25/2250 loss=6.340 (l1=1.38 sil=0.47 nrm=0.176 flat=0.050 bin=1.93 ent=2.77 seg=0.28 a=0.78 crs=7.07) lr=6.98e-05 40.8 img/s wait=0% vram=45G 49min
+  e4 s50/2250 loss=7.480 (l1=2.06 sil=0.53 nrm=0.230 flat=0.055 bin=1.99 ent=2.74 seg=0.27 a=0.80 crs=5.60) lr=6.93e-05 40.6 img/s wait=0% vram=45G 50min
+  e4 s75/2250 loss=7.118 (l1=1.80 sil=0.50 nrm=0.244 flat=0.040 bin=2.13 ent=2.77 seg=0.36 a=0.79 crs=5.48) lr=6.89e-05 40.5 img/s wait=0% vram=45G 50min
+  e4 s100/2250 loss=7.177 (l1=1.74 sil=0.49 nrm=0.235 flat=0.050 bin=2.08 ent=2.97 seg=0.37 a=0.72 crs=6.86) lr=6.84e-05 41.1 img/s wait=0% vram=45G 50min
+  e4 s125/2250 loss=5.422 (l1=1.18 sil=0.43 nrm=0.171 flat=0.035 bin=2.01 ent=2.77 seg=0.27 a=0.77 crs=5.39) lr=6.80e-05 41.1 img/s wait=0% vram=45G 50min
+  e4 s150/2250 loss=7.256 (l1=1.57 sil=0.56 nrm=0.265 flat=0.050 bin=2.35 ent=2.99 seg=0.37 a=0.76 crs=6.03) lr=6.76e-05 41.1 img/s wait=0% vram=45G 50min
+  e4 s175/2250 loss=8.392 (l1=2.32 sil=0.58 nrm=0.231 flat=0.059 bin=1.79 ent=2.86 seg=0.32 a=0.70 crs=7.49) lr=6.71e-05 41.2 img/s wait=0% vram=45G 50min
+  e4 s200/2250 loss=8.459 (l1=2.14 sil=0.52 nrm=0.253 flat=0.067 bin=1.87 ent=2.65 seg=0.42 a=0.76 crs=8.10) lr=6.67e-05 41.0 img/s wait=0% vram=45G 51min
+  e4 s225/2250 loss=9.400 (l1=1.97 sil=0.57 nrm=0.249 flat=0.049 bin=2.29 ent=3.05 seg=0.50 a=0.70 crs=13.72) lr=6.62e-05 41.3 img/s wait=0% vram=45G 51min
+  e4 s250/2250 loss=7.178 (l1=1.66 sil=0.49 nrm=0.227 flat=0.052 bin=1.95 ent=2.61 seg=0.44 a=0.77 crs=8.41) lr=6.58e-05 40.9 img/s wait=0% vram=45G 51min
+  e4 s275/2250 loss=6.564 (l1=1.40 sil=0.49 nrm=0.237 flat=0.049 bin=2.14 ent=2.81 seg=0.44 a=0.75 crs=9.06) lr=6.54e-05 41.0 img/s wait=0% vram=45G 51min
+  e4 s300/2250 loss=7.921 (l1=2.02 sil=0.47 nrm=0.221 flat=0.033 bin=1.50 ent=2.39 seg=0.29 a=0.78 crs=9.20) lr=6.49e-05 41.1 img/s wait=0% vram=45G 51min
+  e4 s325/2250 loss=6.469 (l1=1.11 sil=0.42 nrm=0.157 flat=0.040 bin=1.56 ent=2.52 seg=0.29 a=0.77 crs=12.07) lr=6.45e-05 40.6 img/s wait=0% vram=45G 51min
+  e4 s350/2250 loss=7.774 (l1=2.15 sil=0.52 nrm=0.227 flat=0.042 bin=1.86 ent=2.84 seg=0.24 a=0.76 crs=7.02) lr=6.40e-05 40.9 img/s wait=0% vram=45G 52min
+  e4 s375/2250 loss=7.797 (l1=2.38 sil=0.50 nrm=0.229 flat=0.056 bin=1.59 ent=2.44 seg=0.26 a=0.75 crs=6.32) lr=6.36e-05 40.7 img/s wait=0% vram=45G 52min
+  e4 s400/2250 loss=8.433 (l1=2.53 sil=0.54 nrm=0.231 flat=0.057 bin=1.91 ent=2.59 seg=0.43 a=0.76 crs=4.39) lr=6.32e-05 40.9 img/s wait=0% vram=45G 52min
+  e4 s425/2250 loss=7.497 (l1=1.37 sil=0.49 nrm=0.201 flat=0.039 bin=1.93 ent=2.86 seg=0.36 a=0.74 crs=11.26) lr=6.27e-05 40.7 img/s wait=0% vram=45G 52min
+  e4 s450/2250 loss=7.673 (l1=1.70 sil=0.54 nrm=0.254 flat=0.032 bin=2.23 ent=2.91 seg=0.39 a=0.75 crs=7.56) lr=6.23e-05 41.0 img/s wait=0% vram=45G 52min
+  e4 s475/2250 loss=7.445 (l1=1.99 sil=0.52 nrm=0.230 flat=0.056 bin=1.67 ent=2.42 seg=0.25 a=0.81 crs=6.03) lr=6.18e-05 41.2 img/s wait=0% vram=45G 52min
+  e4 s500/2250 loss=6.364 (l1=1.21 sil=0.45 nrm=0.158 flat=0.036 bin=1.43 ent=2.31 seg=0.35 a=0.76 crs=8.20) lr=6.14e-05 40.9 img/s wait=0% vram=45G 53min
+  e4 s525/2250 loss=6.639 (l1=1.49 sil=0.47 nrm=0.175 flat=0.045 bin=1.80 ent=2.56 seg=0.28 a=0.76 crs=8.58) lr=6.10e-05 40.9 img/s wait=0% vram=45G 53min
+  e4 s550/2250 loss=8.331 (l1=2.01 sil=0.53 nrm=0.266 flat=0.060 bin=2.09 ent=2.86 seg=0.41 a=0.76 crs=8.84) lr=6.05e-05 41.2 img/s wait=0% vram=45G 53min
+  e4 s575/2250 loss=8.130 (l1=1.79 sil=0.51 nrm=0.182 flat=0.053 bin=2.08 ent=2.83 seg=0.40 a=0.75 crs=9.06) lr=6.01e-05 40.8 img/s wait=0% vram=45G 53min
+  e4 s600/2250 loss=8.347 (l1=2.13 sil=0.54 nrm=0.233 flat=0.049 bin=2.17 ent=2.91 seg=0.44 a=0.74 crs=10.07) lr=5.97e-05 40.9 img/s wait=0% vram=45G 53min
+  e4 s625/2250 loss=9.181 (l1=3.25 sil=0.59 nrm=0.236 flat=0.070 bin=1.73 ent=2.39 seg=0.32 a=0.78 crs=4.61) lr=5.92e-05 40.9 img/s wait=0% vram=45G 53min
+  e4 s650/2250 loss=9.800 (l1=2.65 sil=0.53 nrm=0.298 flat=0.072 bin=1.76 ent=2.94 seg=0.43 a=0.73 crs=8.93) lr=5.88e-05 40.8 img/s wait=0% vram=45G 54min
+  e4 s675/2250 loss=7.116 (l1=1.77 sil=0.46 nrm=0.200 flat=0.040 bin=1.86 ent=2.73 seg=0.45 a=0.73 crs=7.16) lr=5.84e-05 40.8 img/s wait=0% vram=45G 54min
+  e4 s700/2250 loss=7.709 (l1=2.20 sil=0.54 nrm=0.222 flat=0.044 bin=1.89 ent=2.66 seg=0.38 a=0.75 crs=5.41) lr=5.79e-05 41.3 img/s wait=0% vram=45G 54min
+  e4 s725/2250 loss=7.569 (l1=1.90 sil=0.52 nrm=0.283 flat=0.038 bin=2.13 ent=3.04 seg=0.43 a=0.72 crs=4.48) lr=5.75e-05 41.0 img/s wait=0% vram=45G 54min
+  e4 s750/2250 loss=6.244 (l1=1.76 sil=0.51 nrm=0.229 flat=0.060 bin=2.20 ent=2.95 seg=0.42 a=0.75 crs=2.83) lr=5.71e-05 41.0 img/s wait=0% vram=45G 54min
+  e4 s775/2250 loss=8.007 (l1=1.67 sil=0.54 nrm=0.240 flat=0.045 bin=2.15 ent=2.84 seg=0.44 a=0.78 crs=8.67) lr=5.67e-05 41.2 img/s wait=0% vram=45G 54min
+  e4 s800/2250 loss=7.602 (l1=1.62 sil=0.50 nrm=0.249 flat=0.042 bin=2.03 ent=2.61 seg=0.49 a=0.79 crs=9.16) lr=5.62e-05 40.9 img/s wait=0% vram=45G 54min
+  e4 s825/2250 loss=6.963 (l1=1.66 sil=0.47 nrm=0.211 flat=0.042 bin=1.89 ent=2.71 seg=0.39 a=0.77 crs=8.16) lr=5.58e-05 41.1 img/s wait=0% vram=45G 55min
+  e4 s850/2250 loss=6.805 (l1=1.68 sil=0.50 nrm=0.239 flat=0.043 bin=1.74 ent=2.57 seg=0.31 a=0.79 crs=6.15) lr=5.54e-05 41.0 img/s wait=0% vram=45G 55min
+  e4 s875/2250 loss=8.495 (l1=2.09 sil=0.51 nrm=0.253 flat=0.041 bin=1.85 ent=2.68 seg=0.39 a=0.76 crs=9.69) lr=5.49e-05 40.8 img/s wait=0% vram=45G 55min
+  e4 s900/2250 loss=8.206 (l1=2.02 sil=0.49 nrm=0.239 flat=0.079 bin=1.68 ent=2.56 seg=0.39 a=0.76 crs=8.70) lr=5.45e-05 41.1 img/s wait=0% vram=45G 55min
+  e4 s925/2250 loss=7.326 (l1=2.19 sil=0.56 nrm=0.212 flat=0.054 bin=1.70 ent=2.47 seg=0.32 a=0.81 crs=0.57) lr=5.41e-05 40.9 img/s wait=0% vram=45G 55min
+  e4 s950/2250 loss=7.577 (l1=2.00 sil=0.55 nrm=0.230 flat=0.036 bin=1.98 ent=2.69 seg=0.34 a=0.77 crs=6.16) lr=5.37e-05 40.8 img/s wait=0% vram=45G 55min
+  e4 s975/2250 loss=7.519 (l1=1.64 sil=0.52 nrm=0.216 flat=0.054 bin=2.18 ent=2.77 seg=0.40 a=0.77 crs=10.64) lr=5.32e-05 40.9 img/s wait=0% vram=45G 56min
+  e4 s1000/2250 loss=8.588 (l1=2.50 sil=0.57 nrm=0.298 flat=0.045 bin=2.00 ent=2.81 seg=0.35 a=0.73 crs=5.43) lr=5.28e-05 41.1 img/s wait=0% vram=45G 56min
+  e4 s1025/2250 loss=7.285 (l1=1.85 sil=0.50 nrm=0.258 flat=0.043 bin=2.06 ent=2.62 seg=0.34 a=0.76 crs=5.37) lr=5.24e-05 40.8 img/s wait=0% vram=45G 56min
+  e4 s1050/2250 loss=8.719 (l1=2.45 sil=0.55 nrm=0.244 flat=0.062 bin=2.02 ent=2.80 seg=0.46 a=0.77 crs=6.94) lr=5.20e-05 41.1 img/s wait=0% vram=45G 56min
+  e4 s1075/2250 loss=7.280 (l1=2.08 sil=0.50 nrm=0.209 flat=0.040 bin=1.86 ent=2.46 seg=0.29 a=0.77 crs=5.83) lr=5.16e-05 41.0 img/s wait=0% vram=45G 56min
+  e4 s1100/2250 loss=8.782 (l1=2.40 sil=0.54 nrm=0.287 flat=0.055 bin=1.82 ent=2.64 seg=0.32 a=0.78 crs=7.38) lr=5.11e-05 41.0 img/s wait=0% vram=45G 56min
+  e4 s1125/2250 loss=9.414 (l1=2.11 sil=0.55 nrm=0.306 flat=0.051 bin=1.84 ent=2.90 seg=0.37 a=0.71 crs=10.24) lr=5.07e-05 41.0 img/s wait=0% vram=45G 57min
+  e4 s1150/2250 loss=6.271 (l1=1.71 sil=0.46 nrm=0.209 flat=0.033 bin=1.80 ent=2.49 seg=0.36 a=0.79 crs=4.38) lr=5.03e-05 41.0 img/s wait=0% vram=45G 57min
+  e4 s1175/2250 loss=8.002 (l1=2.25 sil=0.58 nrm=0.266 flat=0.051 bin=2.34 ent=2.95 seg=0.50 a=0.75 crs=4.32) lr=4.99e-05 40.9 img/s wait=0% vram=45G 57min
+  e4 s1200/2250 loss=7.555 (l1=2.02 sil=0.51 nrm=0.247 flat=0.048 bin=2.14 ent=2.72 seg=0.47 a=0.75 crs=2.80) lr=4.95e-05 40.8 img/s wait=0% vram=45G 57min
+  e4 s1225/2250 loss=9.296 (l1=2.60 sil=0.54 nrm=0.210 flat=0.048 bin=1.76 ent=2.50 seg=0.21 a=0.74 crs=9.92) lr=4.91e-05 41.0 img/s wait=0% vram=45G 57min
+  e4 s1250/2250 loss=6.614 (l1=1.63 sil=0.45 nrm=0.222 flat=0.036 bin=1.54 ent=2.37 seg=0.31 a=0.80 crs=9.29) lr=4.86e-05 40.9 img/s wait=0% vram=45G 57min
+  e4 s1275/2250 loss=7.234 (l1=1.83 sil=0.53 nrm=0.209 flat=0.046 bin=1.94 ent=2.61 seg=0.43 a=0.72 crs=7.44) lr=4.82e-05 41.0 img/s wait=0% vram=45G 58min
+  e4 s1300/2250 loss=8.796 (l1=3.10 sil=0.53 nrm=0.264 flat=0.040 bin=2.03 ent=2.86 seg=0.33 a=0.77 crs=4.99) lr=4.78e-05 40.7 img/s wait=0% vram=45G 58min
+  e4 s1325/2250 loss=6.326 (l1=1.31 sil=0.41 nrm=0.125 flat=0.028 bin=1.19 ent=1.84 seg=0.31 a=0.83 crs=8.64) lr=4.74e-05 40.9 img/s wait=0% vram=45G 58min
+  e4 s1350/2250 loss=7.937 (l1=1.89 sil=0.51 nrm=0.256 flat=0.051 bin=1.93 ent=2.75 seg=0.46 a=0.75 crs=8.30) lr=4.70e-05 40.9 img/s wait=0% vram=45G 58min
+  e4 s1375/2250 loss=7.115 (l1=2.12 sil=0.57 nrm=0.246 flat=0.041 bin=1.65 ent=2.32 seg=0.44 a=0.80 crs=5.41) lr=4.66e-05 40.4 img/s wait=0% vram=45G 58min
+  e4 s1400/2250 loss=6.154 (l1=1.70 sil=0.45 nrm=0.183 flat=0.036 bin=1.69 ent=2.56 seg=0.40 a=0.76 crs=2.95) lr=4.62e-05 40.9 img/s wait=0% vram=45G 58min
+  e4 s1425/2250 loss=9.043 (l1=1.70 sil=0.50 nrm=0.203 flat=0.052 bin=2.00 ent=2.86 seg=0.45 a=0.72 crs=13.38) lr=4.58e-05 41.1 img/s wait=0% vram=45G 59min
+  e4 s1450/2250 loss=7.809 (l1=1.65 sil=0.49 nrm=0.232 flat=0.054 bin=1.86 ent=2.72 seg=0.32 a=0.76 crs=11.89) lr=4.54e-05 40.8 img/s wait=0% vram=45G 59min
+  e4 s1475/2250 loss=7.729 (l1=1.66 sil=0.51 nrm=0.260 flat=0.049 bin=2.21 ent=2.95 seg=0.45 a=0.75 crs=9.86) lr=4.50e-05 41.0 img/s wait=0% vram=45G 59min
+  e4 s1500/2250 loss=7.683 (l1=1.51 sil=0.49 nrm=0.197 flat=0.052 bin=1.95 ent=2.65 seg=0.36 a=0.74 crs=12.59) lr=4.46e-05 41.1 img/s wait=0% vram=45G 59min
+  e4 s1525/2250 loss=8.288 (l1=2.71 sil=0.51 nrm=0.206 flat=0.054 bin=1.58 ent=2.31 seg=0.35 a=0.79 crs=3.90) lr=4.42e-05 41.0 img/s wait=0% vram=45G 59min
+  e4 s1550/2250 loss=5.879 (l1=1.66 sil=0.50 nrm=0.185 flat=0.039 bin=2.16 ent=2.57 seg=0.39 a=0.83 crs=1.99) lr=4.37e-05 41.0 img/s wait=0% vram=45G 59min
+  e4 s1575/2250 loss=8.162 (l1=1.38 sil=0.43 nrm=0.173 flat=0.037 bin=1.46 ent=2.54 seg=0.35 a=0.72 crs=13.09) lr=4.34e-05 40.9 img/s wait=0% vram=45G 60min
+  e4 s1600/2250 loss=6.403 (l1=1.65 sil=0.42 nrm=0.163 flat=0.044 bin=1.62 ent=2.60 seg=0.38 a=0.75 crs=6.40) lr=4.29e-05 41.0 img/s wait=0% vram=45G 60min
+  e4 s1625/2250 loss=6.276 (l1=1.57 sil=0.53 nrm=0.236 flat=0.050 bin=2.00 ent=2.76 seg=0.41 a=0.76 crs=4.24) lr=4.26e-05 40.8 img/s wait=0% vram=45G 60min
+  e4 s1650/2250 loss=7.629 (l1=1.76 sil=0.50 nrm=0.221 flat=0.043 bin=2.00 ent=2.68 seg=0.49 a=0.74 crs=7.75) lr=4.22e-05 41.0 img/s wait=0% vram=45G 60min
+  e4 s1675/2250 loss=6.724 (l1=1.70 sil=0.54 nrm=0.250 flat=0.048 bin=2.48 ent=3.14 seg=0.42 a=0.74 crs=2.90) lr=4.18e-05 40.8 img/s wait=0% vram=45G 60min
+  e4 s1700/2250 loss=7.718 (l1=1.73 sil=0.56 nrm=0.276 flat=0.047 bin=2.58 ent=2.98 seg=0.48 a=0.75 crs=0.00) lr=4.14e-05 41.1 img/s wait=0% vram=45G 60min
+  e4 s1725/2250 loss=6.473 (l1=1.27 sil=0.47 nrm=0.187 flat=0.035 bin=1.73 ent=2.46 seg=0.33 a=0.80 crs=7.05) lr=4.10e-05 40.2 img/s wait=0% vram=45G 61min
+  e4 s1750/2250 loss=6.541 (l1=1.46 sil=0.49 nrm=0.210 flat=0.036 bin=2.06 ent=2.72 seg=0.32 a=0.76 crs=7.06) lr=4.06e-05 41.0 img/s wait=0% vram=45G 61min
+  e4 s1775/2250 loss=6.689 (l1=1.81 sil=0.44 nrm=0.221 flat=0.049 bin=1.63 ent=2.58 seg=0.22 a=0.77 crs=3.61) lr=4.02e-05 41.1 img/s wait=0% vram=45G 61min
+  e4 s1800/2250 loss=7.566 (l1=2.01 sil=0.53 nrm=0.229 flat=0.057 bin=2.23 ent=2.78 seg=0.43 a=0.79 crs=3.56) lr=3.98e-05 40.8 img/s wait=0% vram=45G 61min
+  e4 s1825/2250 loss=8.471 (l1=1.40 sil=0.43 nrm=0.233 flat=0.038 bin=1.70 ent=2.57 seg=0.28 a=0.75 crs=10.54) lr=3.94e-05 40.9 img/s wait=0% vram=45G 61min
+  e4 s1850/2250 loss=6.350 (l1=1.45 sil=0.44 nrm=0.173 flat=0.046 bin=1.64 ent=2.57 seg=0.33 a=0.73 crs=7.14) lr=3.90e-05 40.9 img/s wait=0% vram=45G 61min
+  e4 s1875/2250 loss=7.377 (l1=1.59 sil=0.54 nrm=0.262 flat=0.053 bin=2.09 ent=2.90 seg=0.22 a=0.75 crs=6.94) lr=3.86e-05 40.8 img/s wait=0% vram=45G 62min
+  e4 s1900/2250 loss=7.492 (l1=1.96 sil=0.53 nrm=0.218 flat=0.091 bin=1.65 ent=2.49 seg=0.41 a=0.76 crs=6.04) lr=3.82e-05 41.0 img/s wait=0% vram=45G 62min
+  e4 s1925/2250 loss=8.251 (l1=1.57 sil=0.49 nrm=0.220 flat=0.057 bin=1.82 ent=2.83 seg=0.38 a=0.73 crs=12.09) lr=3.79e-05 40.8 img/s wait=0% vram=45G 62min
+  e4 s1950/2250 loss=7.769 (l1=1.83 sil=0.51 nrm=0.244 flat=0.067 bin=2.15 ent=2.93 seg=0.30 a=0.74 crs=7.71) lr=3.75e-05 41.3 img/s wait=0% vram=45G 62min
+  e4 s1975/2250 loss=7.318 (l1=1.63 sil=0.47 nrm=0.209 flat=0.044 bin=2.08 ent=2.78 seg=0.36 a=0.78 crs=9.40) lr=3.71e-05 41.0 img/s wait=0% vram=45G 62min
+  e4 s2000/2250 loss=7.723 (l1=2.15 sil=0.50 nrm=0.213 flat=0.046 bin=1.50 ent=2.42 seg=0.34 a=0.77 crs=8.01) lr=3.67e-05 40.9 img/s wait=0% vram=45G 62min
+  e4 s2025/2250 loss=9.479 (l1=2.03 sil=0.53 nrm=0.305 flat=0.060 bin=1.82 ent=2.97 seg=0.41 a=0.74 crs=13.49) lr=3.63e-05 40.9 img/s wait=0% vram=45G 62min
+  e4 s2050/2250 loss=6.439 (l1=1.66 sil=0.48 nrm=0.239 flat=0.039 bin=2.06 ent=2.56 seg=0.28 a=0.81 crs=3.77) lr=3.60e-05 41.0 img/s wait=0% vram=45G 63min
+  e4 s2075/2250 loss=7.020 (l1=2.06 sil=0.53 nrm=0.210 flat=0.062 bin=1.76 ent=2.41 seg=0.36 a=0.78 crs=4.03) lr=3.56e-05 41.0 img/s wait=0% vram=45G 63min
+  e4 s2100/2250 loss=6.462 (l1=1.73 sil=0.46 nrm=0.225 flat=0.054 bin=1.86 ent=2.62 seg=0.35 a=0.78 crs=1.63) lr=3.52e-05 41.0 img/s wait=0% vram=45G 63min
+  e4 s2125/2250 loss=8.426 (l1=1.95 sil=0.55 nrm=0.301 flat=0.045 bin=2.06 ent=3.05 seg=0.34 a=0.76 crs=8.13) lr=3.49e-05 40.8 img/s wait=0% vram=45G 63min
+  e4 s2150/2250 loss=7.468 (l1=1.77 sil=0.52 nrm=0.269 flat=0.040 bin=2.20 ent=2.87 seg=0.42 a=0.74 crs=6.36) lr=3.45e-05 41.1 img/s wait=0% vram=45G 63min
+  e4 s2175/2250 loss=5.801 (l1=0.96 sil=0.40 nrm=0.153 flat=0.024 bin=1.73 ent=2.52 seg=0.21 a=0.78 crs=7.66) lr=3.41e-05 41.0 img/s wait=0% vram=45G 63min
+  e4 s2200/2250 loss=7.643 (l1=1.63 sil=0.52 nrm=0.228 flat=0.052 bin=2.37 ent=3.14 seg=0.35 a=0.71 crs=7.81) lr=3.38e-05 41.2 img/s wait=0% vram=45G 64min
+  e4 s2225/2250 loss=8.366 (l1=2.19 sil=0.52 nrm=0.296 flat=0.048 bin=2.28 ent=3.02 seg=0.29 a=0.75 crs=6.36) lr=3.34e-05 41.0 img/s wait=0% vram=45G 64min
+  eval e4  RMSE=1.554 MAE=0.822 r=0.813 d1=0.642 bal=4.286 tall_bias=-6.12 flat_bias=+0.36 edge=2.295 grad=0.23  [fore=1.96 spar=0.87]
+  eval e4  [neon] RMSE=3.500 MAE=1.857 r=0.951 d1=0.716 bal=3.697 tall_bias=-1.08 flat_bias=+0.43 edge=4.720 grad=0.66  [fore=4.18 spar=0.69]
+  eval e4  [neon @2x pooled] RMSE=3.469 MAE=1.843 r=0.952 d1=0.717 bal=3.661 tall_bias=-1.07 flat_bias=+0.43 edge=4.249 grad=0.63  [fore=4.14 spar=0.67]
+  eval e4  [gamus] RMSE=2.911 MAE=1.434 r=0.909 d1=0.653 bal=3.673 tall_bias=-1.97 flat_bias=+0.54 edge=3.774 grad=0.39  [fore=2.01 spar=3.26 urba=3.27]
+  eval e4  [us3d] RMSE=3.857 MAE=1.381 r=0.886 d1=0.715 bal=6.126 tall_bias=-5.63 flat_bias=+0.27 edge=5.768 grad=0.43  [spar=0.27 urba=4.17]
+  eval e4  select=2.512 m  (forested+sparse RMSE, mean over neon,mvs3dm)
+  new best 2.512 m -> best.pt
+  full state -> last_full.pt (epoch 4, 6.0 GB)
+  e5 s0/2250 loss=7.436 (l1=1.16 sil=0.46 nrm=0.204 flat=0.042 bin=1.80 ent=2.58 seg=0.52 a=0.77 crs=14.81) lr=3.14e-05 23.2 img/s wait=36% vram=45G 65min
+  e5 s25/2250 loss=7.186 (l1=1.77 sil=0.46 nrm=0.196 flat=0.040 bin=1.66 ent=2.46 seg=0.37 a=0.77 crs=7.90) lr=3.10e-05 40.6 img/s wait=0% vram=45G 65min
+  e5 s50/2250 loss=6.832 (l1=1.60 sil=0.51 nrm=0.247 flat=0.046 bin=2.23 ent=2.79 seg=0.36 a=0.79 crs=5.51) lr=3.07e-05 40.7 img/s wait=0% vram=45G 65min
+  e5 s75/2250 loss=5.269 (l1=1.55 sil=0.41 nrm=0.169 flat=0.035 bin=1.60 ent=2.24 seg=0.26 a=0.81 crs=2.47) lr=3.03e-05 40.8 img/s wait=0% vram=45G 65min
+  e5 s100/2250 loss=8.324 (l1=2.12 sil=0.51 nrm=0.264 flat=0.049 bin=1.55 ent=2.48 seg=0.32 a=0.75 crs=8.08) lr=3.00e-05 40.6 img/s wait=0% vram=45G 65min
+  e5 s125/2250 loss=6.921 (l1=1.78 sil=0.48 nrm=0.214 flat=0.040 bin=1.90 ent=2.62 seg=0.38 a=0.79 crs=5.39) lr=2.96e-05 41.0 img/s wait=0% vram=45G 66min
+  e5 s150/2250 loss=7.753 (l1=1.53 sil=0.43 nrm=0.206 flat=0.037 bin=1.70 ent=2.39 seg=0.28 a=0.78 crs=19.14) lr=2.93e-05 41.2 img/s wait=0% vram=45G 66min
+  e5 s175/2250 loss=5.991 (l1=0.65 sil=0.35 nrm=0.111 flat=0.020 bin=1.34 ent=2.34 seg=0.26 a=0.76 crs=9.61) lr=2.89e-05 41.1 img/s wait=0% vram=45G 66min
+  e5 s200/2250 loss=8.627 (l1=2.35 sil=0.54 nrm=0.321 flat=0.066 bin=1.88 ent=2.64 seg=0.42 a=0.76 crs=4.10) lr=2.86e-05 41.1 img/s wait=0% vram=45G 66min
+  e5 s225/2250 loss=7.057 (l1=1.85 sil=0.52 nrm=0.199 flat=0.029 bin=1.80 ent=2.46 seg=0.35 a=0.79 crs=7.58) lr=2.82e-05 41.0 img/s wait=0% vram=45G 66min
+  e5 s250/2250 loss=8.593 (l1=2.44 sil=0.55 nrm=0.249 flat=0.057 bin=2.14 ent=2.79 seg=0.37 a=0.76 crs=6.56) lr=2.79e-05 41.0 img/s wait=0% vram=45G 66min
+  e5 s275/2250 loss=6.204 (l1=1.20 sil=0.46 nrm=0.209 flat=0.065 bin=1.93 ent=2.77 seg=0.38 a=0.77 crs=7.36) lr=2.76e-05 40.9 img/s wait=0% vram=45G 66min
+  e5 s300/2250 loss=8.261 (l1=2.34 sil=0.49 nrm=0.232 flat=0.069 bin=1.90 ent=2.77 seg=0.41 a=0.77 crs=7.33) lr=2.72e-05 41.0 img/s wait=0% vram=45G 67min
+  e5 s325/2250 loss=6.443 (l1=1.67 sil=0.48 nrm=0.213 flat=0.039 bin=2.14 ent=2.70 seg=0.33 a=0.78 crs=0.42) lr=2.69e-05 41.1 img/s wait=0% vram=45G 67min
+  e5 s350/2250 loss=9.855 (l1=1.85 sil=0.54 nrm=0.299 flat=0.048 bin=1.75 ent=2.67 seg=0.41 a=0.70 crs=12.10) lr=2.65e-05 40.9 img/s wait=0% vram=45G 67min
+  e5 s375/2250 loss=9.395 (l1=2.41 sil=0.55 nrm=0.268 flat=0.056 bin=1.77 ent=2.67 seg=0.43 a=0.75 crs=11.06) lr=2.62e-05 41.1 img/s wait=0% vram=45G 67min
+  e5 s400/2250 loss=7.738 (l1=1.82 sil=0.53 nrm=0.230 flat=0.060 bin=1.97 ent=3.02 seg=0.40 a=0.75 crs=6.91) lr=2.59e-05 41.0 img/s wait=0% vram=45G 67min
+  e5 s425/2250 loss=7.961 (l1=1.72 sil=0.50 nrm=0.254 flat=0.036 bin=1.66 ent=2.53 seg=0.40 a=0.77 crs=11.15) lr=2.56e-05 41.1 img/s wait=0% vram=45G 67min
+  e5 s450/2250 loss=8.479 (l1=2.61 sil=0.60 nrm=0.234 flat=0.038 bin=2.12 ent=2.58 seg=0.34 a=0.78 crs=4.82) lr=2.52e-05 41.1 img/s wait=0% vram=45G 68min
+  e5 s475/2250 loss=6.909 (l1=1.72 sil=0.50 nrm=0.237 flat=0.034 bin=2.21 ent=2.78 seg=0.40 a=0.74 crs=0.00) lr=2.49e-05 41.1 img/s wait=0% vram=45G 68min
+  e5 s500/2250 loss=8.144 (l1=2.70 sil=0.57 nrm=0.304 flat=0.073 bin=1.92 ent=2.60 seg=0.48 a=0.71 crs=4.85) lr=2.46e-05 41.0 img/s wait=0% vram=45G 68min
+  e5 s525/2250 loss=8.360 (l1=1.84 sil=0.50 nrm=0.220 flat=0.078 bin=1.46 ent=2.40 seg=0.28 a=0.76 crs=11.22) lr=2.43e-05 40.9 img/s wait=0% vram=45G 68min
+  e5 s550/2250 loss=6.331 (l1=1.36 sil=0.43 nrm=0.171 flat=0.040 bin=1.75 ent=2.59 seg=0.37 a=0.77 crs=9.31) lr=2.39e-05 40.8 img/s wait=0% vram=45G 68min
+  e5 s575/2250 loss=8.135 (l1=2.12 sil=0.52 nrm=0.243 flat=0.054 bin=1.87 ent=2.53 seg=0.39 a=0.79 crs=10.32) lr=2.36e-05 40.9 img/s wait=0% vram=45G 68min
+  e5 s600/2250 loss=7.255 (l1=1.35 sil=0.45 nrm=0.217 flat=0.046 bin=1.79 ent=2.75 seg=0.40 a=0.74 crs=8.93) lr=2.33e-05 41.0 img/s wait=0% vram=45G 69min
+  e5 s625/2250 loss=6.675 (l1=1.65 sil=0.48 nrm=0.192 flat=0.036 bin=1.98 ent=2.68 seg=0.31 a=0.76 crs=7.24) lr=2.30e-05 41.0 img/s wait=0% vram=45G 69min
+  e5 s650/2250 loss=6.175 (l1=1.10 sil=0.45 nrm=0.163 flat=0.032 bin=1.70 ent=2.41 seg=0.27 a=0.79 crs=8.88) lr=2.27e-05 40.9 img/s wait=0% vram=45G 69min
+  e5 s675/2250 loss=9.096 (l1=1.90 sil=0.50 nrm=0.242 flat=0.057 bin=1.37 ent=2.28 seg=0.35 a=0.74 crs=11.98) lr=2.24e-05 40.8 img/s wait=0% vram=45G 69min
+  e5 s700/2250 loss=7.072 (l1=1.96 sil=0.48 nrm=0.193 flat=0.033 bin=2.11 ent=2.55 seg=0.31 a=0.73 crs=0.00) lr=2.21e-05 40.8 img/s wait=0% vram=45G 69min
+  e5 s725/2250 loss=6.517 (l1=1.49 sil=0.47 nrm=0.208 flat=0.046 bin=2.03 ent=2.82 seg=0.35 a=0.73 crs=6.53) lr=2.18e-05 40.9 img/s wait=0% vram=45G 69min
+  e5 s750/2250 loss=7.976 (l1=2.31 sil=0.49 nrm=0.196 flat=0.055 bin=1.60 ent=2.39 seg=0.35 a=0.75 crs=7.03) lr=2.15e-05 41.0 img/s wait=0% vram=45G 70min
+  e5 s775/2250 loss=6.117 (l1=1.18 sil=0.47 nrm=0.164 flat=0.043 bin=1.86 ent=2.47 seg=0.31 a=0.79 crs=6.78) lr=2.12e-05 40.9 img/s wait=0% vram=45G 70min
+  e5 s800/2250 loss=9.341 (l1=3.51 sil=0.53 nrm=0.263 flat=0.053 bin=1.58 ent=2.24 seg=0.29 a=0.78 crs=3.37) lr=2.09e-05 40.8 img/s wait=0% vram=45G 70min
+  e5 s825/2250 loss=7.323 (l1=1.50 sil=0.49 nrm=0.209 flat=0.045 bin=2.03 ent=2.61 seg=0.36 a=0.78 crs=10.17) lr=2.06e-05 40.9 img/s wait=0% vram=45G 70min
+  e5 s850/2250 loss=6.707 (l1=1.93 sil=0.49 nrm=0.192 flat=0.059 bin=1.99 ent=2.55 seg=0.39 a=0.78 crs=0.64) lr=2.03e-05 41.0 img/s wait=0% vram=45G 70min
+[env] torch=2.10.0+cu128 cuda=True gpus=1
+[env]   GPU0: NVIDIA H100 80GB HBM3  79 GiB
+[preproc] image-processor lookup failed (
+AutoImageProcessor requires the Torchvision library but it was not found in your environment. Check out the instructions on the
+installation page: https://pytorch.org/get-started/locally/ and follow the ones that match your environment.
+Please note that you may need to restart your runtime after installation.
+); using defaults
+[preproc] 0.5 m/px, tile 512, stretch=True, mean=(0.43, 0.411, 0.296)
+[data] mvs3dm/train: 9194 tiles @ 512px / 0.5 m  gsd_jitter=0.30..0.50 m  seg=NO  [!] requested hi 1.20 unreachable
+[data] neon/train: 1846 tiles @ 1024px / 0.5 m  gsd_jitter=0.30..1.00 m  seg=NO  [!] requested hi 1.20 unreachable
+[data] gamus/train: 5004 tiles @ 1024px / 0.25 m  gsd_jitter=0.30..0.50 m  seg=yes  [!] requested hi 1.20 unreachable
+[data] us3d/train: 2492 tiles @ 1024px / 0.32 m  gsd_jitter=0.30..0.64 m  seg=yes  [!] requested hi 1.20 unreachable
+[data] synrs3d_g05/train: 6999 tiles @ 512px / 0.45 m  gsd_jitter=0.30..0.45 m  seg=yes  [!] requested hi 1.20 unreachable
+[data] synrs3d_g1/train: 5537 tiles @ 512px / 0.8 m  gsd_jitter=0.30..0.80 m  seg=yes  [!] requested hi 1.20 unreachable
+[data] w_seg=0.2; semantic labels only from ['gamus', 'us3d', 'synrs3d_g05', 'synrs3d_g1']
+[data] mvs3dm/train landscape: urban=274 (2% of draws)  sparse=1542 (13% of draws)  hilly=0 (0% of draws)  forested=7378 (85% of draws)
+[data] neon/train landscape: urban=0 (0% of draws)  sparse=429 (19% of draws)  hilly=0 (0% of draws)  forested=1417 (81% of draws)
+[data] gamus/train landscape: urban=2291 (31% of draws)  sparse=582 (12% of draws)  hilly=0 (0% of draws)  forested=2131 (57% of draws)
+[data] us3d/train landscape: urban=1367 (40% of draws)  sparse=314 (14% of draws)  hilly=0 (0% of draws)  forested=811 (47% of draws)
+[data] synrs3d_g05/train landscape: urban=2974 (27% of draws)  sparse=0 (0% of draws)  hilly=0 (0% of draws)  forested=4025 (73% of draws)
+[data] synrs3d_g1/train landscape: urban=1344 (14% of draws)  sparse=23 (0% of draws)  hilly=0 (0% of draws)  forested=4170 (86% of draws)
+[data] val: 200 tiles from mvs3dm (random 200 of 820, seed 42)  (2250 train steps/epoch)
+[data] val+ : 118 tiles from neon (all)  — reported, not selected on
+[data] val+ : 200 tiles from gamus (random 200 of 859, seed 42)  — reported, not selected on
+[data] val+ : 200 tiles from us3d (random 200 of 291, seed 42)  — reported, not selected on
+[perf] GPU augmentation on — workers hand over uint8 (512x512x3 = 0.8 MB/sample instead of 3.1 MB)
+[model] encoder FROZEN (0.0M grad params)
+[model] encoder=facebook/dinov3-vitl16-pretrain-sat493m hidden=1024 patch=16 blocks=24 taps=(6, 12, 18, 24)
+[model] encoder gradient checkpointing OFF
+[model] 3 unreachable encoder parameter(s) left frozen (never receive gradients, would hang DDP): embeddings.mask_token, norm.weight, norm.bias
+[model] encoder TRAINABLE (303.1M grad params)
+[resume] /mnt/depthwizard-results/v5_final_forest/last_full.pt: full-state resume, missing 0, unexpected 0
+[model] encoder gradient checkpointing OFF
+[model] 3 unreachable encoder parameter(s) left frozen (never receive gradients, would hang DDP): embeddings.mask_token, norm.weight, norm.bias
+[model] encoder TRAINABLE (303.1M grad params)
+[optim] 52 groups, 323.7M trainable params, lr 2.39e-06..1.50e-04  (fused AdamW)
+[resume] continuing at epoch 5, best 2.512 m, 64 min of --max_minutes 106 used; budget changed, cosine held at 71 % (saved) instead of restarting from 61 %
+[sched] 100 epochs, budget 106 min, 64 min already spent  ->  cosine reaches 100 %, decoder lr 1.50e-04 -> 1.50e-06  [resume: starts at 71 %, lr 3.30e-05]
+/usr/local/lib/python3.12/site-packages/torch/utils/data/dataloader.py:1118: UserWarning: pin_memory_device is deprecated, the current accelerator will be used as the device,ignore pin_memory_device='cuda'.
+  super().__init__(loader)
+  e5 s0/2250 loss=6.616 (l1=1.87 sil=0.52 nrm=0.249 flat=0.053 bin=2.28 ent=3.12 seg=0.30 a=0.76 crs=0.33) lr=3.30e-05 0.4 img/s wait=4% vram=42G 65min
+  e5 s25/2250 loss=9.028 (l1=1.96 sil=0.52 nrm=0.206 flat=0.056 bin=1.38 ent=2.70 seg=0.42 a=0.71 crs=13.84) lr=3.19e-05 39.5 img/s wait=0% vram=44G 65min
+  e5 s50/2250 loss=8.202 (l1=1.94 sil=0.49 nrm=0.256 flat=0.063 bin=1.80 ent=2.77 seg=0.44 a=0.73 crs=8.47) lr=3.17e-05 41.2 img/s wait=0% vram=44G 65min
+  e5 s75/2250 loss=5.519 (l1=1.12 sil=0.44 nrm=0.165 flat=0.035 bin=2.01 ent=2.61 seg=0.24 a=0.79 crs=5.07) lr=3.15e-05 40.9 img/s wait=0% vram=44G 66min
+  e5 s100/2250 loss=9.905 (l1=2.76 sil=0.57 nrm=0.291 flat=0.066 bin=1.71 ent=2.78 seg=0.26 a=0.72 crs=9.18) lr=3.13e-05 41.2 img/s wait=0% vram=44G 66min
+  e5 s125/2250 loss=6.368 (l1=2.24 sil=0.49 nrm=0.186 flat=0.054 bin=1.91 ent=2.56 seg=0.24 a=0.78 crs=1.59) lr=3.11e-05 41.1 img/s wait=0% vram=44G 66min
+  e5 s150/2250 loss=8.328 (l1=2.03 sil=0.49 nrm=0.300 flat=0.051 bin=1.79 ent=2.73 seg=0.30 a=0.78 crs=8.18) lr=3.08e-05 40.9 img/s wait=0% vram=44G 66min
+  e5 s175/2250 loss=7.597 (l1=2.11 sil=0.55 nrm=0.236 flat=0.086 bin=1.98 ent=2.82 seg=0.42 a=0.77 crs=5.46) lr=3.06e-05 40.8 img/s wait=0% vram=44G 66min
+  e5 s200/2250 loss=8.748 (l1=2.07 sil=0.53 nrm=0.308 flat=0.038 bin=1.98 ent=2.85 seg=0.39 a=0.76 crs=8.30) lr=3.04e-05 41.0 img/s wait=0% vram=44G 66min
+  e5 s225/2250 loss=7.286 (l1=1.61 sil=0.50 nrm=0.198 flat=0.047 bin=1.95 ent=2.78 seg=0.63 a=0.77 crs=9.28) lr=3.02e-05 40.9 img/s wait=0% vram=44G 67min
+  e5 s250/2250 loss=7.682 (l1=1.72 sil=0.52 nrm=0.274 flat=0.054 bin=2.10 ent=2.92 seg=0.39 a=0.74 crs=8.59) lr=2.99e-05 41.0 img/s wait=0% vram=44G 67min
+  e5 s275/2250 loss=7.043 (l1=1.79 sil=0.49 nrm=0.243 flat=0.036 bin=1.98 ent=2.85 seg=0.41 a=0.72 crs=5.42) lr=2.97e-05 40.9 img/s wait=0% vram=44G 67min
+  e5 s300/2250 loss=6.747 (l1=1.64 sil=0.52 nrm=0.219 flat=0.045 bin=2.16 ent=2.72 seg=0.46 a=0.78 crs=5.01) lr=2.95e-05 40.9 img/s wait=0% vram=44G 67min
+  e5 s325/2250 loss=6.722 (l1=1.69 sil=0.48 nrm=0.178 flat=0.039 bin=1.90 ent=2.70 seg=0.33 a=0.76 crs=8.10) lr=2.93e-05 40.9 img/s wait=0% vram=44G 67min
+  e5 s350/2250 loss=7.552 (l1=1.85 sil=0.52 nrm=0.260 flat=0.054 bin=2.17 ent=2.83 seg=0.43 a=0.74 crs=0.00) lr=2.91e-05 40.9 img/s wait=0% vram=44G 67min
+  e5 s375/2250 loss=6.724 (l1=1.91 sil=0.48 nrm=0.170 flat=0.047 bin=1.59 ent=2.28 seg=0.35 a=0.78 crs=4.39) lr=2.89e-05 40.8 img/s wait=0% vram=44G 68min
+  e5 s400/2250 loss=8.630 (l1=1.81 sil=0.44 nrm=0.161 flat=0.047 bin=1.45 ent=2.28 seg=0.30 a=0.75 crs=11.61) lr=2.86e-05 40.9 img/s wait=0% vram=44G 68min
+  e5 s425/2250 loss=9.590 (l1=2.47 sil=0.58 nrm=0.224 flat=0.050 bin=1.77 ent=2.70 seg=0.44 a=0.69 crs=9.97) lr=2.84e-05 40.9 img/s wait=0% vram=44G 68min
+  e5 s450/2250 loss=6.873 (l1=1.83 sil=0.49 nrm=0.200 flat=0.051 bin=2.06 ent=2.46 seg=0.47 a=0.78 crs=1.78) lr=2.82e-05 41.0 img/s wait=0% vram=44G 68min
+  e5 s475/2250 loss=7.126 (l1=1.77 sil=0.49 nrm=0.237 flat=0.057 bin=2.08 ent=2.82 seg=0.47 a=0.75 crs=6.13) lr=2.80e-05 40.7 img/s wait=0% vram=44G 68min
+  e5 s500/2250 loss=7.518 (l1=2.23 sil=0.54 nrm=0.253 flat=0.056 bin=2.04 ent=2.79 seg=0.39 a=0.71 crs=3.96) lr=2.78e-05 41.0 img/s wait=0% vram=44G 68min
+  e5 s525/2250 loss=8.001 (l1=2.25 sil=0.55 nrm=0.280 flat=0.042 bin=1.98 ent=2.62 seg=0.37 a=0.78 crs=5.19) lr=2.76e-05 41.0 img/s wait=0% vram=44G 69min
+  e5 s550/2250 loss=6.488 (l1=1.00 sil=0.41 nrm=0.157 flat=0.035 bin=1.75 ent=2.64 seg=0.30 a=0.74 crs=18.10) lr=2.74e-05 41.0 img/s wait=0% vram=44G 69min
+  e5 s575/2250 loss=6.349 (l1=1.62 sil=0.45 nrm=0.196 flat=0.044 bin=1.71 ent=2.52 seg=0.37 a=0.77 crs=6.02) lr=2.72e-05 41.2 img/s wait=0% vram=44G 69min
+  e5 s600/2250 loss=4.514 (l1=0.65 sil=0.35 nrm=0.097 flat=0.022 bin=1.56 ent=2.25 seg=0.25 a=0.77 crs=8.54) lr=2.69e-05 41.1 img/s wait=0% vram=44G 69min
+  e5 s625/2250 loss=8.369 (l1=2.01 sil=0.52 nrm=0.221 flat=0.042 bin=1.81 ent=2.58 seg=0.40 a=0.73 crs=13.32) lr=2.67e-05 40.7 img/s wait=0% vram=44G 69min
+  e5 s650/2250 loss=6.523 (l1=1.58 sil=0.49 nrm=0.188 flat=0.046 bin=1.78 ent=2.46 seg=0.38 a=0.78 crs=6.48) lr=2.65e-05 41.0 img/s wait=0% vram=44G 69min
+  e5 s675/2250 loss=6.787 (l1=1.95 sil=0.51 nrm=0.275 flat=0.045 bin=2.25 ent=2.94 seg=0.41 a=0.79 crs=1.93) lr=2.63e-05 41.1 img/s wait=0% vram=44G 69min
+  e5 s700/2250 loss=7.030 (l1=1.94 sil=0.48 nrm=0.222 flat=0.060 bin=1.76 ent=2.47 seg=0.42 a=0.81 crs=4.12) lr=2.61e-05 40.9 img/s wait=0% vram=44G 70min
+  e5 s725/2250 loss=7.477 (l1=1.18 sil=0.46 nrm=0.188 flat=0.040 bin=1.39 ent=2.25 seg=0.42 a=0.76 crs=9.26) lr=2.59e-05 40.8 img/s wait=0% vram=44G 70min
+  e5 s750/2250 loss=6.976 (l1=2.00 sil=0.49 nrm=0.249 flat=0.052 bin=2.08 ent=2.82 seg=0.48 a=0.74 crs=2.08) lr=2.57e-05 40.9 img/s wait=0% vram=44G 70min
+  e5 s775/2250 loss=7.916 (l1=2.32 sil=0.55 nrm=0.228 flat=0.052 bin=1.93 ent=2.72 seg=0.54 a=0.77 crs=6.06) lr=2.55e-05 40.9 img/s wait=0% vram=44G 70min
+  e5 s800/2250 loss=7.920 (l1=1.80 sil=0.48 nrm=0.240 flat=0.066 bin=1.86 ent=2.76 seg=0.41 a=0.76 crs=10.49) lr=2.53e-05 41.3 img/s wait=0% vram=44G 70min
+  e5 s825/2250 loss=7.602 (l1=1.96 sil=0.51 nrm=0.239 flat=0.033 bin=1.82 ent=2.43 seg=0.39 a=0.78 crs=7.22) lr=2.51e-05 41.0 img/s wait=0% vram=44G 70min
+  e5 s850/2250 loss=8.312 (l1=2.09 sil=0.46 nrm=0.237 flat=0.032 bin=1.63 ent=2.31 seg=0.22 a=0.73 crs=9.34) lr=2.49e-05 41.2 img/s wait=0% vram=44G 71min
+  e5 s875/2250 loss=5.657 (l1=1.08 sil=0.44 nrm=0.170 flat=0.035 bin=1.70 ent=2.58 seg=0.38 a=0.80 crs=5.70) lr=2.47e-05 41.0 img/s wait=0% vram=44G 71min
+  e5 s900/2250 loss=6.638 (l1=1.42 sil=0.47 nrm=0.184 flat=0.048 bin=1.80 ent=2.49 seg=0.36 a=0.74 crs=7.58) lr=2.45e-05 40.9 img/s wait=0% vram=44G 71min
+  e5 s925/2250 loss=6.422 (l1=1.68 sil=0.42 nrm=0.167 flat=0.048 bin=1.24 ent=2.09 seg=0.23 a=0.81 crs=6.98) lr=2.43e-05 40.8 img/s wait=0% vram=44G 71min
+  e5 s950/2250 loss=5.907 (l1=1.49 sil=0.47 nrm=0.197 flat=0.046 bin=2.18 ent=2.71 seg=0.39 a=0.81 crs=3.60) lr=2.41e-05 41.2 img/s wait=0% vram=44G 71min
+  e5 s975/2250 loss=6.250 (l1=1.33 sil=0.48 nrm=0.182 flat=0.048 bin=2.11 ent=2.69 seg=0.43 a=0.77 crs=8.29) lr=2.39e-05 41.1 img/s wait=0% vram=44G 71min
+  e5 s1000/2250 loss=7.718 (l1=1.97 sil=0.49 nrm=0.191 flat=0.040 bin=1.98 ent=2.71 seg=0.35 a=0.75 crs=7.96) lr=2.37e-05 41.1 img/s wait=0% vram=44G 72min
+  e5 s1025/2250 loss=6.956 (l1=1.49 sil=0.48 nrm=0.187 flat=0.047 bin=1.60 ent=2.53 seg=0.34 a=0.71 crs=7.85) lr=2.35e-05 40.9 img/s wait=0% vram=44G 72min
+  e5 s1050/2250 loss=7.474 (l1=2.42 sil=0.54 nrm=0.258 flat=0.075 bin=1.82 ent=2.76 seg=0.48 a=0.76 crs=4.36) lr=2.33e-05 41.1 img/s wait=0% vram=44G 72min
+  e5 s1075/2250 loss=7.506 (l1=1.86 sil=0.52 nrm=0.267 flat=0.051 bin=2.09 ent=2.78 seg=0.35 a=0.77 crs=5.95) lr=2.31e-05 40.8 img/s wait=0% vram=44G 72min
+  e5 s1100/2250 loss=11.308 (l1=2.48 sil=0.60 nrm=0.308 flat=0.052 bin=2.07 ent=2.89 seg=0.39 a=0.68 crs=13.99) lr=2.29e-05 41.0 img/s wait=0% vram=44G 72min
+  e5 s1125/2250 loss=8.620 (l1=2.49 sil=0.52 nrm=0.236 flat=0.061 bin=2.17 ent=2.92 seg=0.50 a=0.71 crs=7.36) lr=2.27e-05 40.9 img/s wait=0% vram=44G 72min
+  e5 s1150/2250 loss=6.916 (l1=1.40 sil=0.47 nrm=0.195 flat=0.029 bin=1.69 ent=2.36 seg=0.39 a=0.77 crs=9.18) lr=2.25e-05 41.1 img/s wait=0% vram=44G 73min
+  e5 s1175/2250 loss=7.551 (l1=2.59 sil=0.47 nrm=0.188 flat=0.054 bin=1.60 ent=2.36 seg=0.37 a=0.81 crs=2.92) lr=2.23e-05 41.1 img/s wait=0% vram=44G 73min
+  e5 s1200/2250 loss=8.839 (l1=1.78 sil=0.53 nrm=0.241 flat=0.044 bin=1.94 ent=2.63 seg=0.47 a=0.71 crs=10.11) lr=2.21e-05 40.4 img/s wait=0% vram=44G 73min
+  e5 s1225/2250 loss=7.524 (l1=1.27 sil=0.47 nrm=0.212 flat=0.039 bin=1.56 ent=2.38 seg=0.46 a=0.78 crs=10.26) lr=2.19e-05 41.0 img/s wait=0% vram=44G 73min
+  e5 s1250/2250 loss=6.796 (l1=1.44 sil=0.41 nrm=0.196 flat=0.048 bin=1.65 ent=2.59 seg=0.30 a=0.75 crs=7.15) lr=2.17e-05 40.9 img/s wait=0% vram=44G 73min
+  e5 s1275/2250 loss=7.658 (l1=2.08 sil=0.52 nrm=0.225 flat=0.047 bin=1.98 ent=2.65 seg=0.37 a=0.77 crs=5.56) lr=2.15e-05 41.1 img/s wait=0% vram=44G 73min
+  e5 s1300/2250 loss=7.467 (l1=1.58 sil=0.48 nrm=0.242 flat=0.046 bin=1.85 ent=2.63 seg=0.44 a=0.75 crs=9.16) lr=2.13e-05 40.9 img/s wait=0% vram=44G 74min
+  e5 s1325/2250 loss=5.286 (l1=1.30 sil=0.47 nrm=0.189 flat=0.034 bin=2.04 ent=2.54 seg=0.25 a=0.82 crs=3.31) lr=2.12e-05 41.0 img/s wait=0% vram=44G 74min
+  e5 s1350/2250 loss=5.806 (l1=1.43 sil=0.51 nrm=0.176 flat=0.044 bin=1.90 ent=2.60 seg=0.28 a=0.81 crs=4.49) lr=2.10e-05 41.2 img/s wait=0% vram=44G 74min
+  e5 s1375/2250 loss=7.427 (l1=2.29 sil=0.51 nrm=0.191 flat=0.073 bin=1.70 ent=2.42 seg=0.32 a=0.79 crs=4.04) lr=2.08e-05 40.8 img/s wait=0% vram=44G 74min
+  e5 s1400/2250 loss=7.579 (l1=2.10 sil=0.52 nrm=0.258 flat=0.056 bin=2.27 ent=2.94 seg=0.36 a=0.74 crs=5.41) lr=2.06e-05 40.9 img/s wait=0% vram=44G 74min
+  e5 s1425/2250 loss=8.853 (l1=2.07 sil=0.55 nrm=0.285 flat=0.031 bin=1.64 ent=2.60 seg=0.35 a=0.69 crs=8.49) lr=2.04e-05 41.1 img/s wait=0% vram=44G 74min
+  e5 s1450/2250 loss=6.168 (l1=1.70 sil=0.50 nrm=0.177 flat=0.050 bin=1.69 ent=2.30 seg=0.30 a=0.80 crs=4.32) lr=2.02e-05 40.8 img/s wait=0% vram=44G 75min
+  e5 s1475/2250 loss=7.260 (l1=1.56 sil=0.52 nrm=0.222 flat=0.035 bin=2.45 ent=3.10 seg=0.37 a=0.74 crs=7.95) lr=2.00e-05 40.7 img/s wait=0% vram=44G 75min
+  e5 s1500/2250 loss=6.830 (l1=1.61 sil=0.50 nrm=0.215 flat=0.046 bin=2.21 ent=2.93 seg=0.26 a=0.77 crs=6.05) lr=1.98e-05 40.8 img/s wait=0% vram=44G 75min
+  e5 s1525/2250 loss=8.996 (l1=2.41 sil=0.53 nrm=0.207 flat=0.060 bin=1.84 ent=2.52 seg=0.35 a=0.74 crs=10.13) lr=1.97e-05 41.1 img/s wait=0% vram=44G 75min
+  e5 s1550/2250 loss=6.171 (l1=1.70 sil=0.45 nrm=0.177 flat=0.044 bin=1.80 ent=2.47 seg=0.23 a=0.78 crs=4.03) lr=1.95e-05 40.8 img/s wait=0% vram=44G 75min
+  e5 s1575/2250 loss=6.517 (l1=1.34 sil=0.43 nrm=0.182 flat=0.055 bin=1.72 ent=2.49 seg=0.29 a=0.76 crs=7.44) lr=1.93e-05 40.9 img/s wait=0% vram=44G 75min
+  e5 s1600/2250 loss=8.633 (l1=2.38 sil=0.50 nrm=0.153 flat=0.065 bin=1.40 ent=2.19 seg=0.40 a=0.76 crs=8.87) lr=1.91e-05 41.0 img/s wait=0% vram=44G 76min
+  e5 s1625/2250 loss=8.242 (l1=1.72 sil=0.50 nrm=0.240 flat=0.051 bin=2.01 ent=3.02 seg=0.35 a=0.70 crs=12.02) lr=1.89e-05 41.2 img/s wait=0% vram=44G 76min
+  e5 s1650/2250 loss=7.773 (l1=1.29 sil=0.45 nrm=0.227 flat=0.057 bin=1.93 ent=2.76 seg=0.46 a=0.71 crs=14.97) lr=1.88e-05 41.0 img/s wait=0% vram=44G 76min
+  e5 s1675/2250 loss=7.536 (l1=1.67 sil=0.51 nrm=0.201 flat=0.049 bin=2.17 ent=2.88 seg=0.39 a=0.68 crs=12.68) lr=1.86e-05 41.0 img/s wait=0% vram=44G 76min
+  e5 s1700/2250 loss=7.581 (l1=2.36 sil=0.53 nrm=0.290 flat=0.067 bin=2.01 ent=2.81 seg=0.37 a=0.77 crs=2.65) lr=1.84e-05 40.9 img/s wait=0% vram=44G 76min
+  e5 s1725/2250 loss=7.138 (l1=1.86 sil=0.50 nrm=0.218 flat=0.052 bin=2.09 ent=2.81 seg=0.49 a=0.75 crs=5.84) lr=1.82e-05 40.9 img/s wait=0% vram=44G 76min
+  e5 s1750/2250 loss=7.311 (l1=1.63 sil=0.54 nrm=0.237 flat=0.056 bin=1.96 ent=2.68 seg=0.48 a=0.76 crs=8.07) lr=1.81e-05 40.9 img/s wait=0% vram=44G 76min
+  e5 s1775/2250 loss=9.065 (l1=2.69 sil=0.59 nrm=0.224 flat=0.063 bin=1.63 ent=2.41 seg=0.41 a=0.75 crs=8.18) lr=1.79e-05 40.7 img/s wait=0% vram=44G 77min
+  e5 s1800/2250 loss=5.850 (l1=1.21 sil=0.45 nrm=0.178 flat=0.039 bin=1.94 ent=2.55 seg=0.53 a=0.75 crs=5.90) lr=1.77e-05 41.0 img/s wait=0% vram=44G 77min
+  e5 s1825/2250 loss=6.926 (l1=1.63 sil=0.52 nrm=0.242 flat=0.052 bin=2.14 ent=2.79 seg=0.65 a=0.78 crs=5.54) lr=1.75e-05 40.9 img/s wait=0% vram=44G 77min
+  e5 s1850/2250 loss=6.802 (l1=1.79 sil=0.45 nrm=0.222 flat=0.034 bin=1.87 ent=2.64 seg=0.33 a=0.77 crs=5.37) lr=1.74e-05 41.0 img/s wait=0% vram=44G 77min
+  e5 s1875/2250 loss=8.353 (l1=2.27 sil=0.53 nrm=0.263 flat=0.066 bin=1.66 ent=2.50 seg=0.33 a=0.75 crs=6.51) lr=1.72e-05 41.2 img/s wait=0% vram=44G 77min
+  e5 s1900/2250 loss=6.399 (l1=1.14 sil=0.43 nrm=0.147 flat=0.039 bin=1.78 ent=2.55 seg=0.22 a=0.74 crs=8.48) lr=1.70e-05 41.0 img/s wait=0% vram=44G 77min
+  e5 s1925/2250 loss=6.729 (l1=1.78 sil=0.52 nrm=0.214 flat=0.051 bin=2.50 ent=3.02 seg=0.45 a=0.74 crs=2.02) lr=1.68e-05 40.9 img/s wait=0% vram=44G 78min
+  e5 s1950/2250 loss=7.173 (l1=2.08 sil=0.49 nrm=0.214 flat=0.053 bin=1.61 ent=2.36 seg=0.31 a=0.79 crs=5.64) lr=1.67e-05 41.1 img/s wait=0% vram=44G 78min
+  e5 s1975/2250 loss=6.516 (l1=1.75 sil=0.47 nrm=0.180 flat=0.047 bin=1.78 ent=2.49 seg=0.30 a=0.74 crs=4.90) lr=1.65e-05 40.9 img/s wait=0% vram=44G 78min
+  e5 s2000/2250 loss=8.695 (l1=1.90 sil=0.53 nrm=0.272 flat=0.038 bin=2.13 ent=2.86 seg=0.41 a=0.75 crs=9.77) lr=1.63e-05 40.9 img/s wait=0% vram=44G 78min
+  e5 s2025/2250 loss=6.731 (l1=1.49 sil=0.48 nrm=0.226 flat=0.056 bin=2.02 ent=2.68 seg=0.41 a=0.76 crs=6.40) lr=1.62e-05 40.9 img/s wait=0% vram=44G 78min
+  e5 s2050/2250 loss=8.228 (l1=2.40 sil=0.49 nrm=0.251 flat=0.075 bin=1.47 ent=2.32 seg=0.28 a=0.77 crs=4.50) lr=1.60e-05 41.0 img/s wait=0% vram=44G 78min
+  e5 s2075/2250 loss=6.413 (l1=0.98 sil=0.42 nrm=0.146 flat=0.039 bin=1.64 ent=2.46 seg=0.35 a=0.69 crs=11.75) lr=1.58e-05 40.8 img/s wait=0% vram=44G 79min
+  e5 s2100/2250 loss=7.697 (l1=1.29 sil=0.48 nrm=0.216 flat=0.048 bin=2.02 ent=2.90 seg=0.37 a=0.76 crs=9.32) lr=1.57e-05 40.9 img/s wait=0% vram=44G 79min
+  e5 s2125/2250 loss=9.839 (l1=2.09 sil=0.56 nrm=0.283 flat=0.054 bin=1.82 ent=2.57 seg=0.44 a=0.72 crs=12.73) lr=1.55e-05 41.1 img/s wait=0% vram=44G 79min
+  e5 s2150/2250 loss=7.682 (l1=1.76 sil=0.44 nrm=0.199 flat=0.062 bin=1.63 ent=2.61 seg=0.41 a=0.71 crs=10.42) lr=1.54e-05 40.9 img/s wait=0% vram=44G 79min
+  e5 s2175/2250 loss=7.864 (l1=1.62 sil=0.53 nrm=0.191 flat=0.032 bin=2.25 ent=2.80 seg=0.31 a=0.74 crs=11.27) lr=1.52e-05 41.0 img/s wait=0% vram=44G 79min
+  e5 s2200/2250 loss=9.078 (l1=2.89 sil=0.58 nrm=0.229 flat=0.055 bin=1.94 ent=2.67 seg=0.39 a=0.76 crs=5.62) lr=1.50e-05 41.1 img/s wait=0% vram=44G 79min
+  e5 s2225/2250 loss=8.404 (l1=1.85 sil=0.50 nrm=0.241 flat=0.065 bin=1.95 ent=2.96 seg=0.37 a=0.70 crs=11.46) lr=1.49e-05 41.2 img/s wait=0% vram=44G 80min
+  eval e5  RMSE=1.549 MAE=0.817 r=0.815 d1=0.644 bal=4.283 tall_bias=-6.11 flat_bias=+0.36 edge=2.285 grad=0.23  [fore=1.96 spar=0.86]
+  eval e5  [neon] RMSE=3.454 MAE=1.835 r=0.953 d1=0.718 bal=3.651 tall_bias=-1.20 flat_bias=+0.44 edge=4.658 grad=0.66  [fore=4.12 spar=0.68]
+  eval e5  [neon @2x pooled] RMSE=3.425 MAE=1.821 r=0.953 d1=0.719 bal=3.616 tall_bias=-1.19 flat_bias=+0.44 edge=4.195 grad=0.63  [fore=4.09 spar=0.67]
+  eval e5  [gamus] RMSE=2.903 MAE=1.429 r=0.909 d1=0.653 bal=3.673 tall_bias=-1.92 flat_bias=+0.53 edge=3.775 grad=0.38  [fore=2.01 spar=3.20 urba=3.27]
+  eval e5  [us3d] RMSE=3.871 MAE=1.386 r=0.884 d1=0.714 bal=6.150 tall_bias=-5.42 flat_bias=+0.27 edge=5.774 grad=0.43  [spar=0.27 urba=4.19]
+  eval e5  select=2.487 m  (forested+sparse RMSE, mean over neon,mvs3dm)
+  new best 2.487 m -> best.pt
+  e6 s0/2250 loss=6.505 (l1=1.54 sil=0.50 nrm=0.195 flat=0.051 bin=2.04 ent=2.84 seg=0.28 a=0.77 crs=5.58) lr=1.35e-05 17.9 img/s wait=30% vram=44G 81min
+  e6 s25/2250 loss=6.858 (l1=2.15 sil=0.44 nrm=0.206 flat=0.049 bin=1.75 ent=2.59 seg=0.30 a=0.76 crs=1.58) lr=1.33e-05 40.7 img/s wait=0% vram=44G 81min
+  e6 s50/2250 loss=7.426 (l1=1.91 sil=0.51 nrm=0.277 flat=0.066 bin=2.03 ent=2.72 seg=0.26 a=0.79 crs=4.29) lr=1.32e-05 41.2 img/s wait=0% vram=44G 81min
+  e6 s75/2250 loss=6.271 (l1=1.64 sil=0.49 nrm=0.218 flat=0.055 bin=1.93 ent=2.66 seg=0.44 a=0.78 crs=0.28) lr=1.30e-05 41.1 img/s wait=0% vram=44G 82min
+  e6 s100/2250 loss=7.696 (l1=2.00 sil=0.50 nrm=0.196 flat=0.056 bin=2.21 ent=2.89 seg=0.30 a=0.75 crs=10.97) lr=1.29e-05 41.1 img/s wait=0% vram=44G 82min
+  e6 s125/2250 loss=6.494 (l1=1.53 sil=0.49 nrm=0.214 flat=0.056 bin=2.00 ent=2.67 seg=0.49 a=0.77 crs=5.60) lr=1.27e-05 41.0 img/s wait=0% vram=44G 82min
+  e6 s150/2250 loss=7.453 (l1=1.75 sil=0.51 nrm=0.291 flat=0.056 bin=2.07 ent=2.89 seg=0.40 a=0.76 crs=6.75) lr=1.26e-05 41.2 img/s wait=0% vram=44G 82min
+  e6 s175/2250 loss=6.102 (l1=1.53 sil=0.46 nrm=0.202 flat=0.056 bin=1.90 ent=2.72 seg=0.37 a=0.73 crs=4.23) lr=1.24e-05 41.1 img/s wait=0% vram=44G 82min
+  e6 s200/2250 loss=6.852 (l1=1.21 sil=0.48 nrm=0.206 flat=0.040 bin=2.28 ent=2.96 seg=0.39 a=0.74 crs=7.09) lr=1.23e-05 41.1 img/s wait=0% vram=44G 82min
+  e6 s225/2250 loss=7.304 (l1=1.92 sil=0.52 nrm=0.195 flat=0.050 bin=1.71 ent=2.37 seg=0.44 a=0.75 crs=6.56) lr=1.22e-05 40.8 img/s wait=0% vram=44G 82min
+  e6 s250/2250 loss=6.695 (l1=1.19 sil=0.45 nrm=0.183 flat=0.026 bin=1.93 ent=2.78 seg=0.20 a=0.73 crs=9.80) lr=1.20e-05 40.9 img/s wait=0% vram=44G 83min
+  e6 s275/2250 loss=6.742 (l1=1.55 sil=0.51 nrm=0.227 flat=0.059 bin=2.14 ent=2.93 seg=0.42 a=0.72 crs=6.80) lr=1.19e-05 40.6 img/s wait=0% vram=44G 83min
+  e6 s300/2250 loss=6.565 (l1=1.57 sil=0.46 nrm=0.193 flat=0.050 bin=1.89 ent=2.66 seg=0.31 a=0.75 crs=6.13) lr=1.17e-05 41.1 img/s wait=0% vram=44G 83min
+  e6 s325/2250 loss=5.707 (l1=1.35 sil=0.44 nrm=0.162 flat=0.053 bin=1.83 ent=2.39 seg=0.32 a=0.81 crs=4.64) lr=1.16e-05 40.6 img/s wait=0% vram=44G 83min
+  e6 s350/2250 loss=7.653 (l1=2.01 sil=0.52 nrm=0.233 flat=0.055 bin=2.02 ent=2.88 seg=0.44 a=0.72 crs=6.93) lr=1.14e-05 41.0 img/s wait=0% vram=44G 83min
+  e6 s375/2250 loss=7.540 (l1=1.87 sil=0.52 nrm=0.221 flat=0.068 bin=1.97 ent=2.74 seg=0.40 a=0.73 crs=8.78) lr=1.13e-05 41.2 img/s wait=0% vram=44G 83min
+  e6 s400/2250 loss=6.704 (l1=1.39 sil=0.48 nrm=0.245 flat=0.033 bin=2.36 ent=3.07 seg=0.32 a=0.76 crs=6.50) lr=1.12e-05 41.1 img/s wait=0% vram=44G 84min
+  e6 s425/2250 loss=6.423 (l1=1.35 sil=0.48 nrm=0.218 flat=0.043 bin=2.15 ent=2.76 seg=0.36 a=0.76 crs=6.03) lr=1.10e-05 41.2 img/s wait=0% vram=44G 84min
+  e6 s450/2250 loss=7.366 (l1=1.42 sil=0.49 nrm=0.221 flat=0.038 bin=1.97 ent=2.77 seg=0.33 a=0.73 crs=14.38) lr=1.09e-05 41.2 img/s wait=0% vram=44G 84min
+  e6 s475/2250 loss=8.453 (l1=2.49 sil=0.55 nrm=0.301 flat=0.050 bin=1.77 ent=2.55 seg=0.39 a=0.78 crs=4.93) lr=1.08e-05 41.1 img/s wait=0% vram=44G 84min
+  e6 s500/2250 loss=7.008 (l1=1.65 sil=0.47 nrm=0.215 flat=0.044 bin=2.01 ent=2.65 seg=0.43 a=0.77 crs=7.62) lr=1.06e-05 41.0 img/s wait=0% vram=44G 84min
+  e6 s525/2250 loss=9.305 (l1=2.50 sil=0.54 nrm=0.227 flat=0.070 bin=1.67 ent=2.51 seg=0.41 a=0.74 crs=9.77) lr=1.05e-05 41.0 img/s wait=0% vram=44G 84min
+  e6 s550/2250 loss=6.503 (l1=1.21 sil=0.45 nrm=0.165 flat=0.034 bin=1.73 ent=2.51 seg=0.38 a=0.71 crs=9.43) lr=1.04e-05 41.0 img/s wait=0% vram=44G 85min
+  e6 s575/2250 loss=6.113 (l1=0.69 sil=0.36 nrm=0.131 flat=0.016 bin=1.52 ent=2.12 seg=0.32 a=0.79 crs=12.79) lr=1.02e-05 41.1 img/s wait=0% vram=44G 85min
+  e6 s600/2250 loss=7.909 (l1=2.00 sil=0.52 nrm=0.301 flat=0.044 bin=2.23 ent=2.93 seg=0.31 a=0.76 crs=5.09) lr=1.01e-05 40.9 img/s wait=0% vram=44G 85min
+  e6 s625/2250 loss=6.962 (l1=1.80 sil=0.47 nrm=0.223 flat=0.049 bin=1.87 ent=2.57 seg=0.36 a=0.77 crs=0.00) lr=9.97e-06 41.0 img/s wait=0% vram=44G 85min
+  e6 s650/2250 loss=7.664 (l1=2.00 sil=0.49 nrm=0.207 flat=0.045 bin=1.52 ent=2.26 seg=0.33 a=0.78 crs=7.46) lr=9.85e-06 41.2 img/s wait=0% vram=44G 85min
+  e6 s675/2250 loss=6.520 (l1=1.51 sil=0.42 nrm=0.166 flat=0.046 bin=1.61 ent=2.63 seg=0.24 a=0.74 crs=7.73) lr=9.72e-06 40.8 img/s wait=0% vram=44G 85min
+  e6 s700/2250 loss=6.194 (l1=1.23 sil=0.39 nrm=0.156 flat=0.040 bin=1.32 ent=2.28 seg=0.25 a=0.77 crs=9.15) lr=9.59e-06 40.9 img/s wait=0% vram=44G 86min
+  e6 s725/2250 loss=8.031 (l1=2.15 sil=0.51 nrm=0.257 flat=0.068 bin=1.83 ent=2.64 seg=0.45 a=0.76 crs=7.15) lr=9.46e-06 40.6 img/s wait=0% vram=44G 86min
+  e6 s750/2250 loss=6.657 (l1=1.17 sil=0.47 nrm=0.193 flat=0.052 bin=2.17 ent=2.95 seg=0.30 a=0.70 crs=7.78) lr=9.34e-06 41.1 img/s wait=0% vram=44G 86min
+  e6 s775/2250 loss=6.859 (l1=1.92 sil=0.53 nrm=0.235 flat=0.044 bin=2.04 ent=2.70 seg=0.38 a=0.77 crs=3.94) lr=9.22e-06 41.0 img/s wait=0% vram=44G 86min
+  e6 s800/2250 loss=8.206 (l1=2.92 sil=0.49 nrm=0.221 flat=0.040 bin=1.53 ent=2.20 seg=0.31 a=0.81 crs=5.92) lr=9.09e-06 40.8 img/s wait=0% vram=44G 86min
+  e6 s825/2250 loss=7.876 (l1=2.12 sil=0.53 nrm=0.242 flat=0.060 bin=1.68 ent=2.36 seg=0.43 a=0.79 crs=6.70) lr=8.97e-06 40.7 img/s wait=0% vram=44G 86min
+  e6 s850/2250 loss=8.684 (l1=1.89 sil=0.52 nrm=0.232 flat=0.058 bin=1.59 ent=2.61 seg=0.44 a=0.71 crs=10.54) lr=8.85e-06 40.7 img/s wait=0% vram=44G 87min
+  e6 s875/2250 loss=6.872 (l1=1.73 sil=0.49 nrm=0.264 flat=0.033 bin=2.11 ent=2.70 seg=0.44 a=0.81 crs=1.13) lr=8.73e-06 40.9 img/s wait=0% vram=44G 87min
+  e6 s900/2250 loss=6.445 (l1=1.72 sil=0.44 nrm=0.177 flat=0.025 bin=1.76 ent=2.52 seg=0.25 a=0.73 crs=6.51) lr=8.61e-06 40.9 img/s wait=0% vram=44G 87min
+  e6 s925/2250 loss=8.104 (l1=2.43 sil=0.53 nrm=0.219 flat=0.066 bin=1.94 ent=2.80 seg=0.42 a=0.74 crs=2.83) lr=8.49e-06 40.8 img/s wait=0% vram=44G 87min
+  e6 s950/2250 loss=8.823 (l1=2.61 sil=0.55 nrm=0.296 flat=0.065 bin=2.10 ent=2.81 seg=0.29 a=0.75 crs=3.82) lr=8.37e-06 40.8 img/s wait=0% vram=44G 87min
+  e6 s975/2250 loss=5.884 (l1=1.40 sil=0.43 nrm=0.180 flat=0.037 bin=1.92 ent=2.70 seg=0.42 a=0.77 crs=5.44) lr=8.25e-06 40.9 img/s wait=0% vram=44G 87min
+  e6 s1000/2250 loss=7.337 (l1=1.23 sil=0.48 nrm=0.221 flat=0.042 bin=1.99 ent=2.72 seg=0.37 a=0.77 crs=9.36) lr=8.14e-06 40.9 img/s wait=0% vram=44G 88min
+  e6 s1025/2250 loss=9.132 (l1=1.70 sil=0.50 nrm=0.269 flat=0.031 bin=1.78 ent=2.73 seg=0.26 a=0.72 crs=10.67) lr=8.02e-06 40.8 img/s wait=0% vram=44G 88min
+  e6 s1050/2250 loss=7.701 (l1=1.77 sil=0.48 nrm=0.233 flat=0.095 bin=1.54 ent=2.53 seg=0.36 a=0.74 crs=9.90) lr=7.91e-06 40.9 img/s wait=0% vram=44G 88min
+  e6 s1075/2250 loss=6.540 (l1=1.64 sil=0.48 nrm=0.187 flat=0.045 bin=1.96 ent=2.75 seg=0.35 a=0.73 crs=5.48) lr=7.79e-06 40.9 img/s wait=0% vram=44G 88min
+  e6 s1100/2250 loss=6.527 (l1=1.32 sil=0.47 nrm=0.195 flat=0.042 bin=1.61 ent=2.40 seg=0.51 a=0.79 crs=6.75) lr=7.68e-06 41.1 img/s wait=0% vram=44G 88min
+  e6 s1125/2250 loss=7.997 (l1=1.92 sil=0.57 nrm=0.258 flat=0.059 bin=2.08 ent=2.82 seg=0.52 a=0.76 crs=7.00) lr=7.57e-06 41.0 img/s wait=0% vram=44G 88min
+  e6 s1150/2250 loss=6.983 (l1=1.78 sil=0.52 nrm=0.220 flat=0.067 bin=2.04 ent=2.76 seg=0.50 a=0.73 crs=5.27) lr=7.46e-06 41.1 img/s wait=0% vram=44G 89min
+  e6 s1175/2250 loss=8.085 (l1=1.54 sil=0.54 nrm=0.242 flat=0.058 bin=2.03 ent=2.73 seg=0.43 a=0.72 crs=7.72) lr=7.35e-06 40.7 img/s wait=0% vram=44G 89min
+  e6 s1200/2250 loss=6.193 (l1=1.45 sil=0.44 nrm=0.171 flat=0.039 bin=1.78 ent=2.49 seg=0.32 a=0.76 crs=6.53) lr=7.25e-06 41.0 img/s wait=0% vram=44G 89min
+  e6 s1225/2250 loss=6.719 (l1=1.38 sil=0.44 nrm=0.206 flat=0.051 bin=1.85 ent=2.79 seg=0.33 a=0.73 crs=9.29) lr=7.14e-06 40.9 img/s wait=0% vram=44G 89min
+  e6 s1250/2250 loss=7.561 (l1=2.26 sil=0.57 nrm=0.226 flat=0.044 bin=1.89 ent=2.62 seg=0.49 a=0.76 crs=5.62) lr=7.03e-06 41.0 img/s wait=0% vram=44G 89min
+  e6 s1275/2250 loss=7.968 (l1=1.48 sil=0.49 nrm=0.225 flat=0.036 bin=1.88 ent=2.77 seg=0.42 a=0.73 crs=10.63) lr=6.93e-06 41.0 img/s wait=0% vram=44G 89min
+  e6 s1300/2250 loss=5.781 (l1=1.75 sil=0.50 nrm=0.225 flat=0.047 bin=2.06 ent=2.73 seg=0.33 a=0.80 crs=1.92) lr=6.82e-06 41.0 img/s wait=0% vram=44G 89min
+  e6 s1325/2250 loss=8.186 (l1=1.91 sil=0.53 nrm=0.283 flat=0.045 bin=1.77 ent=2.54 seg=0.35 a=0.78 crs=8.11) lr=6.72e-06 41.0 img/s wait=0% vram=44G 90min
+  e6 s1350/2250 loss=7.549 (l1=2.12 sil=0.52 nrm=0.215 flat=0.051 bin=1.77 ent=2.56 seg=0.35 a=0.76 crs=6.38) lr=6.62e-06 41.0 img/s wait=0% vram=44G 90min
+  e6 s1375/2250 loss=6.360 (l1=1.82 sil=0.46 nrm=0.218 flat=0.048 bin=2.15 ent=2.82 seg=0.33 a=0.78 crs=2.78) lr=6.52e-06 40.8 img/s wait=0% vram=44G 90min
+  e6 s1400/2250 loss=6.546 (l1=1.87 sil=0.48 nrm=0.180 flat=0.063 bin=1.71 ent=2.57 seg=0.33 a=0.76 crs=0.87) lr=6.42e-06 40.9 img/s wait=0% vram=44G 90min
+  e6 s1425/2250 loss=6.860 (l1=1.79 sil=0.48 nrm=0.199 flat=0.050 bin=2.45 ent=3.15 seg=0.40 a=0.72 crs=6.15) lr=6.32e-06 40.7 img/s wait=0% vram=44G 90min
+  e6 s1450/2250 loss=8.065 (l1=2.04 sil=0.53 nrm=0.222 flat=0.066 bin=1.69 ent=2.50 seg=0.38 a=0.75 crs=7.77) lr=6.22e-06 40.9 img/s wait=0% vram=44G 90min
+  e6 s1475/2250 loss=8.908 (l1=1.67 sil=0.47 nrm=0.289 flat=0.063 bin=1.70 ent=2.62 seg=0.40 a=0.72 crs=13.07) lr=6.12e-06 40.7 img/s wait=0% vram=44G 91min
+  e6 s1500/2250 loss=7.905 (l1=2.20 sil=0.54 nrm=0.248 flat=0.056 bin=2.01 ent=2.82 seg=0.41 a=0.74 crs=6.40) lr=6.02e-06 40.8 img/s wait=0% vram=44G 91min
+  e6 s1525/2250 loss=7.329 (l1=1.92 sil=0.50 nrm=0.212 flat=0.046 bin=1.83 ent=2.89 seg=0.51 a=0.71 crs=6.39) lr=5.93e-06 41.1 img/s wait=0% vram=44G 91min
+  e6 s1550/2250 loss=7.883 (l1=1.48 sil=0.52 nrm=0.232 flat=0.038 bin=1.75 ent=2.79 seg=0.29 a=0.73 crs=10.21) lr=5.83e-06 41.3 img/s wait=0% vram=44G 91min
+  e6 s1575/2250 loss=6.231 (l1=1.75 sil=0.46 nrm=0.208 flat=0.035 bin=2.07 ent=2.60 seg=0.38 a=0.79 crs=1.52) lr=5.74e-06 41.0 img/s wait=0% vram=44G 91min
+  e6 s1600/2250 loss=8.557 (l1=1.90 sil=0.54 nrm=0.231 flat=0.052 bin=1.48 ent=2.24 seg=0.40 a=0.76 crs=10.27) lr=5.65e-06 40.8 img/s wait=0% vram=44G 91min
+  e6 s1625/2250 loss=6.698 (l1=1.60 sil=0.51 nrm=0.217 flat=0.044 bin=2.40 ent=3.08 seg=0.44 a=0.74 crs=5.38) lr=5.56e-06 41.1 img/s wait=0% vram=44G 92min
+  e6 s1650/2250 loss=7.649 (l1=2.26 sil=0.53 nrm=0.224 flat=0.051 bin=2.09 ent=2.74 seg=0.40 a=0.78 crs=1.83) lr=5.47e-06 41.0 img/s wait=0% vram=44G 92min
+  e6 s1675/2250 loss=8.689 (l1=2.44 sil=0.55 nrm=0.222 flat=0.082 bin=1.78 ent=2.58 seg=0.41 a=0.76 crs=7.06) lr=5.38e-06 40.8 img/s wait=0% vram=44G 92min
+  e6 s1700/2250 loss=8.310 (l1=2.45 sil=0.50 nrm=0.183 flat=0.055 bin=1.58 ent=2.37 seg=0.28 a=0.74 crs=8.40) lr=5.29e-06 40.9 img/s wait=0% vram=44G 92min
+  e6 s1725/2250 loss=7.411 (l1=1.61 sil=0.46 nrm=0.193 flat=0.044 bin=1.62 ent=2.44 seg=0.40 a=0.74 crs=9.97) lr=5.20e-06 40.9 img/s wait=0% vram=44G 92min
+  e6 s1750/2250 loss=7.680 (l1=1.62 sil=0.54 nrm=0.230 flat=0.046 bin=1.97 ent=2.66 seg=0.57 a=0.75 crs=8.58) lr=5.12e-06 41.0 img/s wait=0% vram=44G 92min
+  e6 s1775/2250 loss=8.389 (l1=1.78 sil=0.53 nrm=0.267 flat=0.047 bin=2.23 ent=3.12 seg=0.50 a=0.68 crs=8.22) lr=5.03e-06 40.9 img/s wait=0% vram=44G 93min
+  e6 s1800/2250 loss=9.096 (l1=2.74 sil=0.52 nrm=0.297 flat=0.057 bin=1.74 ent=2.67 seg=0.31 a=0.77 crs=5.68) lr=4.95e-06 41.0 img/s wait=0% vram=44G 93min
+  e6 s1825/2250 loss=7.334 (l1=1.53 sil=0.52 nrm=0.220 flat=0.031 bin=1.97 ent=2.78 seg=0.44 a=0.75 crs=8.78) lr=4.86e-06 40.8 img/s wait=0% vram=44G 93min
+  e6 s1850/2250 loss=8.000 (l1=1.81 sil=0.49 nrm=0.212 flat=0.045 bin=2.22 ent=2.84 seg=0.35 a=0.74 crs=9.87) lr=4.78e-06 41.0 img/s wait=0% vram=44G 93min
+  e6 s1875/2250 loss=6.511 (l1=1.97 sil=0.43 nrm=0.191 flat=0.039 bin=1.52 ent=2.28 seg=0.27 a=0.82 crs=1.44) lr=4.70e-06 41.0 img/s wait=0% vram=44G 93min
+  e6 s1900/2250 loss=8.243 (l1=2.34 sil=0.55 nrm=0.255 flat=0.070 bin=2.10 ent=2.92 seg=0.39 a=0.75 crs=4.59) lr=4.62e-06 41.1 img/s wait=0% vram=44G 93min
+  e6 s1925/2250 loss=7.207 (l1=1.92 sil=0.49 nrm=0.240 flat=0.034 bin=1.84 ent=2.53 seg=0.42 a=0.79 crs=5.75) lr=4.54e-06 40.9 img/s wait=0% vram=44G 94min
+  e6 s1950/2250 loss=7.228 (l1=1.74 sil=0.50 nrm=0.278 flat=0.054 bin=2.06 ent=2.84 seg=0.31 a=0.78 crs=5.46) lr=4.46e-06 40.6 img/s wait=0% vram=44G 94min
+  e6 s1975/2250 loss=6.623 (l1=1.23 sil=0.41 nrm=0.170 flat=0.050 bin=1.57 ent=2.37 seg=0.36 a=0.74 crs=9.79) lr=4.38e-06 40.6 img/s wait=0% vram=44G 94min
+  e6 s2000/2250 loss=8.298 (l1=2.27 sil=0.58 nrm=0.275 flat=0.039 bin=2.12 ent=2.83 seg=0.38 a=0.75 crs=5.59) lr=4.31e-06 41.1 img/s wait=0% vram=44G 94min
+  e6 s2025/2250 loss=6.538 (l1=1.35 sil=0.49 nrm=0.185 flat=0.027 bin=1.72 ent=2.48 seg=0.22 a=0.75 crs=7.95) lr=4.23e-06 40.8 img/s wait=0% vram=44G 94min
+  e6 s2050/2250 loss=8.241 (l1=1.99 sil=0.53 nrm=0.278 flat=0.055 bin=1.79 ent=2.67 seg=0.32 a=0.74 crs=8.00) lr=4.16e-06 40.9 img/s wait=0% vram=44G 94min
+  e6 s2075/2250 loss=8.038 (l1=1.78 sil=0.49 nrm=0.276 flat=0.053 bin=1.87 ent=2.71 seg=0.41 a=0.75 crs=9.77) lr=4.08e-06 40.5 img/s wait=0% vram=44G 95min
+  e6 s2100/2250 loss=7.816 (l1=1.74 sil=0.50 nrm=0.235 flat=0.043 bin=1.84 ent=2.74 seg=0.34 a=0.77 crs=12.85) lr=4.01e-06 41.0 img/s wait=0% vram=44G 95min
+  e6 s2125/2250 loss=6.596 (l1=1.55 sil=0.45 nrm=0.236 flat=0.022 bin=1.87 ent=2.55 seg=0.23 a=0.79 crs=6.06) lr=3.94e-06 40.6 img/s wait=0% vram=44G 95min
+  e6 s2150/2250 loss=6.492 (l1=1.76 sil=0.52 nrm=0.269 flat=0.061 bin=2.27 ent=3.01 seg=0.38 a=0.77 crs=3.64) lr=3.87e-06 41.0 img/s wait=0% vram=44G 95min
+  e6 s2175/2250 loss=9.590 (l1=1.38 sil=0.55 nrm=0.211 flat=0.044 bin=2.06 ent=2.74 seg=0.39 a=0.67 crs=19.62) lr=3.80e-06 41.0 img/s wait=0% vram=44G 95min
+  e6 s2200/2250 loss=7.766 (l1=2.18 sil=0.53 nrm=0.230 flat=0.032 bin=2.00 ent=2.66 seg=0.34 a=0.72 crs=6.45) lr=3.73e-06 40.9 img/s wait=0% vram=44G 95min
+  e6 s2225/2250 loss=7.388 (l1=1.12 sil=0.45 nrm=0.209 flat=0.045 bin=1.81 ent=2.83 seg=0.41 a=0.76 crs=8.26) lr=3.66e-06 40.7 img/s wait=0% vram=44G 96min
+  eval e6  RMSE=1.546 MAE=0.815 r=0.816 d1=0.645 bal=4.275 tall_bias=-6.07 flat_bias=+0.36 edge=2.282 grad=0.23  [fore=1.95 spar=0.86]
+  eval e6  [neon] RMSE=3.447 MAE=1.833 r=0.953 d1=0.719 bal=3.646 tall_bias=-1.16 flat_bias=+0.43 edge=4.649 grad=0.66  [fore=4.11 spar=0.68]
+  eval e6  [neon @2x pooled] RMSE=3.419 MAE=1.819 r=0.954 d1=0.720 bal=3.612 tall_bias=-1.16 flat_bias=+0.43 edge=4.187 grad=0.63  [fore=4.08 spar=0.67]
+  eval e6  [gamus] RMSE=2.899 MAE=1.427 r=0.910 d1=0.653 bal=3.665 tall_bias=-1.83 flat_bias=+0.54 edge=3.774 grad=0.39  [fore=2.01 spar=3.18 urba=3.27]
+  eval e6  [us3d] RMSE=3.866 MAE=1.384 r=0.884 d1=0.715 bal=6.142 tall_bias=-5.40 flat_bias=+0.27 edge=5.761 grad=0.43  [spar=0.27 urba=4.18]
+  eval e6  select=2.482 m  (forested+sparse RMSE, mean over neon,mvs3dm)
+  new best 2.482 m -> best.pt
+  full state -> last_full.pt (epoch 6, 6.0 GB)
+  e7 s0/2250 loss=7.450 (l1=1.90 sil=0.49 nrm=0.232 flat=0.054 bin=1.94 ent=2.83 seg=0.36 a=0.76 crs=7.40) lr=3.24e-06 18.2 img/s wait=40% vram=44G 97min
+  e7 s25/2250 loss=7.525 (l1=2.49 sil=0.55 nrm=0.244 flat=0.045 bin=2.09 ent=2.91 seg=0.28 a=0.76 crs=2.70) lr=3.18e-06 40.9 img/s wait=0% vram=44G 97min
+  e7 s50/2250 loss=6.552 (l1=1.57 sil=0.47 nrm=0.207 flat=0.031 bin=1.64 ent=2.30 seg=0.28 a=0.80 crs=7.00) lr=3.13e-06 40.9 img/s wait=0% vram=44G 97min
+  e7 s75/2250 loss=7.446 (l1=1.98 sil=0.49 nrm=0.195 flat=0.046 bin=1.88 ent=2.46 seg=0.43 a=0.79 crs=8.30) lr=3.07e-06 40.8 img/s wait=0% vram=44G 97min
+  e7 s100/2250 loss=7.978 (l1=1.97 sil=0.54 nrm=0.268 flat=0.045 bin=1.93 ent=2.73 seg=0.31 a=0.77 crs=7.39) lr=3.01e-06 40.9 img/s wait=0% vram=44G 97min
+  e7 s125/2250 loss=8.334 (l1=2.28 sil=0.50 nrm=0.238 flat=0.064 bin=1.73 ent=2.60 seg=0.36 a=0.75 crs=7.71) lr=2.96e-06 41.2 img/s wait=0% vram=44G 97min
+  e7 s150/2250 loss=7.767 (l1=2.09 sil=0.50 nrm=0.277 flat=0.048 bin=1.70 ent=2.55 seg=0.31 a=0.76 crs=5.68) lr=2.90e-06 40.9 img/s wait=0% vram=44G 98min
+  e7 s175/2250 loss=7.807 (l1=2.49 sil=0.54 nrm=0.281 flat=0.052 bin=1.84 ent=2.65 seg=0.29 a=0.77 crs=4.29) lr=2.85e-06 40.8 img/s wait=0% vram=44G 98min
+  e7 s200/2250 loss=9.005 (l1=1.88 sil=0.53 nrm=0.214 flat=0.044 bin=1.75 ent=2.48 seg=0.42 a=0.75 crs=11.86) lr=2.80e-06 40.8 img/s wait=0% vram=44G 98min
+  e7 s225/2250 loss=7.450 (l1=1.70 sil=0.54 nrm=0.229 flat=0.056 bin=2.26 ent=2.98 seg=0.41 a=0.72 crs=11.68) lr=2.74e-06 40.9 img/s wait=0% vram=44G 98min
+  e7 s250/2250 loss=8.762 (l1=2.59 sil=0.60 nrm=0.334 flat=0.061 bin=2.16 ent=2.83 seg=0.47 a=0.77 crs=5.35) lr=2.69e-06 40.7 img/s wait=0% vram=44G 98min
+  e7 s275/2250 loss=7.530 (l1=1.99 sil=0.48 nrm=0.191 flat=0.039 bin=1.80 ent=2.50 seg=0.36 a=0.77 crs=14.37) lr=2.64e-06 40.9 img/s wait=0% vram=44G 98min
+  e7 s300/2250 loss=7.341 (l1=1.57 sil=0.50 nrm=0.244 flat=0.032 bin=2.05 ent=2.68 seg=0.40 a=0.76 crs=10.63) lr=2.60e-06 41.2 img/s wait=0% vram=44G 99min
+  e7 s325/2250 loss=7.282 (l1=2.45 sil=0.54 nrm=0.213 flat=0.064 bin=2.17 ent=2.87 seg=0.38 a=0.76 crs=4.02) lr=2.55e-06 40.8 img/s wait=0% vram=44G 99min
+  e7 s350/2250 loss=8.401 (l1=2.28 sil=0.54 nrm=0.238 flat=0.048 bin=2.16 ent=2.86 seg=0.37 a=0.76 crs=7.60) lr=2.50e-06 41.1 img/s wait=0% vram=44G 99min
+  e7 s375/2250 loss=6.203 (l1=1.96 sil=0.53 nrm=0.194 flat=0.049 bin=2.08 ent=2.67 seg=0.43 a=0.80 crs=1.70) lr=2.46e-06 40.8 img/s wait=0% vram=44G 99min
+  e7 s400/2250 loss=7.881 (l1=2.01 sil=0.48 nrm=0.225 flat=0.058 bin=1.77 ent=2.50 seg=0.38 a=0.74 crs=10.67) lr=2.41e-06 40.9 img/s wait=0% vram=44G 99min
+  e7 s425/2250 loss=8.539 (l1=1.88 sil=0.55 nrm=0.259 flat=0.057 bin=2.10 ent=2.79 seg=0.31 a=0.72 crs=13.08) lr=2.37e-06 41.0 img/s wait=0% vram=44G 99min
+  e7 s450/2250 loss=7.216 (l1=2.11 sil=0.53 nrm=0.187 flat=0.031 bin=2.07 ent=2.73 seg=0.54 a=0.76 crs=5.79) lr=2.33e-06 40.1 img/s wait=0% vram=44G 100min
+  e7 s475/2250 loss=6.969 (l1=1.71 sil=0.47 nrm=0.168 flat=0.043 bin=1.87 ent=2.43 seg=0.40 a=0.76 crs=9.45) lr=2.29e-06 40.7 img/s wait=0% vram=44G 100min
+  e7 s500/2250 loss=7.487 (l1=2.50 sil=0.54 nrm=0.307 flat=0.050 bin=1.75 ent=2.66 seg=0.36 a=0.77 crs=4.54) lr=2.25e-06 40.9 img/s wait=0% vram=44G 100min
+  e7 s525/2250 loss=6.254 (l1=1.01 sil=0.44 nrm=0.143 flat=0.034 bin=1.71 ent=2.63 seg=0.55 a=0.69 crs=12.01) lr=2.21e-06 41.4 img/s wait=0% vram=44G 100min
+  e7 s550/2250 loss=6.488 (l1=1.66 sil=0.43 nrm=0.178 flat=0.036 bin=1.71 ent=2.65 seg=0.30 a=0.74 crs=8.71) lr=2.17e-06 40.7 img/s wait=0% vram=44G 100min
+  e7 s575/2250 loss=6.221 (l1=1.32 sil=0.45 nrm=0.207 flat=0.050 bin=2.03 ent=2.86 seg=0.37 a=0.74 crs=6.23) lr=2.13e-06 41.2 img/s wait=0% vram=44G 100min
+  e7 s600/2250 loss=4.774 (l1=1.11 sil=0.38 nrm=0.139 flat=0.029 bin=1.80 ent=2.44 seg=0.28 a=0.75 crs=4.28) lr=2.10e-06 41.1 img/s wait=0% vram=44G 101min
+  e7 s625/2250 loss=7.027 (l1=1.46 sil=0.50 nrm=0.196 flat=0.053 bin=2.10 ent=2.79 seg=0.32 a=0.75 crs=16.70) lr=2.06e-06 40.9 img/s wait=0% vram=44G 101min
+  e7 s650/2250 loss=7.575 (l1=2.06 sil=0.47 nrm=0.210 flat=0.040 bin=1.63 ent=2.44 seg=0.30 a=0.74 crs=8.77) lr=2.03e-06 40.9 img/s wait=0% vram=44G 101min
+  e7 s675/2250 loss=6.625 (l1=1.84 sil=0.50 nrm=0.220 flat=0.047 bin=2.08 ent=2.88 seg=0.39 a=0.73 crs=3.02) lr=2.00e-06 41.1 img/s wait=0% vram=44G 101min
+  e7 s700/2250 loss=7.451 (l1=1.47 sil=0.55 nrm=0.228 flat=0.048 bin=2.42 ent=3.18 seg=0.43 a=0.68 crs=9.41) lr=1.96e-06 40.9 img/s wait=0% vram=44G 101min
+  e7 s725/2250 loss=7.213 (l1=1.58 sil=0.51 nrm=0.226 flat=0.048 bin=1.79 ent=2.66 seg=0.34 a=0.76 crs=7.78) lr=1.93e-06 40.9 img/s wait=0% vram=44G 101min
+  e7 s750/2250 loss=7.462 (l1=1.92 sil=0.44 nrm=0.189 flat=0.049 bin=1.51 ent=2.39 seg=0.32 a=0.75 crs=9.06) lr=1.90e-06 40.7 img/s wait=0% vram=44G 101min
+  e7 s775/2250 loss=6.455 (l1=1.19 sil=0.45 nrm=0.207 flat=0.046 bin=2.01 ent=2.81 seg=0.40 a=0.76 crs=6.98) lr=1.88e-06 41.0 img/s wait=0% vram=44G 102min
+  e7 s800/2250 loss=6.411 (l1=1.67 sil=0.47 nrm=0.224 flat=0.052 bin=2.15 ent=2.88 seg=0.38 a=0.72 crs=3.06) lr=1.85e-06 41.0 img/s wait=0% vram=44G 102min
+  e7 s825/2250 loss=7.013 (l1=1.89 sil=0.51 nrm=0.239 flat=0.045 bin=1.98 ent=2.65 seg=0.38 a=0.80 crs=1.18) lr=1.82e-06 41.1 img/s wait=0% vram=44G 102min
+  e7 s850/2250 loss=8.093 (l1=1.79 sil=0.56 nrm=0.259 flat=0.079 bin=2.16 ent=2.96 seg=0.35 a=0.70 crs=8.63) lr=1.80e-06 40.7 img/s wait=0% vram=44G 102min
+  e7 s875/2250 loss=8.536 (l1=2.10 sil=0.52 nrm=0.173 flat=0.052 bin=1.38 ent=2.39 seg=0.37 a=0.71 crs=9.07) lr=1.77e-06 40.5 img/s wait=0% vram=44G 102min
+  e7 s900/2250 loss=6.868 (l1=1.68 sil=0.44 nrm=0.177 flat=0.039 bin=1.69 ent=2.61 seg=0.33 a=0.71 crs=8.15) lr=1.75e-06 41.1 img/s wait=0% vram=44G 102min
+  e7 s925/2250 loss=7.967 (l1=1.58 sil=0.55 nrm=0.241 flat=0.051 bin=2.08 ent=2.87 seg=0.31 a=0.72 crs=8.58) lr=1.73e-06 40.9 img/s wait=0% vram=44G 103min
+  e7 s950/2250 loss=7.581 (l1=2.03 sil=0.45 nrm=0.295 flat=0.042 bin=1.63 ent=2.48 seg=0.29 a=0.79 crs=5.55) lr=1.71e-06 40.7 img/s wait=0% vram=44G 103min
+  e7 s975/2250 loss=6.949 (l1=1.86 sil=0.50 nrm=0.224 flat=0.059 bin=2.10 ent=2.85 seg=0.26 a=0.75 crs=3.35) lr=1.68e-06 40.9 img/s wait=0% vram=44G 103min
+  e7 s1000/2250 loss=8.744 (l1=1.52 sil=0.47 nrm=0.216 flat=0.041 bin=1.54 ent=2.69 seg=0.42 a=0.66 crs=12.22) lr=1.67e-06 41.2 img/s wait=0% vram=44G 103min
+  e7 s1025/2250 loss=6.258 (l1=1.90 sil=0.48 nrm=0.187 flat=0.051 bin=1.73 ent=2.35 seg=0.30 a=0.81 crs=3.33) lr=1.65e-06 40.9 img/s wait=0% vram=44G 103min
+  e7 s1050/2250 loss=6.792 (l1=1.83 sil=0.50 nrm=0.264 flat=0.051 bin=2.09 ent=2.85 seg=0.32 a=0.76 crs=3.57) lr=1.63e-06 41.1 img/s wait=0% vram=44G 103min
+  e7 s1075/2250 loss=7.517 (l1=2.23 sil=0.55 nrm=0.248 flat=0.037 bin=1.67 ent=2.58 seg=0.52 a=0.77 crs=5.12) lr=1.61e-06 40.7 img/s wait=0% vram=44G 104min
+  e7 s1100/2250 loss=7.200 (l1=1.15 sil=0.46 nrm=0.227 flat=0.052 bin=2.29 ent=3.09 seg=0.37 a=0.71 crs=9.24) lr=1.60e-06 41.2 img/s wait=0% vram=44G 104min
+  e7 s1125/2250 loss=6.357 (l1=1.42 sil=0.45 nrm=0.181 flat=0.045 bin=1.87 ent=2.60 seg=0.32 a=0.77 crs=7.05) lr=1.59e-06 41.1 img/s wait=0% vram=44G 104min
+  e7 s1150/2250 loss=6.259 (l1=2.00 sil=0.45 nrm=0.189 flat=0.035 bin=1.27 ent=2.10 seg=0.25 a=0.78 crs=4.44) lr=1.57e-06 40.9 img/s wait=0% vram=44G 104min
+  e7 s1175/2250 loss=6.324 (l1=1.65 sil=0.47 nrm=0.173 flat=0.055 bin=1.80 ent=2.42 seg=0.28 a=0.79 crs=5.10) lr=1.56e-06 40.9 img/s wait=0% vram=44G 104min
+  e7 s1200/2250 loss=6.617 (l1=2.13 sil=0.48 nrm=0.191 flat=0.073 bin=1.63 ent=2.53 seg=0.30 a=0.73 crs=0.68) lr=1.55e-06 41.2 img/s wait=0% vram=44G 104min
+  e7 s1225/2250 loss=7.024 (l1=1.87 sil=0.56 nrm=0.209 flat=0.033 bin=2.21 ent=2.87 seg=0.38 a=0.75 crs=5.40) lr=1.54e-06 40.8 img/s wait=0% vram=44G 105min
+  e7 s1250/2250 loss=7.969 (l1=2.11 sil=0.54 nrm=0.242 flat=0.034 bin=1.71 ent=2.57 seg=0.33 a=0.75 crs=7.90) lr=1.53e-06 41.0 img/s wait=0% vram=44G 105min
+  e7 s1275/2250 loss=5.967 (l1=1.72 sil=0.49 nrm=0.228 flat=0.068 bin=2.03 ent=2.67 seg=0.44 a=0.81 crs=1.87) lr=1.52e-06 41.0 img/s wait=0% vram=44G 105min
+  e7 s1300/2250 loss=7.705 (l1=2.10 sil=0.51 nrm=0.240 flat=0.054 bin=1.56 ent=2.42 seg=0.40 a=0.78 crs=6.40) lr=1.52e-06 41.1 img/s wait=0% vram=44G 105min
+  e7 s1325/2250 loss=6.868 (l1=1.83 sil=0.50 nrm=0.228 flat=0.051 bin=2.05 ent=2.82 seg=0.48 a=0.75 crs=4.42) lr=1.51e-06 41.0 img/s wait=0% vram=44G 105min
+  e7 s1350/2250 loss=6.250 (l1=1.30 sil=0.45 nrm=0.176 flat=0.034 bin=2.06 ent=2.94 seg=0.35 a=0.72 crs=6.72) lr=1.51e-06 40.8 img/s wait=0% vram=44G 105min
+  e7 s1375/2250 loss=6.616 (l1=1.61 sil=0.50 nrm=0.210 flat=0.059 bin=2.03 ent=2.62 seg=0.32 a=0.80 crs=5.30) lr=1.50e-06 41.0 img/s wait=0% vram=44G 106min
+  e7 s1400/2250 loss=7.016 (l1=2.03 sil=0.46 nrm=0.263 flat=0.044 bin=2.04 ent=2.84 seg=0.49 a=0.76 crs=1.92) lr=1.50e-06 40.9 img/s wait=0% vram=44G 106min
+  e7 s1425/2250 loss=6.633 (l1=1.66 sil=0.49 nrm=0.164 flat=0.037 bin=1.93 ent=2.64 seg=0.33 a=0.75 crs=6.31) lr=1.50e-06 41.0 img/s wait=0% vram=44G 106min
+  wall-clock cap 106 min hit
+  eval e7  RMSE=1.545 MAE=0.815 r=0.816 d1=0.645 bal=4.280 tall_bias=-6.11 flat_bias=+0.36 edge=2.281 grad=0.23  [fore=1.95 spar=0.86]
+  eval e7  [neon] RMSE=3.444 MAE=1.830 r=0.953 d1=0.719 bal=3.641 tall_bias=-1.18 flat_bias=+0.43 edge=4.646 grad=0.66  [fore=4.11 spar=0.68]
+  eval e7  [neon @2x pooled] RMSE=3.416 MAE=1.817 r=0.954 d1=0.720 bal=3.608 tall_bias=-1.18 flat_bias=+0.43 edge=4.184 grad=0.63  [fore=4.08 spar=0.67]
+  eval e7  [gamus] RMSE=2.893 MAE=1.425 r=0.910 d1=0.654 bal=3.662 tall_bias=-1.89 flat_bias=+0.53 edge=3.771 grad=0.39  [fore=2.01 spar=3.15 urba=3.26]
+  eval e7  [us3d] RMSE=3.872 MAE=1.383 r=0.884 d1=0.715 bal=6.150 tall_bias=-5.58 flat_bias=+0.27 edge=5.780 grad=0.43  [spar=0.27 urba=4.19]
+  eval e7  select=2.481 m  (forested+sparse RMSE, mean over neon,mvs3dm)
+  new best 2.481 m -> best.pt
+  full state -> last_full.pt (epoch 7, 6.0 GB)
+[final] evaluating best.pt (epoch 7)
+[final] final_plain  RMSE=1.545 MAE=0.815 r=0.816 d1=0.645 bal=4.280 tall_bias=-6.11 flat_bias=+0.36 edge=2.281 grad=0.23  [fore=1.95 spar=0.86]
+[viewer] wrote sample -> /mnt/depthwizard-results/v5_final_forest/viewer_sample
+[qual] wrote 12 strips -> /mnt/depthwizard-results/v5_final_forest/qualitative  (RGB | pred | GT | |err|)
+[gallery] synrs3d_g05/train: 3 tiles  (training tiles — seen by the model)
+[gallery] us3d/val: 3 tiles
+[gallery] mvs3dm/val: 3 tiles
+[gallery] neon/val: 3 tiles
+[landscape] neon/val: scanned 118 tiles urban=0, sparse=31, hilly=0, forested=87; showing 4
+
+================================================================
+DONE — best centre-crop val RMSE 2.481 m (108 min)
+       artefacts -> /mnt/depthwizard-results/v5_final_forest
+================================================================
