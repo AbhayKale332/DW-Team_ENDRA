@@ -2,9 +2,11 @@ import { Alert, Anchor, List, Stack, Text } from '@mantine/core';
 import { IconInfoCircle, IconPhoto } from '@tabler/icons-react';
 import { EmptyPanel, KeyValueRows, PanelSection } from '@/components/panel';
 import { useScene } from '@/store/scene';
-import { ElevationReference } from '@/features/anchoring/ElevationReference';import { lonLatAt, formatLonLat } from '@/lib/georef';
+import { ElevationReference } from '@/features/anchoring/ElevationReference';
+import { tileCentre } from '@/lib/tileLocation';
 import { summariseObjects } from '@/lib/objects';
 import { download } from '@/lib/download';
+import { TileLocation } from './TileLocation';
 
 const metres = (v: number | null) => (v === null ? '–' : `${v.toFixed(1)} m`);
 
@@ -14,11 +16,22 @@ export function InfoTab() {
   if (!scene) return <EmptyPanel icon={IconPhoto}>No scene loaded.</EmptyPanel>;
   const s = scene.stats;
   const g = scene.georef;
-  const centre = g ? lonLatAt(g, (scene.heights.width - 1) / 2, (scene.heights.height - 1) / 2) : null;
+  const centre = tileCentre(scene);
+  const areaM2 = scene.heights.width * scene.heights.height * scene.gsd ** 2;
+  const sourceFile = scene.meta.scene?.path?.split(/[\\/]/).pop();
   const notes = scene.warnings.filter((w) => w.level === 'info');
   const obj = scene.objects ? summariseObjects(scene.objects) : null;
   return (
     <Stack gap="lg" p="md">
+      <PanelSection title="Loaded tile" gap={4}>
+        <Text size="sm" fw={600} style={{ overflowWrap: 'anywhere' }}>{scene.name}</Text>
+        <Text size="xs" c="dimmed">
+          {({ inference: 'Model prediction', sample: 'Sample scene', bundle: 'Imported result bundle', project: 'Saved project' })[scene.provenance.source]}
+          {' · '}{scene.image.type === 'image/jpeg' ? 'JPEG image' : scene.image.type === 'image/png' ? 'PNG image' : 'Raster image'}
+        </Text>
+        {sourceFile && <Text size="xs" c="dimmed" style={{ overflowWrap: 'anywhere' }}>Source image: {sourceFile}</Text>}
+      </PanelSection>
+      <TileLocation key={`${scene.id}:${centre?.join(',') ?? 'unlocated'}`} scene={scene} centre={centre} />
       <ElevationReference scene={scene} />
       <PanelSection title={scene.product === 'DSM' ? 'Elevations' : 'Heights'} gap={4}>
         <KeyValueRows
@@ -38,9 +51,11 @@ export function InfoTab() {
             ['Height grid', `${scene.heights.width} × ${scene.heights.height} px`],
             ['Ground resolution', `${scene.gsd.toFixed(3)} m/px (${scene.gsdSource})`],
             ['Footprint', `${((scene.heights.width * scene.gsd) / 1000).toFixed(3)} × ${((scene.heights.height * scene.gsd) / 1000).toFixed(3)} km`],
+            ['Tile area', `${(areaM2 / 1e6).toFixed(3)} km² (${(areaM2 / 10_000).toFixed(2)} ha)`],
             ['Input image', `${scene.imageWidth} × ${scene.imageHeight} px`],
-            ['CRS', g ? (g.epsg ? `EPSG:${g.epsg}` : 'unknown') : 'not georeferenced'],
-            ...(centre ? ([['Scene centre', formatLonLat(centre)]] as Array<[string, string]>) : []),
+            ['CRS', g ? (g.epsg ? `EPSG:${g.epsg}` : scene.meta.scene?.crs ?? 'unknown') : 'not georeferenced'],
+            ['Valid height pixels', `${s.valid.toLocaleString()} / ${(scene.heights.width * scene.heights.height).toLocaleString()}`],
+            ...(scene.cloud ? [['Cloud coverage', `${(scene.cloud.coverage * 100).toFixed(1)} % (masked)`] as [string, string]] : []),
           ]}
         />
       </PanelSection>
@@ -75,7 +90,7 @@ export function InfoTab() {
         <KeyValueRows
           rows={[
             ['Source', scene.provenance.provider],
-            ['Created', new Date(scene.provenance.createdAt).toLocaleString()],
+            ['Result created', new Date(scene.provenance.createdAt).toLocaleString()],
             ...(scene.provenance.params ? ([['TTA', scene.provenance.params.tta ? 'on (8 passes)' : 'off']] as Array<[string, string]>) : []),
             ...(scene.provenance.modelVersion ? ([['Model', scene.provenance.modelVersion]] as Array<[string, string]>) : []),
           ]}
