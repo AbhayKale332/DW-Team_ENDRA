@@ -62,7 +62,8 @@ const EXTERNAL = 'https://server.arcgisonline.com https://tile.openstreetmap.org
 const SECURITY_HEADERS = {
   'x-content-type-options': 'nosniff',
   'x-frame-options': 'DENY',
-  'referrer-policy': 'no-referrer',
+  // OSM tiles require a Referer; cross-origin requests disclose only the site's origin.
+  'referrer-policy': 'strict-origin-when-cross-origin',
   ...(process.env.CSP === 'off'
     ? {}
     : {
