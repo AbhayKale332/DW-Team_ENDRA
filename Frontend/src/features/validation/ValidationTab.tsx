@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Accordion, Alert, Button, Checkbox, FileButton, Group, List, SegmentedControl, Slider, Stack, Switch, Table, Text } from '@mantine/core';
-import { IconCheck, IconFileReport, IconInfoCircle, IconScale, IconUpload } from '@tabler/icons-react';
+import { IconCheck, IconDownload, IconFileReport, IconInfoCircle, IconScale, IconUpload } from '@tabler/icons-react';
 import { EmptyPanel, PanelSection } from '@/components/panel';
 import { notifications } from '@mantine/notifications';
 import { useScene } from '@/store/scene';
@@ -13,6 +13,8 @@ import { validate } from '@/lib/metrics';
 import { baseAxis, EChart, type ChartTheme } from '@/components/EChart';
 import { reportError } from '@/features/files/openFile';
 import { exportValidationReport } from './report';
+import { colorAt, cssGradient } from '@/theme/colormaps';
+import { download, safeStem } from '@/lib/download';
 
 const f2 = (v: number, unit = ' m') => (Number.isFinite(v) ? `${v.toFixed(2)}${unit}` : '—');
 const pct = (v: number) => (Number.isFinite(v) ? `${(v * 100).toFixed(1)} %` : '—');
@@ -374,6 +376,86 @@ function Metrics() {
   );
 }
 
+/** Standalone spatial error image at the prediction grid resolution. */
+function ErrorMap() {
+  const scene = useScene((s) => s.scene)!;
+  const reference = useScene((s) => s.reference)!;
+  const validation = useScene((s) => s.validation);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [ready, setReady] = useState(false);
+  const range = Math.max(1, (scene.stats.p98 - scene.stats.p2) * 0.25);
+  const { width, height, data } = scene.heights;
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx || !validation?.all.n) {
+      setReady(false);
+      return;
+    }
+    canvas.width = width;
+    canvas.height = height;
+    const pixels = ctx.createImageData(width, height);
+    for (let i = 0; i < data.length; i++) {
+      const error = data[i] - reference.data[i];
+      const offset = i * 4;
+      if (!Number.isFinite(error)) {
+        pixels.data[offset + 3] = 0;
+        continue;
+      }
+      const [r, g, b] = colorAt('diverging', 0.5 + 0.5 * error / range);
+      pixels.data[offset] = r;
+      pixels.data[offset + 1] = g;
+      pixels.data[offset + 2] = b;
+      pixels.data[offset + 3] = 255;
+    }
+    ctx.putImageData(pixels, 0, 0);
+    setReady(true);
+  }, [data, height, range, reference.data, validation, width]);
+
+  if (!validation?.all.n) return null;
+
+  return (
+    <PanelSection title="4 · View spatial errors">
+      <Text size="xs" c="dimmed">
+        This 2D image shows predicted height − reference height in metres. Red means the prediction is high; blue means it is low. Pixels without valid overlap are transparent.
+      </Text>
+      <Group gap="sm" wrap="nowrap" align="center">
+        <canvas
+          ref={canvasRef}
+          role="img"
+          aria-label={`2D height error map, ${width} by ${height} pixels`}
+          style={{ display: 'block', flex: 1, minWidth: 0, width: '100%', maxHeight: 260, objectFit: 'contain', background: 'repeating-conic-gradient(var(--mantine-color-default-hover) 0% 25%, transparent 0% 50%) 50% / 12px 12px' }}
+        />
+        <Stack gap={2} align="center" style={{ flex: 'none' }} role="img" aria-label={`Error colour scale: red is prediction ${range.toFixed(1)} metres too high, white is zero, blue is ${range.toFixed(1)} metres too low`}>
+          <Text size="xs">+{range.toFixed(1)} m</Text>
+          <div aria-hidden style={{ width: 14, height: 120, background: cssGradient('diverging') }} />
+          <Text size="xs">0 m</Text>
+          <Text size="xs">−{range.toFixed(1)} m</Text>
+        </Stack>
+      </Group>
+      <Button
+        fullWidth
+        variant="default"
+        leftSection={<IconDownload size={16} />}
+        disabled={!ready}
+        onClick={() => {
+          const canvas = canvasRef.current;
+          canvas?.toBlob((blob) => {
+            if (!blob) {
+              notifications.show({ title: 'Export failed', message: 'Could not create the error image.', color: 'red' });
+              return;
+            }
+            download(blob, `${safeStem(scene.name)}_height_error.png`);
+          }, 'image/png');
+        }}
+      >
+        Export error image (PNG)
+      </Button>
+    </PanelSection>
+  );
+}
+
 /** Validate estimated heights against a reference dataset (problem-statement deliverable). */
 export function ValidationTab() {
   const scene = useScene((s) => s.scene);
@@ -441,6 +523,7 @@ export function ValidationTab() {
             <Checkbox size="xs" checked={removeOffset} onChange={(e) => useScene.getState().set({ removeOffset: e.currentTarget.checked })} label="Remove ground offset" />
           )}
           <Metrics />
+          <ErrorMap />
           <span className="dw-section-title">Inspect the comparison</span>
           <Group gap="xs">
             <Button
