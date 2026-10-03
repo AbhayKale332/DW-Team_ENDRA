@@ -87,13 +87,13 @@ def test_upload_predict_and_fetch(client):
     assert meta["preproc"]["tile_size"] == 64
 
 
-def test_view_redirects_into_the_viewer(client):
+def test_view_redirects_to_the_report(client):
     c, _ = client
     r = c.post("/api/predict", files={"file": ("s.png", _png(), "image/png")})
     job = r.json()
     v = c.get(job["view_url"], follow_redirects=False)
     assert v.status_code in (302, 307)
-    assert "/viewer/index.html?result=/api/result/" in v.headers["location"]
+    assert v.headers["location"] == f"/api/report/{job['job']}"
 
 
 def test_result_path_cannot_escape_the_jobs_dir(client, tmp_path):
@@ -111,11 +111,12 @@ def test_unknown_job_is_404(client):
     assert c.get("/api/job/deadbeef").status_code == 404
 
 
-def test_index_and_viewer_are_served(client):
+def test_index_describes_the_api(client):
     c, _ = client
     assert c.get("/").status_code == 200
     assert "DepthWizard" in c.get("/").text
-    assert c.get("/viewer/index.html").status_code == 200
+    assert c.get("/").json()["docs"] == "/docs"
+    assert c.get("/viewer/index.html").status_code == 404
 
 
 def test_upload_an_nrsc_product_as_several_files(client, tmp_path):

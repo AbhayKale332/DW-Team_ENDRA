@@ -4,3 +4,8 @@
 *.safetensors
 *.bin
 *.gguf
+
+# Generated HTML reports; retain one milestone report.
+*.html
+*.htm
+!/V4_modal/Output/validation_report.html

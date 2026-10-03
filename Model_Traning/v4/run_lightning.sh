@@ -11,7 +11,7 @@
 #   bash run_lightning.sh train --epochs 32 --batch_size 16   # extra flags pass through
 #   bash run_lightning.sh predict scene.tif --ckpt outputs/v4/best.pt --absolute
 #   bash run_lightning.sh onnx             # export for CPU/standalone deployment
-#   bash run_lightning.sh serve            # FastAPI + the 3D viewer on :8000
+#   bash run_lightning.sh serve            # FastAPI inference API on :8000
 #   bash run_lightning.sh report           # re-render figures + validation report
 #
 # Prerequisites in the Studio environment:

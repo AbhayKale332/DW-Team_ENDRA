@@ -1,29 +1,8 @@
-"""FastAPI service: upload an image -> DSM products -> the 3D viewer.
+"""FastAPI inference service.
 
-    uvicorn serve.app:app --host 0.0.0.0 --port 8000
-    # or
-    python -m serve.app --ckpt outputs/v4/best.pt --port 8000
-
-Then open http://localhost:8000/ — the viewer is served from the same origin, so
-a finished job's URL (`/view/<job>`) loads the result with no CORS, no file
-picker and no manual copying.
-
-Design notes:
-
-* **One inference path, again.**  This service calls `infer.engine.predict_scene`,
-  the same function the final evaluation and the CLI call.  If a number on the
-  report is right, the number the demo shows is right, because it came out of the
-  same code.
-
-* **Two runtimes.**  `--runtime torch` loads the checkpoint; `--runtime onnx`
-  loads `depthwizard.onnx` and needs neither CUDA nor `transformers` nor an HF
-  token.  The ONNX path is what ships in the standalone bundle: a judge's laptop
-  runs it on CPU.
-
-* **Jobs are files on disk**, one directory per job, with exactly the layout the
-  viewer and `infer/predict.py` already agree on.  No database, no queue, no
-  session state — which is the cheapest way to be stable under a demo, and it
-  means a crashed process loses nothing.
+Start with `python -m serve.app --ckpt <checkpoint>`.
+Use /docs to upload images through the API and /api/report/{job_id}
+to view generated reports. Jobs and inference products are stored on disk.
 """
 
 # NOTE: no `from __future__ import annotations` here on purpose.  FastAPI resolves
@@ -48,7 +27,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 JOBS = Path(os.environ.get("DW_JOBS_DIR", ROOT / "outputs" / "jobs"))
-VIEWER = ROOT / "viewer"
 
 _state: dict = {"model": None, "spec": None, "cfg": None, "runtime": "torch",
                 "session": None, "device": None, "ckpt": "", "lock": threading.Lock()}
@@ -196,10 +174,9 @@ def run_job(job_id: str, image_path: Path, opts: dict) -> None:
 def create_app():
     from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
     from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
-    from fastapi.staticfiles import StaticFiles
 
     app = FastAPI(title="DepthWizard", version="4.0",
-                  description="Single-view RGB -> metric DSM -> 3D flythrough")
+                  description="Single-view RGB -> metric DSM inference API")
     JOBS.mkdir(parents=True, exist_ok=True)
 
     @app.get("/api/health")
@@ -260,7 +237,7 @@ def create_app():
 
     @app.get("/view/{job_id}")
     def view(job_id: str):
-        return RedirectResponse(f"/viewer/index.html?result=/api/result/{job_id}")
+        return RedirectResponse(f"/api/report/{job_id}")
 
     @app.get("/api/report/{job_id}")
     def report(job_id: str):
@@ -285,17 +262,10 @@ def create_app():
         return FileResponse(build(d, d / "report.html",
                                   title=f"DepthWizard — {meta['stem']}"))
 
-    if VIEWER.is_dir():
-        app.mount("/viewer", StaticFiles(directory=str(VIEWER), html=True),
-                  name="viewer")
-
     @app.get("/")
     def index():
-        p = HERE / "static" / "index.html"
-        if p.is_file():
-            return FileResponse(p)
-        return JSONResponse({"service": "DepthWizard v4",
-                             "viewer": "/viewer/index.html",
+        return JSONResponse({"service": "DepthWizard V4_Kaggle",
+                             "docs": "/docs",
                              "health": "/api/health"})
 
     return app
@@ -324,7 +294,7 @@ def main() -> None:
     load_backend("" if a.onnx else a.ckpt, a.onnx, a.device)
     global app
     app = app or create_app()
-    print(f"[serve] http://{a.host}:{a.port}/   viewer at /viewer/index.html")
+    print(f"[serve] http://{a.host}:{a.port}/   API docs at /docs")
     uvicorn.run(app, host=a.host, port=a.port)
 
 

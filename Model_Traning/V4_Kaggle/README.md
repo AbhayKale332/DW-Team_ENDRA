@@ -27,8 +27,7 @@ FineTunning/V4_Kaggle/
   eval/      metrics · landscape · sliding · report
   infer/     engine (the one inference path) · predict (CLI) · export_onnx
   viz/       figures · report_html · mesh (glTF / OBJ)
-  serve/     FastAPI: upload → DSM → viewer
-  viewer/    standalone dual-pane Three.js app (vendored, no build step)
+  serve/     FastAPI: upload → DSM products and reports
   tests/     113 offline tests, no GPU and no network
 ```
 
@@ -392,50 +391,10 @@ diagnostics.
 
 ## 4. The visualization module
 
-### 4.1 The viewer (`viewer/index.html`)
+### 4.1 Visualization outputs
 
-Open the file. That is the whole install — three.js r128 is vendored beside it,
-there is no build step, no bundler and no network call, so it behaves identically
-from a USB stick and from the server. That is the "standalone deployment" half of
-the rubric.
-
-Two synchronised panes:
-
-* **Map pane** — height colormap / hillshade / optical / reference / signed-error
-  layers, optional contours, and the 3D camera's footprint drawn on it so the two
-  panes are visibly the same place.
-* **Flythrough pane** — the DSM as a textured mesh with the **original optical
-  image draped**. Orbit, **first-person** (pointer-lock WASD, Shift sprint,
-  Space/C for altitude), and a cinematic drone orbit for the demo video.
-  Sun azimuth/elevation with real shadows, vertical exaggeration, wireframe, and
-  a mesh-detail budget (150k / 500k / 1.5M vertices).
-
-Analysis, all in metres:
-
-* **click-to-probe** — height at a pixel, plus the reference value and the error
-  when a reference is loaded
-* **two-point slope** — ground distance, Δh, slope in % and degrees
-* **elevation profile** — predicted vs reference along the measured line
-* **live validation** — RMSE / MAE / bias / Pearson r computed in the browser
-  against `gt_ndsm_m.npy`
-* **an automatic warning** when implausibly little of the scene is below 1 m,
-  which is the signature of the model reading texture as terrain
-
-**Projection accuracy is graded, so the mapping is stated rather than implied**:
-vertex (row, col) sits at world `(x = col·gsd, y = height_m, z = row·gsd)` with UV
-`(col/(W−1), 1 − row/(H−1))` — pixel-centre to vertex, no half-pixel drift. Same
-convention in `viz/mesh.py` and in the viewer, and `tests/test_mesh.py` asserts it.
-
-Heights are read from `ndsm_m.npy` as float32, not from the PNG: a 16-bit PNG
-drawn into a 2-D canvas is down-converted to 8 bits by the browser, which would
-quantise a 0–60 m range into 0.23 m steps before anything renders. The PNG path
-still exists as a fallback and warns when it is used.
-
-```bash
-# try it with no model at all — a synthetic scene with exact known block heights
-python viewer/make_sample.py
-python -m http.server -d viewer 8000    # then open ?result=./sample
-```
+The bundled viewer and upload UI have been removed. Use the exported meshes,
+figures, and validation reports to inspect model outputs.
 
 ### 4.2 The service (`serve/app.py`)
 
@@ -444,11 +403,10 @@ bash run_kaggle.sh serve                         # torch
 python -m serve.app --onnx outputs/v4/depthwizard.onnx    # CPU, no HF token
 ```
 
-Drag an image onto `/`, watch the progress bar, and land in the flythrough. It
-calls the same `infer.engine.predict_scene` the evaluation calls — a number on
-the report is a number the demo reproduces. Jobs are plain directories on disk in
-exactly the layout the viewer already reads: no database, no queue, nothing to
-lose when a process dies mid-demo.
+Open `/docs` to upload an image with `POST /api/predict`, then poll the returned
+status URL. Download products through `/api/result/{id}/{file}` or open the
+generated report at `/api/report/{id}`. `/view/{id}` redirects to that report.
+Jobs are stored in directories on disk.
 
 `GET /api/health` · `POST /api/predict` · `GET /api/job/{id}` ·
 `GET /api/result/{id}/{file}` · `GET /api/report/{id}` · `GET /view/{id}`
@@ -1192,7 +1150,6 @@ Watch six numbers, not one:
 | GAMUS | see the HF dataset card | gated |
 | SynRS3D | see the HF dataset card | NeurIPS'24 |
 | DFC23 Track 2 | IEEE GRSS contest terms | **attribution is mandatory** — see below |
-| three.js r128 | MIT | vendored in `viewer/vendor/`, notice retained |
 | Copernicus DEM GLO-30 | free, attribution required | ESA / Copernicus |
 | DA-V2 **Small** | Apache-2.0 | Base/Large/Giant are CC-BY-NC-4.0 — do **not** use them |
 
