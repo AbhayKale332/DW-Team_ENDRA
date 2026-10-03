@@ -1,0 +1,34 @@
+---
+title: Cartosat validation
+description: Frozen v5 inference on 67 Cartosat crops, checked against coarse elevation references.
+---
+
+import Chart from '../../../components/Chart.astro';
+
+DepthWizard v5 epoch-7 `best.pt` completed inference on 67 Cartosat crops. No scene DSM ground truth is available, so these numbers check coarse DEM agreement and pipeline behavior; they do not measure building or tree height accuracy.
+
+<Chart
+	height={320}
+	caption="Cell-weighted RMSE against historical DEMs, grouped by Cartosat input. Copernicus agreement is self-consistency because it anchors the output DSM."
+	source="Model_Traning/v5/outputs/v5/cartosat_benchmark/modal/RESULTS.md"
+	option={{
+		tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+		grid: { left: 55, right: 20, top: 24, bottom: 48 },
+		xAxis: { type: 'category', data: ['Cartosat-3 RGB', 'Cartosat-3 PAN', 'Cartosat-2E', 'Cartosat-2S', 'Cartosat-2E hills'], axisLabel: { interval: 0, rotate: 16, fontSize: 10 } },
+		yAxis: { type: 'value', name: 'RMSE (m)', min: 0 },
+		series: [
+			{ name: 'SRTM', type: 'bar', data: [2.942, 3.824, 3.511, 2.783, 3.849] },
+			{ name: 'NASADEM', type: 'bar', data: [2.197, 2.791, 2.650, 2.711, 3.100] },
+		],
+	}}
+/>
+
+| Input | Crops | SRTM RMSE (m) | NASADEM RMSE (m) | Copernicus self-consistency (m) |
+|---|---:|---:|---:|---:|
+| Cartosat-3 RGB | 22 | 2.942 | 2.197 | 0.024 |
+| Cartosat-3 PAN | 12 | 3.824 | 2.791 | 0.348 |
+| Cartosat-2E | 11 | 3.511 | 2.650 | 0.252 |
+| Cartosat-2S | 13 | 2.783 | 2.711 | 0.195 |
+| Cartosat-2E hills | 9 | 3.849 | 3.100 | 0.119 |
+
+SRTM and NASADEM are historical surface models, and are not independent of each other. Copernicus is the model's elevation anchor, so its low error is not independent accuracy evidence. The outputs passed grid, projection, GSD, and vertical-datum checks.

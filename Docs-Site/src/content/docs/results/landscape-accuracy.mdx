@@ -47,7 +47,7 @@ GAMUS is the main judging dataset. Its accuracy is shown separately below, using
 The D4 setting lowers full GAMUS RMSE from **2.775 m to 2.590 m** (6.64%) while taking 14.2× longer. It worsens RMSE for true heights ≥15 m (5.792 → 5.980 m). See [full GAMUS inference comparison](/results/gamus-d4/) and [download the raw GAMUS metrics](/evidence/v5-gamus-d4/probe_metrics.json).
 
 <Aside type="caution" title="Validation result">
-These are GAMUS validation centre-crop metrics. The held-out test split and native sliding evaluation have not been scored. The target is height above ground (nDSM), so this result does not establish absolute DSM accuracy.
+These are GAMUS validation centre-crop metrics. Native-grid sliding validation is reported separately; the held-out test split has not been scored. The target is height above ground (nDSM), so this result does not establish absolute DSM accuracy.
 </Aside>
 
 ## Inference choices on GAMUS
@@ -89,7 +89,7 @@ These are the four **validation** splits. No tile in them was trained on, but th
 - **MVS3DM** (200 of 820 tiles) and **NEON** (all 118) chose the checkpoint. `best.pt` is the epoch with the lowest mean forested + sparse RMSE over these two sets.
 - **GAMUS** (200 of 859) and **US3D** (200 of 291) were only reported. The log marks them `reported, not selected on`.
 
-The fair held-out test, on the separate `test` splits, has not been run for v5 yet. See [Benchmarks](/results/benchmarks/) for v4's held-out test numbers.
+The separate held-out `test` split has not been run for v5. Full native-grid sliding validation is now available in [GAMUS D4 validation](/results/gamus-d4/); see [Benchmarks](/results/benchmarks/) for v4's held-out test numbers.
 </Aside>
 
 ## Where each row comes from

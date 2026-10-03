@@ -80,6 +80,7 @@ export default defineConfig({
 						'results/landscape-accuracy',
 						'results/error-analysis',
 						'results/lidar-validation',
+						'results/cartosat-validation',
 						'results/gallery',
 					],
 				},

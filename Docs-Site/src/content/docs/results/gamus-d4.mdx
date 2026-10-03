@@ -3,6 +3,8 @@ title: GAMUS D4 validation
 description: Full GAMUS validation metrics comparing single-pass inference with D4 averaging and 1.5× input scaling for the epoch-7 DepthWizard v5 checkpoint.
 ---
 
+import Chart from '../../../components/Chart.astro';
+
 ## Full GAMUS validation comparison
 
 DepthWizard v5 epoch-7 `best.pt`, the same checkpoint used in the [landscape table](/results/landscape-accuracy/), scored on all 859 GAMUS validation tiles. The D4 candidate averages eight rotations and reflections with 1.5× input scaling. Both settings use the same deterministic 512 px centre crop and the same valid pixels. The weights are unchanged.
@@ -35,3 +37,33 @@ The gain also appears outside the original 128-tile pilot: aggregate-derived RMS
 - GSD: 0.25 m source labels; 512 px model crop, zoom input 768 px.
 - Same preprocessing, BF16 and batch size 2; no model weights or target heights changed.
 - D4: four rotations, each with and without horizontal flip; inverse transforms averaged at the original output size.
+
+## Native-grid sliding evaluation
+
+The deployed `predict_scene` path was also evaluated over the full 1024 px label grid for all 859 validation tiles. D4 + 1.5× lowered RMSE by 6.12%, with 891.4 million valid pixels scored. This is a separate protocol from the centre-crop results above.
+
+<Chart
+	height={300}
+	caption="Full-resolution GAMUS validation RMSE. Native-grid sliding inference uses 0.5 overlap and the deployed prediction path."
+	source="Model_Traning/v5/outputs/v5/hf_sliding_accuracy/modal/REPORT.md"
+	option={{
+		tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+		grid: { left: 55, right: 20, top: 24, bottom: 40 },
+		xAxis: { type: 'category', data: ['Overall', 'Urban', 'Sparse', 'Forested'] },
+		yAxis: { type: 'value', name: 'RMSE (m)', min: 0 },
+		series: [
+			{ name: 'Single pass', type: 'bar', data: [2.876262, 3.132358, 2.389326, 2.405550] },
+			{ name: 'D4 + 1.5×', type: 'bar', data: [2.700175, 3.033088, 1.364003, 2.268531] },
+		],
+	}}
+/>
+
+| Native-grid metric | Single pass | D4 + 1.5× |
+|---|---:|---:|
+| RMSE | 2.876 m | **2.700 m** |
+| MAE | 1.407 m | **1.323 m** |
+| Bias | +0.031 m | −0.258 m |
+| ≥15 m RMSE | 5.927 m | 6.348 m |
+| <1 m RMSE | 1.903 m | **1.446 m** |
+
+This is still validation data. D4 improves overall and flat-ground error, while tall-object RMSE rises; no held-out GAMUS test was run.
