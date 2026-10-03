@@ -1,0 +1,21 @@
+{
+  "name": "ui-taste",
+  "version": "uizze-design-v13",
+  "designStack": {
+    "version": "4.4.0",
+    "commit": "9d715cc4f5564a990ca8345abfdd5df6dc9b41c8",
+    "license": "Apache-2.0"
+  },
+  "designAuthority": "uizze",
+  "evidenceMode": "concrete-need-only",
+  "included": [
+    "reference/new-work.md",
+    "reference/operate.md",
+    "reference/polish.md",
+    "reference/distill.md",
+    "reference/audit.md",
+    "reference/ios.md",
+    "reference/craft.md",
+    "reference/overdrive.md"
+  ]
+}

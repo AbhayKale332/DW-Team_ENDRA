@@ -1,0 +1,52 @@
+{
+  "app": "dw-gamus-confirmation",
+  "function_call_id": "fc-01M40SBFSEMCJHSTWB082V7XTR",
+  "environment": "gpu",
+  "volume": "depthwizard-results",
+  "remote_output": "/v5_gamus_scale_comparison_20261003",
+  "candidates": [
+    "baseline",
+    "baseline_zoom125",
+    "baseline_zoom150",
+    "baseline_d4_zoom125"
+  ],
+  "checkpoint": "/mnt/depthwizard-results/v5_final_forest/best.pt",
+  "split": "val",
+  "tiles": 859,
+  "valid_pixels_expected": 222847123,
+  "gpu": "L4",
+  "cpu": 2,
+  "memory_mib": 8192,
+  "timeout_minutes": 40,
+  "started_at_utc": "2026-10-03T11:45:53.423520+00:00",
+  "status": "completed",
+  "readout_probe_sha256": "ecd19806025bbf5c4b7e90117827f3b91a3dfafdfce915ed71259fe8b68abfc2",
+  "incumbent_rmse_m": 2.5904203396852234,
+  "completed_at_utc": "2026-10-03T12:03:41.119060+00:00",
+  "results": {
+    "baseline": {
+      "rmse_m": 2.7745807525174246,
+      "seconds": 83.85
+    },
+    "baseline_zoom125": {
+      "rmse_m": 2.7065366285715213,
+      "seconds": 105.43
+    },
+    "baseline_zoom150": {
+      "rmse_m": 2.621131321947636,
+      "seconds": 146.82
+    },
+    "baseline_d4_zoom125": {
+      "rmse_m": 2.652125453531731,
+      "seconds": 637.56
+    }
+  },
+  "checks": {
+    "baseline_exact": true,
+    "indices_and_stems_match": true,
+    "all_valid_pixels_match": true,
+    "stratum_class_landscape_counts_match": true
+  },
+  "selected_candidate": "baseline_d4_zoom150",
+  "app_stopped": true
+}

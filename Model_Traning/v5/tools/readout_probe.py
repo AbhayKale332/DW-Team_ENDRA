@@ -15,6 +15,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -27,6 +28,22 @@ from eval.metrics import evaluate
 from eval_test import Replicated, load_checkpoint
 from models.losses import coarse_pool_px
 from train import resolve_hf_token
+
+
+class ScaledInput(torch.nn.Module):
+    """One scaled forward pass, returned to the original target grid in metres."""
+
+    def __init__(self, model, scale):
+        super().__init__()
+        self.model = model
+        self.scale = scale
+
+    def forward(self, image):
+        h, w = image.shape[-2:]
+        size = tuple(max(16, int(round(s * self.scale / 16)) * 16) for s in (h, w))
+        scaled = F.interpolate(image, size=size, mode="bilinear", align_corners=False)
+        pred = self.model(scaled)["fused"].float()
+        return {"fused": F.interpolate(pred, size=(h, w), mode="bilinear", align_corners=False)}
 
 
 def main():
@@ -70,6 +87,9 @@ def main():
         ("fused_single_mode_b50", "single_mode", .5, "fused", False, (1.,)),
         ("baseline_d4", "mean", None, "fused", True, (1.,)),
         ("baseline_d4_zoom150", "mean", None, "fused", True, (1.5,)),
+        ("baseline_zoom125", "mean", None, "fused", False, (1.25,)),
+        ("baseline_zoom150", "mean", None, "fused", False, (1.5,)),
+        ("baseline_d4_zoom125", "mean", None, "fused", True, (1.25,)),
     ]
     if a.candidates:
         wanted = set(a.candidates.split(","))
@@ -102,7 +122,8 @@ def main():
             start = time.time()
             coarse_sources = tuple(s.strip() for s in cfg.coarse_label_sources.split(",") if s.strip())
             extra_pool = coarse_pool_px(cfg, cfg.canonical_gsd_m) if coarse_sources and src.startswith(coarse_sources) else 1
-            metrics = evaluate(model, loader, cfg, device, use_tta=tta, extra_pool=extra_pool)
+            evaluated_model = ScaledInput(model, scales[0]) if not tta and scales != (1.,) else model
+            metrics = evaluate(evaluated_model, loader, cfg, device, use_tta=tta, extra_pool=extra_pool)
             metrics["seconds"] = round(time.time() - start, 2)
             metrics["readout"] = {"bin": readout, "head_b_weight": weight,
                                    "head": head, "tta": tta, "scales": scales}
@@ -117,7 +138,8 @@ def main():
             rows.append(row)
             print(row + f" ({metrics['seconds']:.0f}s)", flush=True)
             (out / "probe_metrics.json").write_text(json.dumps(report, indent=2))
-            (out / "PROBE.md").write_text("# Frozen readout validation pilot\n\n" + report["protocol"] +
+            title = "# Frozen readout full validation" if a.tiles == 0 else "# Frozen readout validation pilot"
+            (out / "PROBE.md").write_text(title + "\n\n" + report["protocol"] +
                                           "\n\n" + "\n".join(rows) + "\n")
 
 

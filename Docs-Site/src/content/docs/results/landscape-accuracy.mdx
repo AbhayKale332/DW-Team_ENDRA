@@ -1,12 +1,14 @@
 ---
 title: Accuracy by landscape
-description: Four-set pooled v5 single-pass metrics and full-validation GAMUS metrics with D4 averaging and 1.5× input scaling, with raw evidence and a reproduction script.
+description: GAMUS validation accuracy as the primary judging metric, with a separate landscape breakdown and supporting results from four validation datasets.
 ---
 
 import DataTable from '../../../components/DataTable.astro';
 import Stat from '../../../components/Stat.astro';
 import StatGrid from '../../../components/StatGrid.astro';
 import metrics from '../../../data/metrics.json';
+import gamus from '../../../../public/evidence/v5-gamus-d4/probe_metrics.json';
+import scaling from '../../../../public/evidence/v5-gamus-scales/comparison.json';
 import { Aside, Code } from '@astrojs/starlight/components';
 import script from '../../../../scripts/reproduce_landscape_table.py?raw';
 
@@ -14,26 +16,72 @@ export const L = metrics.v5_landscape;
 export const row = (k) => L.rows.find((r) => r.landscape === k);
 export const cap = (s) => s[0].toUpperCase() + s.slice(1);
 export const mpx = (n) => `${(n / 1e6).toFixed(1)} M`;
+export const G = gamus.sources.gamus;
+export const baseline = G.candidates.baseline;
+export const zoom = G.candidates.baseline_d4_zoom150;
+export const gamusBlock = (candidate, landscape) => landscape === 'overall' ? candidate.global : candidate.per_landscape[landscape];
+export const inferenceLabels = { baseline: 'Single pass', baseline_zoom125: 'Plain 1.25×', baseline_zoom150: 'Plain 1.5×', baseline_d4_zoom125: 'D4 + 1.25×', baseline_d4_zoom150: 'D4 + 1.5×' };
 
-The pooled RMSE, MAE and Pearson columns reproduce the epoch-7 single-pass metrics across MVS3DM, NEON, GAMUS and US3D. The GAMUS RMSE column uses the same epoch-7 checkpoint with D4 averaging and 1.5× input scaling on all 859 GAMUS validation tiles. Raw evidence for both evaluations is linked in the table caption.
+## GAMUS accuracy — primary judging dataset
 
-<StatGrid>
-	<Stat label="Overall RMSE" value={row('overall').rmse.toFixed(2)} unit="m" note={`MAE ${row('overall').mae.toFixed(2)} m · r ${row('overall').r.toFixed(2)}`} />
-	<Stat label="Pixels scored" value={mpx(row('overall').n)} note="Single-pass pool: 718 tiles · GAMUS zoom: 859 tiles" />
-	<Stat label="Checkpoint" value={`epoch ${L.epoch}`} note={`best.pt · select score ${L.select_score.toFixed(3)} m`} />
+GAMUS is the main judging dataset. Its accuracy is shown separately below, using **all 859 GAMUS validation tiles** and the epoch-7 `best.pt` checkpoint. The best confirmed inference setting is D4 averaging with 1.5× input scaling; lower RMSE is better.
+
+<StatGrid cols={3}>
+	<Stat label="GAMUS RMSE" value={zoom.global.rmse_m.toFixed(3)} unit="m" note="D4 + 1.5× input · full validation" />
+	<Stat label="GAMUS MAE" value={zoom.global.mae_m.toFixed(3)} unit="m" note={`Pearson r ${zoom.global.pearson_r.toFixed(3)}`} />
+	<Stat label="GAMUS tiles" value={String(G.indices.length)} note={`${mpx(zoom.global.n)} valid pixels · epoch ${L.epoch}`} />
 </StatGrid>
 
-## The table
-
 <DataTable
-	headers={['Landscape', 'RMSE (m) ↓', 'MAE (m) ↓', 'Pearson r ↑', 'GAMUS RMSE (m) ↓', 'Pooled pixels', 'GAMUS tiles', 'Pooled from']}
-	rows={L.rows.map((r) => [cap(r.landscape), r.rmse, r.mae, r.r, r.gamus_rmse, mpx(r.n), r.gamus_tiles, r.sets.join(', ')])}
-	digits={2}
-	caption="RMSE, MAE and r: epoch-7 single-pass pool from four validation sets. GAMUS RMSE: the same checkpoint, D4 + 1.5× input, all 859 GAMUS validation tiles."
-	source={L.source.join(' · ')}
+	headers={['GAMUS landscape', 'Tiles', 'Valid pixels', 'Single-pass RMSE (m) ↓', 'D4 + 1.5× RMSE (m) ↓', 'D4 + 1.5× MAE (m) ↓', 'Pearson r ↑']}
+	rows={['overall', 'urban', 'sparse', 'forested'].map((land) => {
+		const b = gamusBlock(baseline, land);
+		const z = gamusBlock(zoom, land);
+		return [cap(land), String(land === 'overall' ? G.indices.length : z.tiles), mpx(z.n), b.rmse_m, z.rmse_m, z.mae_m, z.pearson_r];
+	})}
+	digits={3}
+	caption="GAMUS only. Both inference settings score the same deterministic 512 px centre crops and valid pixels; model weights are fixed."
+	source="/evidence/v5-gamus-d4/probe_metrics.json"
 />
 
-The D4 setting lowers full GAMUS RMSE from **2.775 m to 2.590 m** (6.64%) while taking 14.2× longer. It worsens RMSE for true heights ≥15 m (5.792 → 5.980 m). See [full GAMUS inference comparison](/results/gamus-d4/) for raw metrics and tradeoffs. This is GAMUS validation centre-crop evaluation, not held-out test or absolute DSM scoring.
+The D4 setting lowers full GAMUS RMSE from **2.775 m to 2.590 m** (6.64%) while taking 14.2× longer. It worsens RMSE for true heights ≥15 m (5.792 → 5.980 m). See [full GAMUS inference comparison](/results/gamus-d4/) and [download the raw GAMUS metrics](/evidence/v5-gamus-d4/probe_metrics.json).
+
+<Aside type="caution" title="Validation result">
+These are GAMUS validation centre-crop metrics. The held-out test split and native sliding evaluation have not been scored. The target is height above ground (nDSM), so this result does not establish absolute DSM accuracy.
+</Aside>
+
+## Inference choices on GAMUS
+
+Three further scaling settings were scored on the same full validation cohort. The new single-pass baseline reproduces the previous metrics exactly. **D4 + 1.5× remains the lowest-RMSE setting for the main judging dataset.**
+
+<DataTable
+	headers={['Inference', 'GAMUS RMSE (m) ↓', 'MAE (m) ↓', 'True ≥15 m RMSE (m) ↓', 'Runtime (s)']}
+	rows={Object.entries(scaling.candidates).map(([name, m]) => [inferenceLabels[name], m.global.rmse_m, m.global.mae_m, m.tall_gt15m.rmse_m, m.seconds.toFixed(2)])}
+	digits={3}
+	bestCols={[1]}
+	caption="All 859 GAMUS validation tiles, fixed weights and matching valid pixel counts. D4 + 1.5× is the earlier full confirmation; the other four rows are from the new paired run."
+	source="/evidence/v5-gamus-scales/comparison.json"
+/>
+
+**Plain 1.5× is the faster alternative:** RMSE is only 0.030711 m higher than D4 + 1.5×, retaining 83.32% of its gain over the single-pass baseline. Its measured runtime is 146.82 s versus 960.38 s for D4 + 1.5×. These are observed L4 evaluation times from two runs, not a repeated throughput benchmark; the earlier baseline took 67.78 s and the new baseline took 83.85 s.
+
+All four scaled settings worsen RMSE for true heights ≥15 m relative to the single-pass baseline. A lower global RMSE therefore comes with a tall-height tradeoff.
+
+- [New full-validation metrics](/evidence/v5-gamus-scales/probe_metrics.json)
+- [Combined comparison and matching-cohort checks](/evidence/v5-gamus-scales/comparison.json)
+- [Scaling run provenance](/evidence/v5-gamus-scales/run.json)
+
+## Supporting accuracy across four datasets
+
+The following table pools the original epoch-7 single-pass evaluation across MVS3DM, NEON, GAMUS and US3D (718 tiles). Its overall score measures that four-dataset pool; use the separate GAMUS table above for the primary judging dataset.
+
+<DataTable
+	headers={['Landscape', 'Pooled RMSE (m) ↓', 'Pooled MAE (m) ↓', 'Weighted Pearson r ↑', 'Pooled pixels', 'Pooled from']}
+	rows={L.rows.map((r) => [cap(r.landscape), r.rmse, r.mae, r.r, mpx(r.n), r.sets.join(', ')])}
+	digits={2}
+	caption="Supporting results: epoch-7 single-pass pool from four validation sets. Pearson r is a pixel-weighted approximation."
+	source={L.source[0]}
+/>
 
 <Aside type="caution" title="Held out from training, not a test split">
 These are the four **validation** splits. No tile in them was trained on, but they are not all independent of model selection:
@@ -92,7 +140,7 @@ The last evaluation in `run.log` (lines 757–763) prints the same per-landscape
 
 - The unlabelled first line is MVS3DM, the selection set.
 - `[neon @2x pooled]` scores NEON again at half resolution. The table does not use it. It uses the full-resolution `[neon]` line (`val_neon` in `metrics.json`).
-- The `[gamus]` line is the original single-pass GAMUS baseline on 200 tiles. The GAMUS column above uses all 859 validation tiles with D4 + 1.5× input; exact numbers are in the linked probe metrics.
+- The `[gamus]` line is the original single-pass GAMUS baseline on 200 tiles. The separate GAMUS table at the top uses all 859 validation tiles; exact numbers are in the linked probe metrics.
 - Epoch 7 is the last epoch, and it is also the best. The run hit its 106-minute wall-clock cap during epoch 7 and then evaluated `best.pt` again (`[final] evaluating best.pt (epoch 7)`).
 - The log does not print pixel counts. Those are in `metrics.json`.
 
@@ -110,13 +158,13 @@ python3 reproduce_landscape_table.py metrics.json probe_metrics.json
 ```text
 best.pt = epoch 7  (select score 2.481 m)
 
-landscape        pixels    RMSE     MAE       r   GAMUS  sets
-urban        73,554,308    3.85    1.69    0.90    3.26  GAMUS, US3D
-sparse       45,504,793    1.32    0.32    0.63    3.15  MVS3DM, NEON, GAMUS, US3D
-forested     64,658,637    2.85    1.60    0.83    2.01  MVS3DM, NEON, GAMUS
-overall     183,717,738    3.04    1.32    0.88    2.89  MVS3DM, NEON, GAMUS, US3D
+landscape        pixels    RMSE     MAE       r   GAMUS  GAMUS tiles  sets
+urban        73,554,308    3.85    1.69    0.90    3.06          465  GAMUS, US3D
+sparse       45,504,793    1.32    0.32    0.63    1.25           99  MVS3DM, NEON, GAMUS, US3D
+forested     64,658,637    2.85    1.60    0.83    2.05          295  MVS3DM, NEON, GAMUS
+overall     183,717,738    3.04    1.32    0.88    2.59          859  MVS3DM, NEON, GAMUS, US3D
 ```
 
 <Code code={script} lang="python" title="Docs-Site/scripts/reproduce_landscape_table.py" />
 
-`scripts/extract_metrics.py` imports the same function to build this page's data, so the page and the script cannot disagree.
+`scripts/extract_metrics.py` imports the same function to build the pooled data. The separate GAMUS table reads the full-validation evidence JSON directly, including its MAE, Pearson r and valid pixel counts.

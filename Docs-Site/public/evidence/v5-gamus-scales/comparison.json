@@ -1,0 +1,4257 @@
+{
+  "selected_candidate": "baseline_d4_zoom150",
+  "selected_label": "D4 + 1.5\u00d7 (previous confirmation)",
+  "paired_checks": {
+    "baseline_exact": true,
+    "indices_and_stems_match": true,
+    "all_valid_pixels_match": true,
+    "stratum_class_landscape_counts_match": true
+  },
+  "candidates": {
+    "baseline": {
+      "global": {
+        "n": 222847123,
+        "rmse_m": 2.7745807525174246,
+        "mae_m": 1.3455333350785457,
+        "bias_m": 0.028215871352502864,
+        "pearson_r": 0.9132508002035792,
+        "delta1": 0.6646580310574618
+      },
+      "tta": false,
+      "per_stratum": {
+        "0-2m": {
+          "n": 137269352,
+          "rmse_m": 1.8205110012986234,
+          "mae_m": 0.5824950026226101,
+          "bias_m": 0.47452259819137005,
+          "pearson_r": 0.3155372285349088,
+          "delta1": 0.7317307507942487
+        },
+        "2-5m": {
+          "n": 22536704,
+          "rmse_m": 2.7223775338534786,
+          "mae_m": 1.8731353989923234,
+          "bias_m": 0.46930055298635115,
+          "pearson_r": 0.255474430133152,
+          "delta1": 0.3727255769077856
+        },
+        "5-10m": {
+          "n": 34847944,
+          "rmse_m": 2.937514409699277,
+          "mae_m": 1.9565770220267922,
+          "bias_m": -0.48155922703780224,
+          "pearson_r": 0.3032345747879334,
+          "delta1": 0.6250535469180047
+        },
+        "10-20m": {
+          "n": 18887766,
+          "rmse_m": 4.993684657274014,
+          "mae_m": 3.725809880931669,
+          "bias_m": -1.6947358186234047,
+          "pearson_r": 0.48338838091275915,
+          "delta1": 0.5460373661977811
+        },
+        "20m+": {
+          "n": 9305357,
+          "rmse_m": 5.881263756452102,
+          "mae_m": 4.204063459767473,
+          "bias_m": -2.2175343631048445,
+          "pearson_r": 0.7086972992946509,
+          "delta1": 0.7713471928051766
+        }
+      },
+      "balanced_rmse_m": 3.671070271715499,
+      "tall_gt15m": {
+        "n": 15623234,
+        "rmse_m": 5.792291901906938,
+        "mae_m": 4.225766843252344,
+        "bias_m": -2.0917974356446556,
+        "pearson_r": 0.7769618704364104,
+        "delta1": 0.6953032899590443
+      },
+      "flat_lt1m": {
+        "n": 126934139,
+        "rmse_m": 1.7331151603005985,
+        "mae_m": 0.4920769974147051,
+        "bias_m": 0.4465714004664092,
+        "pearson_r": 0.22448639014713226,
+        "delta1": 0.7743039797985316
+      },
+      "tall_pred15m": {
+        "n": 14630819,
+        "rmse_m": 6.369058285736753,
+        "mae_m": 4.356517819530897,
+        "bias_m": 1.260844960557247,
+        "pearson_r": 0.7228768537108156,
+        "delta1": 0.7240529733844702
+      },
+      "per_predicted_stratum": {
+        "0-2m": {
+          "n": 131078110,
+          "rmse_m": 1.2632284656418469,
+          "mae_m": 0.3902888279899903,
+          "bias_m": -0.15889131905977102,
+          "pearson_r": 0.3760205984310817,
+          "delta1": 0.766163938433351
+        },
+        "2-5m": {
+          "n": 27381192,
+          "rmse_m": 3.0656806541625694,
+          "mae_m": 2.2064623494130746,
+          "bias_m": -0.05569192914236505,
+          "pearson_r": 0.26362939293277005,
+          "delta1": 0.3029746111856635
+        },
+        "5-10m": {
+          "n": 38500030,
+          "rmse_m": 3.2783381731592205,
+          "mae_m": 2.254146730035344,
+          "bias_m": 0.10567793147614446,
+          "pearson_r": 0.348202652130896,
+          "delta1": 0.5779353678425705
+        },
+        "10-20m": {
+          "n": 16774664,
+          "rmse_m": 5.029596762167061,
+          "mae_m": 3.595427814075419,
+          "bias_m": 0.6568359735546583,
+          "pearson_r": 0.46284591414720805,
+          "delta1": 0.6030306776934549
+        },
+        "20m+": {
+          "n": 9113127,
+          "rmse_m": 6.7149157082226045,
+          "mae_m": 4.518485391197027,
+          "bias_m": 1.4872068242482366,
+          "pearson_r": 0.6490812448167315,
+          "delta1": 0.7711773357268038
+        }
+      },
+      "ndsm_30m": {
+        "n": 54032,
+        "rmse_m": 1.2854518920656914,
+        "mae_m": 0.6045590510437483,
+        "bias_m": 0.02931705320176906,
+        "pearson_r": 0.9719323305612405,
+        "delta1": 0.8722608824400355,
+        "actual_block_sizes_m": [
+          30.0
+        ],
+        "protocol": "tile-aligned complete fully-valid block means; bias = pred - GT"
+      },
+      "edge_rmse_m": 3.7520012567914653,
+      "edge_band": {
+        "n": 99428840,
+        "rmse_m": 3.7520012567914653,
+        "mae_m": 2.430591357428905,
+        "bias_m": -0.06369424562054772,
+        "pearson_r": 0.8797433151404364,
+        "delta1": 0.42986453427395915
+      },
+      "grad_ratio": 0.38436897734310127,
+      "per_landscape": {
+        "urban": {
+          "n": 120723249,
+          "rmse_m": 3.211026322010295,
+          "mae_m": 1.7211525070718636,
+          "bias_m": -0.012113012089174972,
+          "pearson_r": 0.9224430182688637,
+          "delta1": 0.6343970994352546,
+          "tiles": 465
+        },
+        "sparse": {
+          "n": 24920651,
+          "rmse_m": 2.2102365883094413,
+          "mae_m": 0.5161467134691671,
+          "bias_m": 0.26039437951537514,
+          "pearson_r": 0.5225907380521911,
+          "delta1": 0.8536358861572276,
+          "tiles": 99
+        },
+        "forested": {
+          "n": 77203223,
+          "rmse_m": 2.1263461246089395,
+          "mae_m": 1.0258949659844658,
+          "bias_m": 0.016332873488463687,
+          "pearson_r": 0.7865688800248842,
+          "delta1": 0.6509765660949155,
+          "tiles": 295
+        }
+      },
+      "landscape_rmse_spread_m": 1.0846801974013554,
+      "landscape_worst": "urban",
+      "landscape_descriptors": [
+        {
+          "landscape": "urban",
+          "relief_m": 0.07294916361570358,
+          "relief_raw_m": 5.349335193634033,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5532417297363281,
+          "roughness": 0.12185178697109222,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05168551206588745,
+          "relief_raw_m": 6.500959873199463,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.9258232116699219,
+          "roughness": 0.10273932665586472,
+          "n_valid": 260497
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06034190580248833,
+          "relief_raw_m": 1.987339973449707,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5051956176757812,
+          "roughness": 0.149317666888237,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06395425647497177,
+          "relief_raw_m": 1.5946576595306396,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5550270080566406,
+          "roughness": 0.15821345150470734,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04691892862319946,
+          "relief_raw_m": 2.0463366508483887,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4183464050292969,
+          "roughness": 0.12604567408561707,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06937264651060104,
+          "relief_raw_m": 2.886831283569336,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5423469543457031,
+          "roughness": 0.13538052141666412,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04691745340824127,
+          "relief_raw_m": 2.0018365383148193,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.669403076171875,
+          "roughness": 0.14832614362239838,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06326478719711304,
+          "relief_raw_m": 3.0421695709228516,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.366943359375,
+          "roughness": 0.16212160885334015,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.08178655803203583,
+          "relief_raw_m": 2.4546895027160645,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4976005554199219,
+          "roughness": 0.1471347212791443,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06194574758410454,
+          "relief_raw_m": 2.4277188777923584,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6124114990234375,
+          "roughness": 0.14492538571357727,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07584724575281143,
+          "relief_raw_m": 2.1196486949920654,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5402336120605469,
+          "roughness": 0.1372908651828766,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06507033109664917,
+          "relief_raw_m": 2.1474788188934326,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5464706420898438,
+          "roughness": 0.1391257494688034,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.045499250292778015,
+          "relief_raw_m": 2.113858461380005,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7418060302734375,
+          "roughness": 0.1434336155653,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0563976988196373,
+          "relief_raw_m": 2.9789836406707764,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7216796875,
+          "roughness": 0.1452924907207489,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07736730575561523,
+          "relief_raw_m": 1.9407422542572021,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5315742492675781,
+          "roughness": 0.13443899154663086,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05409682169556618,
+          "relief_raw_m": 1.7955679893493652,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5241165161132812,
+          "roughness": 0.15539871156215668,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06346359848976135,
+          "relief_raw_m": 9.214091300964355,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.391876220703125,
+          "roughness": 0.09574590623378754,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0370628722012043,
+          "relief_raw_m": 8.573512077331543,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7616615295410156,
+          "roughness": 0.08814206719398499,
+          "n_valid": 250634
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04634576663374901,
+          "relief_raw_m": 1.416314959526062,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5315933227539062,
+          "roughness": 0.15834200382232666,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07183708995580673,
+          "relief_raw_m": 2.301616907119751,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4846916198730469,
+          "roughness": 0.10279660671949387,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04074367880821228,
+          "relief_raw_m": 2.0759644508361816,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7807121276855469,
+          "roughness": 0.1311827301979065,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0587584562599659,
+          "relief_raw_m": 3.0154805183410645,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6870536804199219,
+          "roughness": 0.12130339443683624,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06310305744409561,
+          "relief_raw_m": 2.201216697692871,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7072792053222656,
+          "roughness": 0.13753806054592133,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.09279143065214157,
+          "relief_raw_m": 6.250307559967041,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6954841613769531,
+          "roughness": 0.10817193984985352,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.024763435125350952,
+          "relief_raw_m": 4.247951507568359,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.9317512512207031,
+          "roughness": 0.06956423819065094,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07163834571838379,
+          "relief_raw_m": 1.0205715894699097,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.34767913818359375,
+          "roughness": 0.1588807851076126,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.09943728893995285,
+          "relief_raw_m": 1.5668320655822754,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.34119415283203125,
+          "roughness": 0.1322333663702011,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06339426338672638,
+          "relief_raw_m": 3.1331169605255127,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7128410339355469,
+          "roughness": 0.1433967500925064,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06244396045804024,
+          "relief_raw_m": 2.4016551971435547,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6725044250488281,
+          "roughness": 0.13730080425739288,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04450111836194992,
+          "relief_raw_m": 8.52710247039795,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.8945541381835938,
+          "roughness": 0.07595475763082504,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.051592059433460236,
+          "relief_raw_m": 1.8151190280914307,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5681838989257812,
+          "roughness": 0.1580333262681961,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.054092276841402054,
+          "relief_raw_m": 1.6998646259307861,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4884376525878906,
+          "roughness": 0.14523211121559143,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07267648726701736,
+          "relief_raw_m": 3.874896287918091,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6082382202148438,
+          "roughness": 0.10890117287635803,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.025332462042570114,
+          "relief_raw_m": 3.0862491130828857,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.95184326171875,
+          "roughness": 0.06998206675052643,
+          "n_valid": 255761
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05859214812517166,
+          "relief_raw_m": 1.2281384468078613,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.404388427734375,
+          "roughness": 0.1635180562734604,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.08663696050643921,
+          "relief_raw_m": 4.311466693878174,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5731048583984375,
+          "roughness": 0.12046585232019424,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0819702297449112,
+          "relief_raw_m": 2.246540069580078,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.2686271667480469,
+          "roughness": 0.12538962066173553,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.08327080309391022,
+          "relief_raw_m": 2.5933196544647217,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.24737548828125,
+          "roughness": 0.15846599638462067,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04739905521273613,
+          "relief_raw_m": 2.0482752323150635,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5882339477539062,
+          "roughness": 0.151912122964859,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0018033706583082676,
+          "relief_raw_m": 2.793104410171509,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.9532394409179688,
+          "roughness": 0.05588115379214287,
+          "n_valid": 250704
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07130096852779388,
+          "relief_raw_m": 1.7862492799758911,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5595016479492188,
+          "roughness": 0.15939782559871674,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06357578933238983,
+          "relief_raw_m": 3.380913734436035,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4505424499511719,
+          "roughness": 0.10744716972112656,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.08714031428098679,
+          "relief_raw_m": 5.138239860534668,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4802665710449219,
+          "roughness": 0.1132018193602562,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.059839699417352676,
+          "relief_raw_m": 2.680354118347168,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6703987121582031,
+          "roughness": 0.13192620873451233,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05646052956581116,
+          "relief_raw_m": 5.394766807556152,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.8460884094238281,
+          "roughness": 0.10369961708784103,
+          "n_valid": 256626
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07630634307861328,
+          "relief_raw_m": 6.777384281158447,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6679153442382812,
+          "roughness": 0.10201095044612885,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05765469744801521,
+          "relief_raw_m": 1.9085317850112915,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.46944427490234375,
+          "roughness": 0.17270562052726746,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06456447392702103,
+          "relief_raw_m": 1.7174278497695923,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4001274108886719,
+          "roughness": 0.15533176064491272,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.052282314747571945,
+          "relief_raw_m": 1.750629186630249,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.632232666015625,
+          "roughness": 0.1545981615781784,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.061466969549655914,
+          "relief_raw_m": 2.500699520111084,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6782455444335938,
+          "roughness": 0.14824172854423523,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04697301983833313,
+          "relief_raw_m": 3.425286293029785,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5245590209960938,
+          "roughness": 0.0978049635887146,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06457450985908508,
+          "relief_raw_m": 2.6845178604125977,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5649032592773438,
+          "roughness": 0.15582016110420227,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05023328214883804,
+          "relief_raw_m": 3.0630927085876465,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6813888549804688,
+          "roughness": 0.1390221118927002,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.038947947323322296,
+          "relief_raw_m": 2.274542808532715,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7329864501953125,
+          "roughness": 0.14812670648097992,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05853156000375748,
+          "relief_raw_m": 1.6336811780929565,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5149688720703125,
+          "roughness": 0.15885722637176514,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0549449659883976,
+          "relief_raw_m": 1.2035629749298096,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5387458801269531,
+          "roughness": 0.13320301473140717,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07457423955202103,
+          "relief_raw_m": 2.0900161266326904,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.43727874755859375,
+          "roughness": 0.1448010951280594,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07006780803203583,
+          "relief_raw_m": 2.758960723876953,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5547943115234375,
+          "roughness": 0.13711489737033844,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05474155768752098,
+          "relief_raw_m": 2.0256712436676025,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5789947509765625,
+          "roughness": 0.15598352253437042,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0723673477768898,
+          "relief_raw_m": 2.3468804359436035,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6980819702148438,
+          "roughness": 0.1296723186969757,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04171261191368103,
+          "relief_raw_m": 5.931067943572998,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.8625450134277344,
+          "roughness": 0.06867408752441406,
+          "n_valid": 242564
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.08054807037115097,
+          "relief_raw_m": 1.6578229665756226,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5612525939941406,
+          "roughness": 0.14746159315109253,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.09470883756875992,
+          "relief_raw_m": 1.416351556777954,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5413169860839844,
+          "roughness": 0.14227811992168427,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07745596766471863,
+          "relief_raw_m": 1.614245057106018,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5095748901367188,
+          "roughness": 0.12449850142002106,
+          "n_valid": 262144
+        }
+      ],
+      "per_class": {
+        "other": {
+          "n": 373730,
+          "rmse_m": 7.453135395095562,
+          "mae_m": 3.4871920332502193,
+          "bias_m": 2.2575946575255283,
+          "pearson_r": 0.27250831374496437,
+          "delta1": 0.31410376474995316
+        },
+        "ground": {
+          "n": 41843563,
+          "rmse_m": 1.3640745071677352,
+          "mae_m": 0.3809212428903309,
+          "bias_m": 0.1553628807232506,
+          "pearson_r": 0.2530269724641073,
+          "delta1": 0.7900319817411342
+        },
+        "low_veg": {
+          "n": 53353689,
+          "rmse_m": 1.6437245253303827,
+          "mae_m": 0.5258183672832554,
+          "bias_m": 0.32782702496467336,
+          "pearson_r": 0.3693999565270135,
+          "delta1": 0.7456877817764391
+        },
+        "building": {
+          "n": 38456881,
+          "rmse_m": 3.322057968980865,
+          "mae_m": 1.908101832936176,
+          "bias_m": 0.026395087721780494,
+          "pearson_r": 0.872805619072561,
+          "delta1": 0.6663084299530168
+        },
+        "water": {
+          "n": 3473338,
+          "rmse_m": 0.7189566516623276,
+          "mae_m": 0.09797558757920381,
+          "bias_m": 0.016507995100691952,
+          "pearson_r": 0.7237360798543653,
+          "delta1": 0.9497040023170794
+        },
+        "road": {
+          "n": 36255817,
+          "rmse_m": 2.322178847104361,
+          "mae_m": 0.9387775131082556,
+          "bias_m": 0.02574385817673253,
+          "pearson_r": 0.8324278085969987,
+          "delta1": 0.6923331227096606
+        },
+        "tree": {
+          "n": 49090105,
+          "rmse_m": 4.163720936859354,
+          "mae_m": 2.990326044430673,
+          "bias_m": -0.41868718605911576,
+          "pearson_r": 0.8852865180022872,
+          "delta1": 0.43049211241247093
+        }
+      },
+      "class_stats": {
+        "other": {
+          "px_frac": 0.0016770689922705443,
+          "mean_gt_height_m": 1.4635611796715287
+        },
+        "ground": {
+          "px_frac": 0.18776801978278176,
+          "mean_gt_height_m": 0.21171286409149898
+        },
+        "low_veg": {
+          "px_frac": 0.23941834330973166,
+          "mean_gt_height_m": 0.26740909223669146
+        },
+        "building": {
+          "px_frac": 0.1725706864970386,
+          "mean_gt_height_m": 8.168026811075068
+        },
+        "water": {
+          "px_frac": 0.015586191794811728,
+          "mean_gt_height_m": 0.09110623891356645
+        },
+        "road": {
+          "px_frac": 0.16269367318688696,
+          "mean_gt_height_m": 1.5483549670524426
+        },
+        "tree": {
+          "px_frac": 0.22028601643647874,
+          "mean_gt_height_m": 9.866471777810336
+        }
+      },
+      "seconds": 83.85,
+      "readout": {
+        "bin": "mean",
+        "head_b_weight": null,
+        "head": "fused",
+        "tta": false,
+        "scales": [
+          1.0
+        ]
+      }
+    },
+    "baseline_zoom125": {
+      "global": {
+        "n": 222847123,
+        "rmse_m": 2.7065366285715213,
+        "mae_m": 1.322277331933014,
+        "bias_m": -0.11817421159701148,
+        "pearson_r": 0.9163137064836218,
+        "delta1": 0.6694024584737404
+      },
+      "tta": false,
+      "per_stratum": {
+        "0-2m": {
+          "n": 137269352,
+          "rmse_m": 1.6994677117179158,
+          "mae_m": 0.5514910315097603,
+          "bias_m": 0.4477822141495417,
+          "pearson_r": 0.34410231548134057,
+          "delta1": 0.7379940935395397
+        },
+        "2-5m": {
+          "n": 22536704,
+          "rmse_m": 2.6116758739038515,
+          "mae_m": 1.7754181284996013,
+          "bias_m": 0.4273288939404702,
+          "pearson_r": 0.24939696884641857,
+          "delta1": 0.40487921392586956
+        },
+        "5-10m": {
+          "n": 34847944,
+          "rmse_m": 2.7892274044453056,
+          "mae_m": 1.879848251710883,
+          "bias_m": -0.679754872971894,
+          "pearson_r": 0.3116407644352675,
+          "delta1": 0.6331207947303864
+        },
+        "10-20m": {
+          "n": 18887766,
+          "rmse_m": 4.887549077228054,
+          "mae_m": 3.7169213974133624,
+          "bias_m": -2.2397275902663685,
+          "pearson_r": 0.49165130611140795,
+          "delta1": 0.5269829687640137
+        },
+        "20m+": {
+          "n": 9305357,
+          "rmse_m": 6.219472662265464,
+          "mae_m": 4.646530129166111,
+          "bias_m": -3.3787668606650043,
+          "pearson_r": 0.7111914159365504,
+          "delta1": 0.7231650542800239
+        }
+      },
+      "balanced_rmse_m": 3.6414785459121184,
+      "tall_gt15m": {
+        "n": 15623234,
+        "rmse_m": 5.973974591676921,
+        "mae_m": 4.503295495169132,
+        "bias_m": -3.075568680688448,
+        "pearson_r": 0.7822578442348663,
+        "delta1": 0.6563136671959211
+      },
+      "flat_lt1m": {
+        "n": 126934139,
+        "rmse_m": 1.601498237724854,
+        "mae_m": 0.45985957045855946,
+        "bias_m": 0.41626928090307913,
+        "pearson_r": 0.24826847539332722,
+        "delta1": 0.7807867590294207
+      },
+      "tall_pred15m": {
+        "n": 13442654,
+        "rmse_m": 6.240100058835295,
+        "mae_m": 4.436157783730237,
+        "bias_m": 0.06577398768863098,
+        "pearson_r": 0.7145193337452516,
+        "delta1": 0.7191431096865247
+      },
+      "per_predicted_stratum": {
+        "0-2m": {
+          "n": 130815080,
+          "rmse_m": 1.2128982531582428,
+          "mae_m": 0.36877678072677406,
+          "bias_m": -0.13854201264364907,
+          "pearson_r": 0.3765324333632251,
+          "delta1": 0.7742312812865306
+        },
+        "2-5m": {
+          "n": 28732314,
+          "rmse_m": 2.968285861762002,
+          "mae_m": 2.1241290398589077,
+          "bias_m": -0.09625379065544908,
+          "pearson_r": 0.2877911738684793,
+          "delta1": 0.32277511654647795
+        },
+        "5-10m": {
+          "n": 38897196,
+          "rmse_m": 3.274110694403486,
+          "mae_m": 2.2533689703255653,
+          "bias_m": -0.1337869977955646,
+          "pearson_r": 0.3620963914843379,
+          "delta1": 0.5831941459224979
+        },
+        "10-20m": {
+          "n": 16201602,
+          "rmse_m": 5.100549736764112,
+          "mae_m": 3.7192576462744675,
+          "bias_m": -0.06589218349318511,
+          "pearson_r": 0.4728326776448257,
+          "delta1": 0.5909150835824754
+        },
+        "20m+": {
+          "n": 8200931,
+          "rmse_m": 6.517606844430639,
+          "mae_m": 4.570862257865683,
+          "bias_m": 0.1006829034811463,
+          "pearson_r": 0.6315164667211774,
+          "delta1": 0.7756218165961889
+        }
+      },
+      "ndsm_30m": {
+        "n": 54032,
+        "rmse_m": 1.2463863539287485,
+        "mae_m": 0.603891992982125,
+        "bias_m": -0.11811801733431061,
+        "pearson_r": 0.9723445950675904,
+        "delta1": 0.8685778797749482,
+        "actual_block_sizes_m": [
+          30.0
+        ],
+        "protocol": "tile-aligned complete fully-valid block means; bias = pred - GT"
+      },
+      "edge_rmse_m": 3.6992365783420063,
+      "edge_band": {
+        "n": 99428840,
+        "rmse_m": 3.6992365783420063,
+        "mae_m": 2.4077402545827553,
+        "bias_m": -0.25412287773294784,
+        "pearson_r": 0.8813972528192738,
+        "delta1": 0.43070368717969554
+      },
+      "grad_ratio": 0.37292809170528485,
+      "per_landscape": {
+        "urban": {
+          "n": 120723249,
+          "rmse_m": 3.128308661444316,
+          "mae_m": 1.6832235707108352,
+          "bias_m": -0.27828966471023636,
+          "pearson_r": 0.926089869744741,
+          "delta1": 0.6406320459450192,
+          "tiles": 465
+        },
+        "sparse": {
+          "n": 24920651,
+          "rmse_m": 1.9148576761958254,
+          "mae_m": 0.44988608125785695,
+          "bias_m": 0.20289397769043296,
+          "pearson_r": 0.5831982825207115,
+          "delta1": 0.8584453512069167,
+          "tiles": 99
+        },
+        "forested": {
+          "n": 77203223,
+          "rmse_m": 2.158259962581078,
+          "mae_m": 1.0394647249248954,
+          "bias_m": 0.028560976161942284,
+          "pearson_r": 0.7798726099546105,
+          "delta1": 0.653369264130333,
+          "tiles": 295
+        }
+      },
+      "landscape_rmse_spread_m": 1.2134509852484905,
+      "landscape_worst": "urban",
+      "landscape_descriptors": [
+        {
+          "landscape": "urban",
+          "relief_m": 0.07294916361570358,
+          "relief_raw_m": 5.349335193634033,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5532417297363281,
+          "roughness": 0.12185178697109222,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05168551206588745,
+          "relief_raw_m": 6.500959873199463,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.9258232116699219,
+          "roughness": 0.10273932665586472,
+          "n_valid": 260497
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06034190580248833,
+          "relief_raw_m": 1.987339973449707,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5051956176757812,
+          "roughness": 0.149317666888237,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06395425647497177,
+          "relief_raw_m": 1.5946576595306396,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5550270080566406,
+          "roughness": 0.15821345150470734,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04691892862319946,
+          "relief_raw_m": 2.0463366508483887,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4183464050292969,
+          "roughness": 0.12604567408561707,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06937264651060104,
+          "relief_raw_m": 2.886831283569336,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5423469543457031,
+          "roughness": 0.13538052141666412,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04691745340824127,
+          "relief_raw_m": 2.0018365383148193,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.669403076171875,
+          "roughness": 0.14832614362239838,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06326478719711304,
+          "relief_raw_m": 3.0421695709228516,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.366943359375,
+          "roughness": 0.16212160885334015,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.08178655803203583,
+          "relief_raw_m": 2.4546895027160645,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4976005554199219,
+          "roughness": 0.1471347212791443,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06194574758410454,
+          "relief_raw_m": 2.4277188777923584,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6124114990234375,
+          "roughness": 0.14492538571357727,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07584724575281143,
+          "relief_raw_m": 2.1196486949920654,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5402336120605469,
+          "roughness": 0.1372908651828766,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06507033109664917,
+          "relief_raw_m": 2.1474788188934326,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5464706420898438,
+          "roughness": 0.1391257494688034,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.045499250292778015,
+          "relief_raw_m": 2.113858461380005,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7418060302734375,
+          "roughness": 0.1434336155653,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0563976988196373,
+          "relief_raw_m": 2.9789836406707764,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7216796875,
+          "roughness": 0.1452924907207489,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07736730575561523,
+          "relief_raw_m": 1.9407422542572021,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5315742492675781,
+          "roughness": 0.13443899154663086,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05409682169556618,
+          "relief_raw_m": 1.7955679893493652,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5241165161132812,
+          "roughness": 0.15539871156215668,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06346359848976135,
+          "relief_raw_m": 9.214091300964355,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.391876220703125,
+          "roughness": 0.09574590623378754,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0370628722012043,
+          "relief_raw_m": 8.573512077331543,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7616615295410156,
+          "roughness": 0.08814206719398499,
+          "n_valid": 250634
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04634576663374901,
+          "relief_raw_m": 1.416314959526062,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5315933227539062,
+          "roughness": 0.15834200382232666,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07183708995580673,
+          "relief_raw_m": 2.301616907119751,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4846916198730469,
+          "roughness": 0.10279660671949387,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04074367880821228,
+          "relief_raw_m": 2.0759644508361816,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7807121276855469,
+          "roughness": 0.1311827301979065,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0587584562599659,
+          "relief_raw_m": 3.0154805183410645,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6870536804199219,
+          "roughness": 0.12130339443683624,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06310305744409561,
+          "relief_raw_m": 2.201216697692871,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7072792053222656,
+          "roughness": 0.13753806054592133,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.09279143065214157,
+          "relief_raw_m": 6.250307559967041,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6954841613769531,
+          "roughness": 0.10817193984985352,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.024763435125350952,
+          "relief_raw_m": 4.247951507568359,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.9317512512207031,
+          "roughness": 0.06956423819065094,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07163834571838379,
+          "relief_raw_m": 1.0205715894699097,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.34767913818359375,
+          "roughness": 0.1588807851076126,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.09943728893995285,
+          "relief_raw_m": 1.5668320655822754,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.34119415283203125,
+          "roughness": 0.1322333663702011,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06339426338672638,
+          "relief_raw_m": 3.1331169605255127,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7128410339355469,
+          "roughness": 0.1433967500925064,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06244396045804024,
+          "relief_raw_m": 2.4016551971435547,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6725044250488281,
+          "roughness": 0.13730080425739288,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04450111836194992,
+          "relief_raw_m": 8.52710247039795,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.8945541381835938,
+          "roughness": 0.07595475763082504,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.051592059433460236,
+          "relief_raw_m": 1.8151190280914307,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5681838989257812,
+          "roughness": 0.1580333262681961,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.054092276841402054,
+          "relief_raw_m": 1.6998646259307861,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4884376525878906,
+          "roughness": 0.14523211121559143,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07267648726701736,
+          "relief_raw_m": 3.874896287918091,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6082382202148438,
+          "roughness": 0.10890117287635803,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.025332462042570114,
+          "relief_raw_m": 3.0862491130828857,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.95184326171875,
+          "roughness": 0.06998206675052643,
+          "n_valid": 255761
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05859214812517166,
+          "relief_raw_m": 1.2281384468078613,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.404388427734375,
+          "roughness": 0.1635180562734604,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.08663696050643921,
+          "relief_raw_m": 4.311466693878174,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5731048583984375,
+          "roughness": 0.12046585232019424,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0819702297449112,
+          "relief_raw_m": 2.246540069580078,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.2686271667480469,
+          "roughness": 0.12538962066173553,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.08327080309391022,
+          "relief_raw_m": 2.5933196544647217,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.24737548828125,
+          "roughness": 0.15846599638462067,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04739905521273613,
+          "relief_raw_m": 2.0482752323150635,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5882339477539062,
+          "roughness": 0.151912122964859,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0018033706583082676,
+          "relief_raw_m": 2.793104410171509,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.9532394409179688,
+          "roughness": 0.05588115379214287,
+          "n_valid": 250704
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07130096852779388,
+          "relief_raw_m": 1.7862492799758911,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5595016479492188,
+          "roughness": 0.15939782559871674,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06357578933238983,
+          "relief_raw_m": 3.380913734436035,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4505424499511719,
+          "roughness": 0.10744716972112656,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.08714031428098679,
+          "relief_raw_m": 5.138239860534668,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4802665710449219,
+          "roughness": 0.1132018193602562,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.059839699417352676,
+          "relief_raw_m": 2.680354118347168,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6703987121582031,
+          "roughness": 0.13192620873451233,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05646052956581116,
+          "relief_raw_m": 5.394766807556152,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.8460884094238281,
+          "roughness": 0.10369961708784103,
+          "n_valid": 256626
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07630634307861328,
+          "relief_raw_m": 6.777384281158447,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6679153442382812,
+          "roughness": 0.10201095044612885,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05765469744801521,
+          "relief_raw_m": 1.9085317850112915,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.46944427490234375,
+          "roughness": 0.17270562052726746,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06456447392702103,
+          "relief_raw_m": 1.7174278497695923,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4001274108886719,
+          "roughness": 0.15533176064491272,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.052282314747571945,
+          "relief_raw_m": 1.750629186630249,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.632232666015625,
+          "roughness": 0.1545981615781784,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.061466969549655914,
+          "relief_raw_m": 2.500699520111084,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6782455444335938,
+          "roughness": 0.14824172854423523,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04697301983833313,
+          "relief_raw_m": 3.425286293029785,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5245590209960938,
+          "roughness": 0.0978049635887146,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06457450985908508,
+          "relief_raw_m": 2.6845178604125977,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5649032592773438,
+          "roughness": 0.15582016110420227,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05023328214883804,
+          "relief_raw_m": 3.0630927085876465,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6813888549804688,
+          "roughness": 0.1390221118927002,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.038947947323322296,
+          "relief_raw_m": 2.274542808532715,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7329864501953125,
+          "roughness": 0.14812670648097992,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05853156000375748,
+          "relief_raw_m": 1.6336811780929565,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5149688720703125,
+          "roughness": 0.15885722637176514,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0549449659883976,
+          "relief_raw_m": 1.2035629749298096,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5387458801269531,
+          "roughness": 0.13320301473140717,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07457423955202103,
+          "relief_raw_m": 2.0900161266326904,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.43727874755859375,
+          "roughness": 0.1448010951280594,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07006780803203583,
+          "relief_raw_m": 2.758960723876953,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5547943115234375,
+          "roughness": 0.13711489737033844,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05474155768752098,
+          "relief_raw_m": 2.0256712436676025,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5789947509765625,
+          "roughness": 0.15598352253437042,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0723673477768898,
+          "relief_raw_m": 2.3468804359436035,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6980819702148438,
+          "roughness": 0.1296723186969757,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04171261191368103,
+          "relief_raw_m": 5.931067943572998,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.8625450134277344,
+          "roughness": 0.06867408752441406,
+          "n_valid": 242564
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.08054807037115097,
+          "relief_raw_m": 1.6578229665756226,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5612525939941406,
+          "roughness": 0.14746159315109253,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.09470883756875992,
+          "relief_raw_m": 1.416351556777954,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5413169860839844,
+          "roughness": 0.14227811992168427,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07745596766471863,
+          "relief_raw_m": 1.614245057106018,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5095748901367188,
+          "roughness": 0.12449850142002106,
+          "n_valid": 262144
+        }
+      ],
+      "per_class": {
+        "other": {
+          "n": 373730,
+          "rmse_m": 6.084987519110479,
+          "mae_m": 2.32149812424746,
+          "bias_m": 1.0594989422285757,
+          "pearson_r": 0.3517242899738498,
+          "delta1": 0.45867069809755706
+        },
+        "ground": {
+          "n": 41843563,
+          "rmse_m": 1.234516517754192,
+          "mae_m": 0.34203174715164275,
+          "bias_m": 0.11849608804002983,
+          "pearson_r": 0.28260132642727653,
+          "delta1": 0.8023923536339389
+        },
+        "low_veg": {
+          "n": 53353689,
+          "rmse_m": 1.5571165080140263,
+          "mae_m": 0.5050572748718548,
+          "bias_m": 0.31648280288437275,
+          "pearson_r": 0.38450580716406574,
+          "delta1": 0.7473763810408686
+        },
+        "building": {
+          "n": 38456881,
+          "rmse_m": 3.1720631698796242,
+          "mae_m": 1.8618671403385294,
+          "bias_m": -0.3869015977741155,
+          "pearson_r": 0.8825880525141726,
+          "delta1": 0.6746555707416834
+        },
+        "water": {
+          "n": 3473338,
+          "rmse_m": 0.698745136856113,
+          "mae_m": 0.09568674601161166,
+          "bias_m": 0.013972089904223762,
+          "pearson_r": 0.728459826575427,
+          "delta1": 0.95222146534544
+        },
+        "road": {
+          "n": 36255817,
+          "rmse_m": 2.2073480504376493,
+          "mae_m": 0.8868234937005229,
+          "bias_m": -0.04705548569102367,
+          "pearson_r": 0.845796782295922,
+          "delta1": 0.7009482092211575
+        },
+        "tree": {
+          "n": 49090105,
+          "rmse_m": 4.185934979323595,
+          "mae_m": 3.0240946569790053,
+          "bias_m": -0.6526374139839157,
+          "pearson_r": 0.8827468822453853,
+          "delta1": 0.42547810806271447
+        }
+      },
+      "class_stats": {
+        "other": {
+          "px_frac": 0.0016770689922705443,
+          "mean_gt_height_m": 1.4635611796715287
+        },
+        "ground": {
+          "px_frac": 0.18776801978278176,
+          "mean_gt_height_m": 0.21171286409149898
+        },
+        "low_veg": {
+          "px_frac": 0.23941834330973166,
+          "mean_gt_height_m": 0.26740909223669146
+        },
+        "building": {
+          "px_frac": 0.1725706864970386,
+          "mean_gt_height_m": 8.168026811075068
+        },
+        "water": {
+          "px_frac": 0.015586191794811728,
+          "mean_gt_height_m": 0.09110623891356645
+        },
+        "road": {
+          "px_frac": 0.16269367318688696,
+          "mean_gt_height_m": 1.5483549670524426
+        },
+        "tree": {
+          "px_frac": 0.22028601643647874,
+          "mean_gt_height_m": 9.866471777810336
+        }
+      },
+      "seconds": 105.43,
+      "readout": {
+        "bin": "mean",
+        "head_b_weight": null,
+        "head": "fused",
+        "tta": false,
+        "scales": [
+          1.25
+        ]
+      }
+    },
+    "baseline_zoom150": {
+      "global": {
+        "n": 222847123,
+        "rmse_m": 2.621131321947636,
+        "mae_m": 1.2727524397911882,
+        "bias_m": -0.18200486376547062,
+        "pearson_r": 0.921958251059024,
+        "delta1": 0.6808126843082466
+      },
+      "tta": false,
+      "per_stratum": {
+        "0-2m": {
+          "n": 137269352,
+          "rmse_m": 1.5071437645961725,
+          "mae_m": 0.4890691611909817,
+          "bias_m": 0.3802967440457969,
+          "pearson_r": 0.3635186032452186,
+          "delta1": 0.7538876631398391
+        },
+        "2-5m": {
+          "n": 22536704,
+          "rmse_m": 2.456179032378541,
+          "mae_m": 1.6749336728763984,
+          "bias_m": 0.29256753862573553,
+          "pearson_r": 0.2656970246915346,
+          "delta1": 0.42146824131869504
+        },
+        "5-10m": {
+          "n": 34847944,
+          "rmse_m": 2.755816567929752,
+          "mae_m": 1.8670039662432492,
+          "bias_m": -0.766161441944001,
+          "pearson_r": 0.3234283555600186,
+          "delta1": 0.6314141517215478
+        },
+        "10-20m": {
+          "n": 18887766,
+          "rmse_m": 4.914241573586936,
+          "mae_m": 3.736030336022093,
+          "bias_m": -2.2195771861077787,
+          "pearson_r": 0.49647881114129,
+          "delta1": 0.527629895457197
+        },
+        "20m+": {
+          "n": 9305357,
+          "rmse_m": 6.241303574281491,
+          "mae_m": 4.633998656308402,
+          "bias_m": -3.3028126023611213,
+          "pearson_r": 0.7011872762923946,
+          "delta1": 0.7268648585970425
+        }
+      },
+      "balanced_rmse_m": 3.5749369025545783,
+      "tall_gt15m": {
+        "n": 15623234,
+        "rmse_m": 5.999210760337975,
+        "mae_m": 4.4982572812685895,
+        "bias_m": -2.9944618963937346,
+        "pearson_r": 0.7757347906096389,
+        "delta1": 0.6603708937598963
+      },
+      "flat_lt1m": {
+        "n": 126934139,
+        "rmse_m": 1.406649018288987,
+        "mae_m": 0.40133614498325415,
+        "bias_m": 0.35503850412530424,
+        "pearson_r": 0.26127042191361255,
+        "delta1": 0.7974669367710447
+      },
+      "tall_pred15m": {
+        "n": 13403211,
+        "rmse_m": 5.9048070240408,
+        "mae_m": 4.246153973467849,
+        "bias_m": -0.07274880985259137,
+        "pearson_r": 0.7294463720255375,
+        "delta1": 0.73010997140909
+      },
+      "per_predicted_stratum": {
+        "0-2m": {
+          "n": 132118056,
+          "rmse_m": 1.2245841336733936,
+          "mae_m": 0.36366593681601345,
+          "bias_m": -0.15378190226069516,
+          "pearson_r": 0.3834615813134187,
+          "delta1": 0.7830456421490186
+        },
+        "2-5m": {
+          "n": 29005661,
+          "rmse_m": 2.9561577841526288,
+          "mae_m": 2.0893253130932523,
+          "bias_m": -0.1941204849455947,
+          "pearson_r": 0.29429054125175746,
+          "delta1": 0.3365554744641055
+        },
+        "5-10m": {
+          "n": 37908363,
+          "rmse_m": 3.220105978401588,
+          "mae_m": 2.1977547489118603,
+          "bias_m": -0.280681284383161,
+          "pearson_r": 0.37359823919820534,
+          "delta1": 0.5949715370194171
+        },
+        "10-20m": {
+          "n": 15526118,
+          "rmse_m": 4.875180177635402,
+          "mae_m": 3.5468357738096437,
+          "bias_m": -0.24967771309889758,
+          "pearson_r": 0.49165701570281345,
+          "delta1": 0.6105186112845464
+        },
+        "20m+": {
+          "n": 8288925,
+          "rmse_m": 6.187485372027648,
+          "mae_m": 4.415318703611181,
+          "bias_m": -0.011413742643678353,
+          "pearson_r": 0.6468542252871302,
+          "delta1": 0.7802320566297801
+        }
+      },
+      "ndsm_30m": {
+        "n": 54032,
+        "rmse_m": 1.1416530717235551,
+        "mae_m": 0.5711566221370509,
+        "bias_m": -0.18074297962572386,
+        "pearson_r": 0.9772040186213188,
+        "delta1": 0.8794603198104827,
+        "actual_block_sizes_m": [
+          30.0
+        ],
+        "protocol": "tile-aligned complete fully-valid block means; bias = pred - GT"
+      },
+      "edge_rmse_m": 3.62667029959361,
+      "edge_band": {
+        "n": 99428840,
+        "rmse_m": 3.62667029959361,
+        "mae_m": 2.3325394319859285,
+        "bias_m": -0.3491777178906817,
+        "pearson_r": 0.8868763936939352,
+        "delta1": 0.44411159780200593
+      },
+      "grad_ratio": 0.38577631454511147,
+      "per_landscape": {
+        "urban": {
+          "n": 120723249,
+          "rmse_m": 3.0921885284702095,
+          "mae_m": 1.6490515415473497,
+          "bias_m": -0.29023209248993015,
+          "pearson_r": 0.9279118750701768,
+          "delta1": 0.6512142578270073,
+          "tiles": 465
+        },
+        "sparse": {
+          "n": 24920651,
+          "rmse_m": 1.3994136997283346,
+          "mae_m": 0.3386275021596926,
+          "bias_m": 0.07133884693376802,
+          "pearson_r": 0.6931040613993055,
+          "delta1": 0.8760924423683796,
+          "tiles": 99
+        },
+        "forested": {
+          "n": 77203223,
+          "rmse_m": 2.060939635175206,
+          "mae_m": 0.9858596425996248,
+          "bias_m": -0.09454669528327929,
+          "pearson_r": 0.7962636958115689,
+          "delta1": 0.6640610457415748,
+          "tiles": 295
+        }
+      },
+      "landscape_rmse_spread_m": 1.692774828741875,
+      "landscape_worst": "urban",
+      "landscape_descriptors": [
+        {
+          "landscape": "urban",
+          "relief_m": 0.07294916361570358,
+          "relief_raw_m": 5.349335193634033,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5532417297363281,
+          "roughness": 0.12185178697109222,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05168551206588745,
+          "relief_raw_m": 6.500959873199463,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.9258232116699219,
+          "roughness": 0.10273932665586472,
+          "n_valid": 260497
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06034190580248833,
+          "relief_raw_m": 1.987339973449707,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5051956176757812,
+          "roughness": 0.149317666888237,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06395425647497177,
+          "relief_raw_m": 1.5946576595306396,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5550270080566406,
+          "roughness": 0.15821345150470734,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04691892862319946,
+          "relief_raw_m": 2.0463366508483887,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4183464050292969,
+          "roughness": 0.12604567408561707,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06937264651060104,
+          "relief_raw_m": 2.886831283569336,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5423469543457031,
+          "roughness": 0.13538052141666412,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04691745340824127,
+          "relief_raw_m": 2.0018365383148193,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.669403076171875,
+          "roughness": 0.14832614362239838,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06326478719711304,
+          "relief_raw_m": 3.0421695709228516,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.366943359375,
+          "roughness": 0.16212160885334015,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.08178655803203583,
+          "relief_raw_m": 2.4546895027160645,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4976005554199219,
+          "roughness": 0.1471347212791443,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06194574758410454,
+          "relief_raw_m": 2.4277188777923584,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6124114990234375,
+          "roughness": 0.14492538571357727,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07584724575281143,
+          "relief_raw_m": 2.1196486949920654,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5402336120605469,
+          "roughness": 0.1372908651828766,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06507033109664917,
+          "relief_raw_m": 2.1474788188934326,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5464706420898438,
+          "roughness": 0.1391257494688034,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.045499250292778015,
+          "relief_raw_m": 2.113858461380005,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7418060302734375,
+          "roughness": 0.1434336155653,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0563976988196373,
+          "relief_raw_m": 2.9789836406707764,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7216796875,
+          "roughness": 0.1452924907207489,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07736730575561523,
+          "relief_raw_m": 1.9407422542572021,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5315742492675781,
+          "roughness": 0.13443899154663086,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05409682169556618,
+          "relief_raw_m": 1.7955679893493652,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5241165161132812,
+          "roughness": 0.15539871156215668,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06346359848976135,
+          "relief_raw_m": 9.214091300964355,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.391876220703125,
+          "roughness": 0.09574590623378754,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0370628722012043,
+          "relief_raw_m": 8.573512077331543,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7616615295410156,
+          "roughness": 0.08814206719398499,
+          "n_valid": 250634
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04634576663374901,
+          "relief_raw_m": 1.416314959526062,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5315933227539062,
+          "roughness": 0.15834200382232666,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07183708995580673,
+          "relief_raw_m": 2.301616907119751,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4846916198730469,
+          "roughness": 0.10279660671949387,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04074367880821228,
+          "relief_raw_m": 2.0759644508361816,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7807121276855469,
+          "roughness": 0.1311827301979065,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0587584562599659,
+          "relief_raw_m": 3.0154805183410645,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6870536804199219,
+          "roughness": 0.12130339443683624,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06310305744409561,
+          "relief_raw_m": 2.201216697692871,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7072792053222656,
+          "roughness": 0.13753806054592133,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.09279143065214157,
+          "relief_raw_m": 6.250307559967041,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6954841613769531,
+          "roughness": 0.10817193984985352,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.024763435125350952,
+          "relief_raw_m": 4.247951507568359,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.9317512512207031,
+          "roughness": 0.06956423819065094,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07163834571838379,
+          "relief_raw_m": 1.0205715894699097,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.34767913818359375,
+          "roughness": 0.1588807851076126,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.09943728893995285,
+          "relief_raw_m": 1.5668320655822754,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.34119415283203125,
+          "roughness": 0.1322333663702011,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06339426338672638,
+          "relief_raw_m": 3.1331169605255127,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7128410339355469,
+          "roughness": 0.1433967500925064,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06244396045804024,
+          "relief_raw_m": 2.4016551971435547,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6725044250488281,
+          "roughness": 0.13730080425739288,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04450111836194992,
+          "relief_raw_m": 8.52710247039795,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.8945541381835938,
+          "roughness": 0.07595475763082504,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.051592059433460236,
+          "relief_raw_m": 1.8151190280914307,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5681838989257812,
+          "roughness": 0.1580333262681961,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.054092276841402054,
+          "relief_raw_m": 1.6998646259307861,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4884376525878906,
+          "roughness": 0.14523211121559143,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07267648726701736,
+          "relief_raw_m": 3.874896287918091,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6082382202148438,
+          "roughness": 0.10890117287635803,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.025332462042570114,
+          "relief_raw_m": 3.0862491130828857,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.95184326171875,
+          "roughness": 0.06998206675052643,
+          "n_valid": 255761
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05859214812517166,
+          "relief_raw_m": 1.2281384468078613,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.404388427734375,
+          "roughness": 0.1635180562734604,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.08663696050643921,
+          "relief_raw_m": 4.311466693878174,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5731048583984375,
+          "roughness": 0.12046585232019424,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0819702297449112,
+          "relief_raw_m": 2.246540069580078,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.2686271667480469,
+          "roughness": 0.12538962066173553,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.08327080309391022,
+          "relief_raw_m": 2.5933196544647217,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.24737548828125,
+          "roughness": 0.15846599638462067,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04739905521273613,
+          "relief_raw_m": 2.0482752323150635,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5882339477539062,
+          "roughness": 0.151912122964859,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0018033706583082676,
+          "relief_raw_m": 2.793104410171509,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.9532394409179688,
+          "roughness": 0.05588115379214287,
+          "n_valid": 250704
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07130096852779388,
+          "relief_raw_m": 1.7862492799758911,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5595016479492188,
+          "roughness": 0.15939782559871674,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06357578933238983,
+          "relief_raw_m": 3.380913734436035,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4505424499511719,
+          "roughness": 0.10744716972112656,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.08714031428098679,
+          "relief_raw_m": 5.138239860534668,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4802665710449219,
+          "roughness": 0.1132018193602562,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.059839699417352676,
+          "relief_raw_m": 2.680354118347168,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6703987121582031,
+          "roughness": 0.13192620873451233,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05646052956581116,
+          "relief_raw_m": 5.394766807556152,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.8460884094238281,
+          "roughness": 0.10369961708784103,
+          "n_valid": 256626
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07630634307861328,
+          "relief_raw_m": 6.777384281158447,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6679153442382812,
+          "roughness": 0.10201095044612885,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05765469744801521,
+          "relief_raw_m": 1.9085317850112915,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.46944427490234375,
+          "roughness": 0.17270562052726746,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06456447392702103,
+          "relief_raw_m": 1.7174278497695923,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4001274108886719,
+          "roughness": 0.15533176064491272,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.052282314747571945,
+          "relief_raw_m": 1.750629186630249,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.632232666015625,
+          "roughness": 0.1545981615781784,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.061466969549655914,
+          "relief_raw_m": 2.500699520111084,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6782455444335938,
+          "roughness": 0.14824172854423523,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04697301983833313,
+          "relief_raw_m": 3.425286293029785,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5245590209960938,
+          "roughness": 0.0978049635887146,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06457450985908508,
+          "relief_raw_m": 2.6845178604125977,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5649032592773438,
+          "roughness": 0.15582016110420227,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05023328214883804,
+          "relief_raw_m": 3.0630927085876465,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6813888549804688,
+          "roughness": 0.1390221118927002,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.038947947323322296,
+          "relief_raw_m": 2.274542808532715,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7329864501953125,
+          "roughness": 0.14812670648097992,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05853156000375748,
+          "relief_raw_m": 1.6336811780929565,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5149688720703125,
+          "roughness": 0.15885722637176514,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0549449659883976,
+          "relief_raw_m": 1.2035629749298096,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5387458801269531,
+          "roughness": 0.13320301473140717,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07457423955202103,
+          "relief_raw_m": 2.0900161266326904,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.43727874755859375,
+          "roughness": 0.1448010951280594,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07006780803203583,
+          "relief_raw_m": 2.758960723876953,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5547943115234375,
+          "roughness": 0.13711489737033844,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05474155768752098,
+          "relief_raw_m": 2.0256712436676025,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5789947509765625,
+          "roughness": 0.15598352253437042,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0723673477768898,
+          "relief_raw_m": 2.3468804359436035,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6980819702148438,
+          "roughness": 0.1296723186969757,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04171261191368103,
+          "relief_raw_m": 5.931067943572998,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.8625450134277344,
+          "roughness": 0.06867408752441406,
+          "n_valid": 242564
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.08054807037115097,
+          "relief_raw_m": 1.6578229665756226,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5612525939941406,
+          "roughness": 0.14746159315109253,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.09470883756875992,
+          "relief_raw_m": 1.416351556777954,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5413169860839844,
+          "roughness": 0.14227811992168427,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07745596766471863,
+          "relief_raw_m": 1.614245057106018,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5095748901367188,
+          "roughness": 0.12449850142002106,
+          "n_valid": 262144
+        }
+      ],
+      "per_class": {
+        "other": {
+          "n": 373730,
+          "rmse_m": 5.797544789677182,
+          "mae_m": 1.8404386174528733,
+          "bias_m": 0.477664007082776,
+          "pearson_r": 0.38334511955913053,
+          "delta1": 0.5749578572766436
+        },
+        "ground": {
+          "n": 41843563,
+          "rmse_m": 1.178347486959962,
+          "mae_m": 0.3123884197195692,
+          "bias_m": 0.0856193880188497,
+          "pearson_r": 0.29593438955728857,
+          "delta1": 0.8179081929519243
+        },
+        "low_veg": {
+          "n": 53353689,
+          "rmse_m": 1.4995320629592381,
+          "mae_m": 0.46864835399682053,
+          "bias_m": 0.272226944498601,
+          "pearson_r": 0.3879626285358667,
+          "delta1": 0.7635671077964262
+        },
+        "building": {
+          "n": 38456881,
+          "rmse_m": 3.0051261983227167,
+          "mae_m": 1.818107803213927,
+          "bias_m": -0.4991448000619988,
+          "pearson_r": 0.8972077206341654,
+          "delta1": 0.6765924672882339
+        },
+        "water": {
+          "n": 3473338,
+          "rmse_m": 0.6750791847511837,
+          "mae_m": 0.07585751338438092,
+          "bias_m": -0.007592744335538184,
+          "pearson_r": 0.7406095590050991,
+          "delta1": 0.9693401563567957
+        },
+        "road": {
+          "n": 36255817,
+          "rmse_m": 2.1689980900643473,
+          "mae_m": 0.8563623774329396,
+          "bias_m": -0.06932195686027456,
+          "pearson_r": 0.8515872131480731,
+          "delta1": 0.7114611980747807
+        },
+        "tree": {
+          "n": 49090105,
+          "rmse_m": 4.089428248668648,
+          "mae_m": 2.925955800351117,
+          "bias_m": -0.7559458488652634,
+          "pearson_r": 0.8900337779225181,
+          "delta1": 0.4350747467335831
+        }
+      },
+      "class_stats": {
+        "other": {
+          "px_frac": 0.0016770689922705443,
+          "mean_gt_height_m": 1.4635611796715287
+        },
+        "ground": {
+          "px_frac": 0.18776801978278176,
+          "mean_gt_height_m": 0.21171286409149898
+        },
+        "low_veg": {
+          "px_frac": 0.23941834330973166,
+          "mean_gt_height_m": 0.26740909223669146
+        },
+        "building": {
+          "px_frac": 0.1725706864970386,
+          "mean_gt_height_m": 8.168026811075068
+        },
+        "water": {
+          "px_frac": 0.015586191794811728,
+          "mean_gt_height_m": 0.09110623891356645
+        },
+        "road": {
+          "px_frac": 0.16269367318688696,
+          "mean_gt_height_m": 1.5483549670524426
+        },
+        "tree": {
+          "px_frac": 0.22028601643647874,
+          "mean_gt_height_m": 9.866471777810336
+        }
+      },
+      "seconds": 146.82,
+      "readout": {
+        "bin": "mean",
+        "head_b_weight": null,
+        "head": "fused",
+        "tta": false,
+        "scales": [
+          1.5
+        ]
+      }
+    },
+    "baseline_d4_zoom125": {
+      "global": {
+        "n": 222847123,
+        "rmse_m": 2.652125453531731,
+        "mae_m": 1.3072788149229362,
+        "bias_m": -0.12997924100637068,
+        "pearson_r": 0.9198323608743959,
+        "delta1": 0.6679672772800392
+      },
+      "tta": true,
+      "per_stratum": {
+        "0-2m": {
+          "n": 137269352,
+          "rmse_m": 1.6143389103939536,
+          "mae_m": 0.5414813359595836,
+          "bias_m": 0.440986871342711,
+          "pearson_r": 0.36131587951594235,
+          "delta1": 0.7341771963781106
+        },
+        "2-5m": {
+          "n": 22536704,
+          "rmse_m": 2.5676483910135364,
+          "mae_m": 1.7511905622330108,
+          "bias_m": 0.43045040050881395,
+          "pearson_r": 0.25706903251634794,
+          "delta1": 0.40711707443998907
+        },
+        "5-10m": {
+          "n": 34847944,
+          "rmse_m": 2.750752691145055,
+          "mae_m": 1.851335069735853,
+          "bias_m": -0.6793006489271444,
+          "pearson_r": 0.3097127341893532,
+          "delta1": 0.6385257333976432
+        },
+        "10-20m": {
+          "n": 18887766,
+          "rmse_m": 4.838340998719623,
+          "mae_m": 3.6944922762820283,
+          "bias_m": -2.27132011166732,
+          "pearson_r": 0.49785960577630395,
+          "delta1": 0.5251450065613901
+        },
+        "20m+": {
+          "n": 9305357,
+          "rmse_m": 6.17920722517404,
+          "mae_m": 4.645984132570842,
+          "bias_m": -3.5063696629178507,
+          "pearson_r": 0.7195065964311601,
+          "delta1": 0.7231701051340642
+        }
+      },
+      "balanced_rmse_m": 3.5900576432892413,
+      "tall_gt15m": {
+        "n": 15623234,
+        "rmse_m": 5.932388944546134,
+        "mae_m": 4.49742322077072,
+        "bias_m": -3.1661909664638554,
+        "pearson_r": 0.7870190692766412,
+        "delta1": 0.6547368489776189
+      },
+      "flat_lt1m": {
+        "n": 126934139,
+        "rmse_m": 1.509595537901521,
+        "mae_m": 0.4512229818106352,
+        "bias_m": 0.4093095598107934,
+        "pearson_r": 0.26352476665421687,
+        "delta1": 0.7760633488836285
+      },
+      "tall_pred15m": {
+        "n": 13263792,
+        "rmse_m": 6.0028985991874855,
+        "mae_m": 4.323429813989424,
+        "bias_m": -0.22974599819180117,
+        "pearson_r": 0.7268338666492806,
+        "delta1": 0.7259071161550181
+      },
+      "per_predicted_stratum": {
+        "0-2m": {
+          "n": 130688917,
+          "rmse_m": 1.1798709540342118,
+          "mae_m": 0.3624719271728949,
+          "bias_m": -0.12145023930139626,
+          "pearson_r": 0.38036503713446784,
+          "delta1": 0.7709798681704586
+        },
+        "2-5m": {
+          "n": 28742895,
+          "rmse_m": 2.940128602447409,
+          "mae_m": 2.1137035350894067,
+          "bias_m": -0.08198288626207097,
+          "pearson_r": 0.29239874130755694,
+          "delta1": 0.32228555961394983
+        },
+        "5-10m": {
+          "n": 39338315,
+          "rmse_m": 3.257203044961291,
+          "mae_m": 2.241919733548571,
+          "bias_m": -0.1495442386221189,
+          "pearson_r": 0.3708140123709339,
+          "delta1": 0.5860359296019669
+        },
+        "10-20m": {
+          "n": 15970303,
+          "rmse_m": 5.025855069251118,
+          "mae_m": 3.68573352905609,
+          "bias_m": -0.1903700272049744,
+          "pearson_r": 0.4907116274571508,
+          "delta1": 0.5911482706370693
+        },
+        "20m+": {
+          "n": 8106693,
+          "rmse_m": 6.246447590616363,
+          "mae_m": 4.458374650397977,
+          "bias_m": -0.2237396668088464,
+          "pearson_r": 0.6464954347682577,
+          "delta1": 0.7818427316786265
+        }
+      },
+      "ndsm_30m": {
+        "n": 54032,
+        "rmse_m": 1.184144022583018,
+        "mae_m": 0.5893076036405412,
+        "bias_m": -0.13078041654833006,
+        "pearson_r": 0.9751256187198496,
+        "delta1": 0.8734453657092094,
+        "actual_block_sizes_m": [
+          30.0
+        ],
+        "protocol": "tile-aligned complete fully-valid block means; bias = pred - GT"
+      },
+      "edge_rmse_m": 3.6587571663970073,
+      "edge_band": {
+        "n": 99428840,
+        "rmse_m": 3.6587571663970073,
+        "mae_m": 2.386771254238611,
+        "bias_m": -0.2675952583254321,
+        "pearson_r": 0.8839968444100363,
+        "delta1": 0.4301917129879017
+      },
+      "grad_ratio": 0.36379037811888204,
+      "per_landscape": {
+        "urban": {
+          "n": 120723249,
+          "rmse_m": 3.0941233390903458,
+          "mae_m": 1.6747949128750101,
+          "bias_m": -0.2880445950287386,
+          "pearson_r": 0.9278961444663826,
+          "delta1": 0.6378225291136755,
+          "tiles": 465
+        },
+        "sparse": {
+          "n": 24920651,
+          "rmse_m": 1.573812161841662,
+          "mae_m": 0.4006508938609061,
+          "bias_m": 0.15377121392064916,
+          "pearson_r": 0.6589603201683146,
+          "delta1": 0.8592877850582635,
+          "tiles": 99
+        },
+        "forested": {
+          "n": 77203223,
+          "rmse_m": 2.129119246644193,
+          "mae_m": 1.0252442242565039,
+          "bias_m": 0.025596090784997933,
+          "pearson_r": 0.7851976270874076,
+          "delta1": 0.6533479437769069,
+          "tiles": 295
+        }
+      },
+      "landscape_rmse_spread_m": 1.5203111772486837,
+      "landscape_worst": "urban",
+      "landscape_descriptors": [
+        {
+          "landscape": "urban",
+          "relief_m": 0.07294916361570358,
+          "relief_raw_m": 5.349335193634033,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5532417297363281,
+          "roughness": 0.12185178697109222,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05168551206588745,
+          "relief_raw_m": 6.500959873199463,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.9258232116699219,
+          "roughness": 0.10273932665586472,
+          "n_valid": 260497
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06034190580248833,
+          "relief_raw_m": 1.987339973449707,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5051956176757812,
+          "roughness": 0.149317666888237,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06395425647497177,
+          "relief_raw_m": 1.5946576595306396,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5550270080566406,
+          "roughness": 0.15821345150470734,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04691892862319946,
+          "relief_raw_m": 2.0463366508483887,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4183464050292969,
+          "roughness": 0.12604567408561707,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06937264651060104,
+          "relief_raw_m": 2.886831283569336,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5423469543457031,
+          "roughness": 0.13538052141666412,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04691745340824127,
+          "relief_raw_m": 2.0018365383148193,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.669403076171875,
+          "roughness": 0.14832614362239838,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06326478719711304,
+          "relief_raw_m": 3.0421695709228516,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.366943359375,
+          "roughness": 0.16212160885334015,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.08178655803203583,
+          "relief_raw_m": 2.4546895027160645,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4976005554199219,
+          "roughness": 0.1471347212791443,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06194574758410454,
+          "relief_raw_m": 2.4277188777923584,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6124114990234375,
+          "roughness": 0.14492538571357727,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07584724575281143,
+          "relief_raw_m": 2.1196486949920654,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5402336120605469,
+          "roughness": 0.1372908651828766,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06507033109664917,
+          "relief_raw_m": 2.1474788188934326,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5464706420898438,
+          "roughness": 0.1391257494688034,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.045499250292778015,
+          "relief_raw_m": 2.113858461380005,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7418060302734375,
+          "roughness": 0.1434336155653,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0563976988196373,
+          "relief_raw_m": 2.9789836406707764,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7216796875,
+          "roughness": 0.1452924907207489,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07736730575561523,
+          "relief_raw_m": 1.9407422542572021,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5315742492675781,
+          "roughness": 0.13443899154663086,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05409682169556618,
+          "relief_raw_m": 1.7955679893493652,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5241165161132812,
+          "roughness": 0.15539871156215668,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06346359848976135,
+          "relief_raw_m": 9.214091300964355,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.391876220703125,
+          "roughness": 0.09574590623378754,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0370628722012043,
+          "relief_raw_m": 8.573512077331543,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7616615295410156,
+          "roughness": 0.08814206719398499,
+          "n_valid": 250634
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04634576663374901,
+          "relief_raw_m": 1.416314959526062,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5315933227539062,
+          "roughness": 0.15834200382232666,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07183708995580673,
+          "relief_raw_m": 2.301616907119751,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4846916198730469,
+          "roughness": 0.10279660671949387,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04074367880821228,
+          "relief_raw_m": 2.0759644508361816,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7807121276855469,
+          "roughness": 0.1311827301979065,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0587584562599659,
+          "relief_raw_m": 3.0154805183410645,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6870536804199219,
+          "roughness": 0.12130339443683624,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06310305744409561,
+          "relief_raw_m": 2.201216697692871,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7072792053222656,
+          "roughness": 0.13753806054592133,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.09279143065214157,
+          "relief_raw_m": 6.250307559967041,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6954841613769531,
+          "roughness": 0.10817193984985352,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.024763435125350952,
+          "relief_raw_m": 4.247951507568359,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.9317512512207031,
+          "roughness": 0.06956423819065094,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07163834571838379,
+          "relief_raw_m": 1.0205715894699097,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.34767913818359375,
+          "roughness": 0.1588807851076126,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.09943728893995285,
+          "relief_raw_m": 1.5668320655822754,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.34119415283203125,
+          "roughness": 0.1322333663702011,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06339426338672638,
+          "relief_raw_m": 3.1331169605255127,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7128410339355469,
+          "roughness": 0.1433967500925064,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06244396045804024,
+          "relief_raw_m": 2.4016551971435547,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6725044250488281,
+          "roughness": 0.13730080425739288,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04450111836194992,
+          "relief_raw_m": 8.52710247039795,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.8945541381835938,
+          "roughness": 0.07595475763082504,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.051592059433460236,
+          "relief_raw_m": 1.8151190280914307,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5681838989257812,
+          "roughness": 0.1580333262681961,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.054092276841402054,
+          "relief_raw_m": 1.6998646259307861,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4884376525878906,
+          "roughness": 0.14523211121559143,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07267648726701736,
+          "relief_raw_m": 3.874896287918091,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6082382202148438,
+          "roughness": 0.10890117287635803,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.025332462042570114,
+          "relief_raw_m": 3.0862491130828857,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.95184326171875,
+          "roughness": 0.06998206675052643,
+          "n_valid": 255761
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05859214812517166,
+          "relief_raw_m": 1.2281384468078613,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.404388427734375,
+          "roughness": 0.1635180562734604,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.08663696050643921,
+          "relief_raw_m": 4.311466693878174,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5731048583984375,
+          "roughness": 0.12046585232019424,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0819702297449112,
+          "relief_raw_m": 2.246540069580078,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.2686271667480469,
+          "roughness": 0.12538962066173553,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.08327080309391022,
+          "relief_raw_m": 2.5933196544647217,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.24737548828125,
+          "roughness": 0.15846599638462067,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04739905521273613,
+          "relief_raw_m": 2.0482752323150635,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5882339477539062,
+          "roughness": 0.151912122964859,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0018033706583082676,
+          "relief_raw_m": 2.793104410171509,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.9532394409179688,
+          "roughness": 0.05588115379214287,
+          "n_valid": 250704
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07130096852779388,
+          "relief_raw_m": 1.7862492799758911,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5595016479492188,
+          "roughness": 0.15939782559871674,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06357578933238983,
+          "relief_raw_m": 3.380913734436035,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4505424499511719,
+          "roughness": 0.10744716972112656,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.08714031428098679,
+          "relief_raw_m": 5.138239860534668,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4802665710449219,
+          "roughness": 0.1132018193602562,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.059839699417352676,
+          "relief_raw_m": 2.680354118347168,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6703987121582031,
+          "roughness": 0.13192620873451233,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05646052956581116,
+          "relief_raw_m": 5.394766807556152,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.8460884094238281,
+          "roughness": 0.10369961708784103,
+          "n_valid": 256626
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07630634307861328,
+          "relief_raw_m": 6.777384281158447,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6679153442382812,
+          "roughness": 0.10201095044612885,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05765469744801521,
+          "relief_raw_m": 1.9085317850112915,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.46944427490234375,
+          "roughness": 0.17270562052726746,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06456447392702103,
+          "relief_raw_m": 1.7174278497695923,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4001274108886719,
+          "roughness": 0.15533176064491272,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.052282314747571945,
+          "relief_raw_m": 1.750629186630249,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.632232666015625,
+          "roughness": 0.1545981615781784,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.061466969549655914,
+          "relief_raw_m": 2.500699520111084,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6782455444335938,
+          "roughness": 0.14824172854423523,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04697301983833313,
+          "relief_raw_m": 3.425286293029785,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5245590209960938,
+          "roughness": 0.0978049635887146,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06457450985908508,
+          "relief_raw_m": 2.6845178604125977,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5649032592773438,
+          "roughness": 0.15582016110420227,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05023328214883804,
+          "relief_raw_m": 3.0630927085876465,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6813888549804688,
+          "roughness": 0.1390221118927002,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.038947947323322296,
+          "relief_raw_m": 2.274542808532715,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7329864501953125,
+          "roughness": 0.14812670648097992,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05853156000375748,
+          "relief_raw_m": 1.6336811780929565,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5149688720703125,
+          "roughness": 0.15885722637176514,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0549449659883976,
+          "relief_raw_m": 1.2035629749298096,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5387458801269531,
+          "roughness": 0.13320301473140717,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07457423955202103,
+          "relief_raw_m": 2.0900161266326904,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.43727874755859375,
+          "roughness": 0.1448010951280594,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07006780803203583,
+          "relief_raw_m": 2.758960723876953,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5547943115234375,
+          "roughness": 0.13711489737033844,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05474155768752098,
+          "relief_raw_m": 2.0256712436676025,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5789947509765625,
+          "roughness": 0.15598352253437042,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0723673477768898,
+          "relief_raw_m": 2.3468804359436035,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6980819702148438,
+          "roughness": 0.1296723186969757,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04171261191368103,
+          "relief_raw_m": 5.931067943572998,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.8625450134277344,
+          "roughness": 0.06867408752441406,
+          "n_valid": 242564
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.08054807037115097,
+          "relief_raw_m": 1.6578229665756226,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5612525939941406,
+          "roughness": 0.14746159315109253,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.09470883756875992,
+          "relief_raw_m": 1.416351556777954,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5413169860839844,
+          "roughness": 0.14227811992168427,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07745596766471863,
+          "relief_raw_m": 1.614245057106018,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5095748901367188,
+          "roughness": 0.12449850142002106,
+          "n_valid": 262144
+        }
+      ],
+      "per_class": {
+        "other": {
+          "n": 373730,
+          "rmse_m": 6.229884012014835,
+          "mae_m": 2.1123803445523626,
+          "bias_m": 0.8469339520236845,
+          "pearson_r": 0.3675358678707102,
+          "delta1": 0.48220908142241725
+        },
+        "ground": {
+          "n": 41843563,
+          "rmse_m": 1.225748217718092,
+          "mae_m": 0.3415910356381031,
+          "bias_m": 0.11906657285969288,
+          "pearson_r": 0.2819806933189968,
+          "delta1": 0.7971928681121156
+        },
+        "low_veg": {
+          "n": 53353689,
+          "rmse_m": 1.5532325797555453,
+          "mae_m": 0.5038178983799277,
+          "bias_m": 0.3187875241382769,
+          "pearson_r": 0.38613959827866906,
+          "delta1": 0.7445165225594804
+        },
+        "building": {
+          "n": 38456881,
+          "rmse_m": 2.999869702234845,
+          "mae_m": 1.8195322566488383,
+          "bias_m": -0.42441047650885405,
+          "pearson_r": 0.8966178899231043,
+          "delta1": 0.6771752238565577
+        },
+        "water": {
+          "n": 3473338,
+          "rmse_m": 0.711835599857432,
+          "mae_m": 0.09636834150425434,
+          "bias_m": 0.015953234176609713,
+          "pearson_r": 0.7279257334534964,
+          "delta1": 0.9513373014661977
+        },
+        "road": {
+          "n": 36255817,
+          "rmse_m": 2.179396687640757,
+          "mae_m": 0.8814198522850095,
+          "bias_m": -0.044460732924947684,
+          "pearson_r": 0.8495638464050467,
+          "delta1": 0.6964376226854851
+        },
+        "tree": {
+          "n": 49090105,
+          "rmse_m": 4.139830744334942,
+          "mae_m": 2.996430366542093,
+          "bias_m": -0.6802721685787156,
+          "pearson_r": 0.8853624451803982,
+          "delta1": 0.427744022955339
+        }
+      },
+      "class_stats": {
+        "other": {
+          "px_frac": 0.0016770689922705443,
+          "mean_gt_height_m": 1.4635611796715287
+        },
+        "ground": {
+          "px_frac": 0.18776801978278176,
+          "mean_gt_height_m": 0.21171286409149898
+        },
+        "low_veg": {
+          "px_frac": 0.23941834330973166,
+          "mean_gt_height_m": 0.26740909223669146
+        },
+        "building": {
+          "px_frac": 0.1725706864970386,
+          "mean_gt_height_m": 8.168026811075068
+        },
+        "water": {
+          "px_frac": 0.015586191794811728,
+          "mean_gt_height_m": 0.09110623891356645
+        },
+        "road": {
+          "px_frac": 0.16269367318688696,
+          "mean_gt_height_m": 1.5483549670524426
+        },
+        "tree": {
+          "px_frac": 0.22028601643647874,
+          "mean_gt_height_m": 9.866471777810336
+        }
+      },
+      "seconds": 637.56,
+      "readout": {
+        "bin": "mean",
+        "head_b_weight": null,
+        "head": "fused",
+        "tta": true,
+        "scales": [
+          1.25
+        ]
+      }
+    },
+    "baseline_d4_zoom150": {
+      "global": {
+        "n": 222847123,
+        "rmse_m": 2.5904203396852234,
+        "mae_m": 1.2637964136741344,
+        "bias_m": -0.1945628501906655,
+        "pearson_r": 0.9239841856365293,
+        "delta1": 0.6795340364344753
+      },
+      "tta": true,
+      "per_stratum": {
+        "0-2m": {
+          "n": 137269352,
+          "rmse_m": 1.4641161379102148,
+          "mae_m": 0.48403899899905267,
+          "bias_m": 0.37814750970850936,
+          "pearson_r": 0.3724307811998311,
+          "delta1": 0.7508163074886519
+        },
+        "2-5m": {
+          "n": 22536704,
+          "rmse_m": 2.421703157887837,
+          "mae_m": 1.654896639145523,
+          "bias_m": 0.2979272918422411,
+          "pearson_r": 0.2733190158168459,
+          "delta1": 0.4232320751073449
+        },
+        "5-10m": {
+          "n": 34847944,
+          "rmse_m": 2.7245684701148365,
+          "mae_m": 1.8433327923584968,
+          "bias_m": -0.7625011577374727,
+          "pearson_r": 0.3220612029969672,
+          "delta1": 0.6362977109926485
+        },
+        "10-20m": {
+          "n": 18887766,
+          "rmse_m": 4.870821840663729,
+          "mae_m": 3.7173115104988135,
+          "bias_m": -2.268285135981259,
+          "pearson_r": 0.50107331351332,
+          "delta1": 0.5249593837619547
+        },
+        "20m+": {
+          "n": 9305357,
+          "rmse_m": 6.238416847333224,
+          "mae_m": 4.66889035227471,
+          "bias_m": -3.4996720384911577,
+          "pearson_r": 0.7080729412578565,
+          "delta1": 0.7244111107182669
+        }
+      },
+      "balanced_rmse_m": 3.5439252907819685,
+      "tall_gt15m": {
+        "n": 15623234,
+        "rmse_m": 5.9796741064395595,
+        "mae_m": 4.51155387496837,
+        "bias_m": -3.1384025428902387,
+        "pearson_r": 0.7797003444613332,
+        "delta1": 0.6580211241795393
+      },
+      "flat_lt1m": {
+        "n": 126934139,
+        "rmse_m": 1.3619797699141132,
+        "mae_m": 0.3980185329879329,
+        "bias_m": 0.35321089995770377,
+        "pearson_r": 0.26904475779567405,
+        "delta1": 0.7935309349677788
+      },
+      "tall_pred15m": {
+        "n": 13264016,
+        "rmse_m": 5.811750257321562,
+        "mae_m": 4.213118600122346,
+        "bias_m": -0.3246909542979984,
+        "pearson_r": 0.734552949684457,
+        "delta1": 0.733648617432307
+      },
+      "per_predicted_stratum": {
+        "0-2m": {
+          "n": 132027326,
+          "rmse_m": 1.1982950171251645,
+          "mae_m": 0.35840938451015386,
+          "bias_m": -0.13958247262505433,
+          "pearson_r": 0.38767785545082534,
+          "delta1": 0.7804474052591204
+        },
+        "2-5m": {
+          "n": 28935834,
+          "rmse_m": 2.94348318226271,
+          "mae_m": 2.086463654637661,
+          "bias_m": -0.1820157095532212,
+          "pearson_r": 0.29478149239166884,
+          "delta1": 0.33562993207660785
+        },
+        "5-10m": {
+          "n": 38295741,
+          "rmse_m": 3.205502420965457,
+          "mae_m": 2.186961444601543,
+          "bias_m": -0.3006821992981648,
+          "pearson_r": 0.38276305452972986,
+          "delta1": 0.5969560427098146
+        },
+        "10-20m": {
+          "n": 15399509,
+          "rmse_m": 4.815018504057101,
+          "mae_m": 3.5197681711327493,
+          "bias_m": -0.36634157297517955,
+          "pearson_r": 0.5039340271985698,
+          "delta1": 0.6100455540498076
+        },
+        "20m+": {
+          "n": 8188713,
+          "rmse_m": 6.09855050807427,
+          "mae_m": 4.394583806816741,
+          "bias_m": -0.30602690016772266,
+          "pearson_r": 0.6540505154641626,
+          "delta1": 0.784593745073249
+        }
+      },
+      "ndsm_30m": {
+        "n": 54032,
+        "rmse_m": 1.1153293185760864,
+        "mae_m": 0.5642217766492039,
+        "bias_m": -0.19382196876999702,
+        "pearson_r": 0.9784035923363692,
+        "delta1": 0.8829397394136808,
+        "actual_block_sizes_m": [
+          30.0
+        ],
+        "protocol": "tile-aligned complete fully-valid block means; bias = pred - GT"
+      },
+      "edge_rmse_m": 3.5964186668613145,
+      "edge_band": {
+        "n": 99428840,
+        "rmse_m": 3.5964186668613145,
+        "mae_m": 2.3162869272311735,
+        "bias_m": -0.37082157943629485,
+        "pearson_r": 0.8887856514380642,
+        "delta1": 0.44384541748651596
+      },
+      "grad_ratio": 0.3779060626743122,
+      "per_landscape": {
+        "urban": {
+          "n": 120723249,
+          "rmse_m": 3.0612047474382247,
+          "mae_m": 1.6426759116006402,
+          "bias_m": -0.3094050482917265,
+          "pearson_r": 0.9295982237744723,
+          "delta1": 0.6485674105739152,
+          "tiles": 465
+        },
+        "sparse": {
+          "n": 24920651,
+          "rmse_m": 1.2531025451823474,
+          "mae_m": 0.32085646375850563,
+          "bias_m": 0.05533722948436153,
+          "pearson_r": 0.7358332054966243,
+          "delta1": 0.8759663621949523,
+          "tiles": 99
+        },
+        "forested": {
+          "n": 77203223,
+          "rmse_m": 2.051556779471564,
+          "mae_m": 0.9757140552035349,
+          "bias_m": -0.09564922573475179,
+          "pearson_r": 0.7981997719347276,
+          "delta1": 0.6645498206726421,
+          "tiles": 295
+        }
+      },
+      "landscape_rmse_spread_m": 1.8081022022558773,
+      "landscape_worst": "urban",
+      "landscape_descriptors": [
+        {
+          "landscape": "urban",
+          "relief_m": 0.07294916361570358,
+          "relief_raw_m": 5.349335193634033,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5532417297363281,
+          "roughness": 0.12185178697109222,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05168551206588745,
+          "relief_raw_m": 6.500959873199463,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.9258232116699219,
+          "roughness": 0.10273932665586472,
+          "n_valid": 260497
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06034190580248833,
+          "relief_raw_m": 1.987339973449707,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5051956176757812,
+          "roughness": 0.149317666888237,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06395425647497177,
+          "relief_raw_m": 1.5946576595306396,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5550270080566406,
+          "roughness": 0.15821345150470734,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04691892862319946,
+          "relief_raw_m": 2.0463366508483887,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4183464050292969,
+          "roughness": 0.12604567408561707,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06937264651060104,
+          "relief_raw_m": 2.886831283569336,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5423469543457031,
+          "roughness": 0.13538052141666412,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04691745340824127,
+          "relief_raw_m": 2.0018365383148193,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.669403076171875,
+          "roughness": 0.14832614362239838,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06326478719711304,
+          "relief_raw_m": 3.0421695709228516,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.366943359375,
+          "roughness": 0.16212160885334015,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.08178655803203583,
+          "relief_raw_m": 2.4546895027160645,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4976005554199219,
+          "roughness": 0.1471347212791443,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06194574758410454,
+          "relief_raw_m": 2.4277188777923584,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6124114990234375,
+          "roughness": 0.14492538571357727,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07584724575281143,
+          "relief_raw_m": 2.1196486949920654,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5402336120605469,
+          "roughness": 0.1372908651828766,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06507033109664917,
+          "relief_raw_m": 2.1474788188934326,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5464706420898438,
+          "roughness": 0.1391257494688034,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.045499250292778015,
+          "relief_raw_m": 2.113858461380005,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7418060302734375,
+          "roughness": 0.1434336155653,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0563976988196373,
+          "relief_raw_m": 2.9789836406707764,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7216796875,
+          "roughness": 0.1452924907207489,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07736730575561523,
+          "relief_raw_m": 1.9407422542572021,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5315742492675781,
+          "roughness": 0.13443899154663086,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05409682169556618,
+          "relief_raw_m": 1.7955679893493652,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5241165161132812,
+          "roughness": 0.15539871156215668,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06346359848976135,
+          "relief_raw_m": 9.214091300964355,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.391876220703125,
+          "roughness": 0.09574590623378754,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0370628722012043,
+          "relief_raw_m": 8.573512077331543,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7616615295410156,
+          "roughness": 0.08814206719398499,
+          "n_valid": 250634
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04634576663374901,
+          "relief_raw_m": 1.416314959526062,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5315933227539062,
+          "roughness": 0.15834200382232666,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07183708995580673,
+          "relief_raw_m": 2.301616907119751,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4846916198730469,
+          "roughness": 0.10279660671949387,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04074367880821228,
+          "relief_raw_m": 2.0759644508361816,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7807121276855469,
+          "roughness": 0.1311827301979065,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0587584562599659,
+          "relief_raw_m": 3.0154805183410645,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6870536804199219,
+          "roughness": 0.12130339443683624,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06310305744409561,
+          "relief_raw_m": 2.201216697692871,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7072792053222656,
+          "roughness": 0.13753806054592133,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.09279143065214157,
+          "relief_raw_m": 6.250307559967041,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6954841613769531,
+          "roughness": 0.10817193984985352,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.024763435125350952,
+          "relief_raw_m": 4.247951507568359,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.9317512512207031,
+          "roughness": 0.06956423819065094,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07163834571838379,
+          "relief_raw_m": 1.0205715894699097,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.34767913818359375,
+          "roughness": 0.1588807851076126,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.09943728893995285,
+          "relief_raw_m": 1.5668320655822754,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.34119415283203125,
+          "roughness": 0.1322333663702011,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06339426338672638,
+          "relief_raw_m": 3.1331169605255127,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7128410339355469,
+          "roughness": 0.1433967500925064,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06244396045804024,
+          "relief_raw_m": 2.4016551971435547,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6725044250488281,
+          "roughness": 0.13730080425739288,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04450111836194992,
+          "relief_raw_m": 8.52710247039795,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.8945541381835938,
+          "roughness": 0.07595475763082504,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.051592059433460236,
+          "relief_raw_m": 1.8151190280914307,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5681838989257812,
+          "roughness": 0.1580333262681961,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.054092276841402054,
+          "relief_raw_m": 1.6998646259307861,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4884376525878906,
+          "roughness": 0.14523211121559143,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07267648726701736,
+          "relief_raw_m": 3.874896287918091,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6082382202148438,
+          "roughness": 0.10890117287635803,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.025332462042570114,
+          "relief_raw_m": 3.0862491130828857,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.95184326171875,
+          "roughness": 0.06998206675052643,
+          "n_valid": 255761
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05859214812517166,
+          "relief_raw_m": 1.2281384468078613,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.404388427734375,
+          "roughness": 0.1635180562734604,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.08663696050643921,
+          "relief_raw_m": 4.311466693878174,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5731048583984375,
+          "roughness": 0.12046585232019424,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0819702297449112,
+          "relief_raw_m": 2.246540069580078,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.2686271667480469,
+          "roughness": 0.12538962066173553,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.08327080309391022,
+          "relief_raw_m": 2.5933196544647217,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.24737548828125,
+          "roughness": 0.15846599638462067,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04739905521273613,
+          "relief_raw_m": 2.0482752323150635,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5882339477539062,
+          "roughness": 0.151912122964859,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0018033706583082676,
+          "relief_raw_m": 2.793104410171509,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.9532394409179688,
+          "roughness": 0.05588115379214287,
+          "n_valid": 250704
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07130096852779388,
+          "relief_raw_m": 1.7862492799758911,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5595016479492188,
+          "roughness": 0.15939782559871674,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06357578933238983,
+          "relief_raw_m": 3.380913734436035,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4505424499511719,
+          "roughness": 0.10744716972112656,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.08714031428098679,
+          "relief_raw_m": 5.138239860534668,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4802665710449219,
+          "roughness": 0.1132018193602562,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.059839699417352676,
+          "relief_raw_m": 2.680354118347168,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6703987121582031,
+          "roughness": 0.13192620873451233,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05646052956581116,
+          "relief_raw_m": 5.394766807556152,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.8460884094238281,
+          "roughness": 0.10369961708784103,
+          "n_valid": 256626
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07630634307861328,
+          "relief_raw_m": 6.777384281158447,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6679153442382812,
+          "roughness": 0.10201095044612885,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05765469744801521,
+          "relief_raw_m": 1.9085317850112915,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.46944427490234375,
+          "roughness": 0.17270562052726746,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06456447392702103,
+          "relief_raw_m": 1.7174278497695923,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.4001274108886719,
+          "roughness": 0.15533176064491272,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.052282314747571945,
+          "relief_raw_m": 1.750629186630249,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.632232666015625,
+          "roughness": 0.1545981615781784,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.061466969549655914,
+          "relief_raw_m": 2.500699520111084,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6782455444335938,
+          "roughness": 0.14824172854423523,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04697301983833313,
+          "relief_raw_m": 3.425286293029785,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5245590209960938,
+          "roughness": 0.0978049635887146,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.06457450985908508,
+          "relief_raw_m": 2.6845178604125977,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5649032592773438,
+          "roughness": 0.15582016110420227,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05023328214883804,
+          "relief_raw_m": 3.0630927085876465,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6813888549804688,
+          "roughness": 0.1390221118927002,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.038947947323322296,
+          "relief_raw_m": 2.274542808532715,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.7329864501953125,
+          "roughness": 0.14812670648097992,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05853156000375748,
+          "relief_raw_m": 1.6336811780929565,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5149688720703125,
+          "roughness": 0.15885722637176514,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0549449659883976,
+          "relief_raw_m": 1.2035629749298096,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5387458801269531,
+          "roughness": 0.13320301473140717,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07457423955202103,
+          "relief_raw_m": 2.0900161266326904,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.43727874755859375,
+          "roughness": 0.1448010951280594,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07006780803203583,
+          "relief_raw_m": 2.758960723876953,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5547943115234375,
+          "roughness": 0.13711489737033844,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.05474155768752098,
+          "relief_raw_m": 2.0256712436676025,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5789947509765625,
+          "roughness": 0.15598352253437042,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.0723673477768898,
+          "relief_raw_m": 2.3468804359436035,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.6980819702148438,
+          "roughness": 0.1296723186969757,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.04171261191368103,
+          "relief_raw_m": 5.931067943572998,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.8625450134277344,
+          "roughness": 0.06867408752441406,
+          "n_valid": 242564
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.08054807037115097,
+          "relief_raw_m": 1.6578229665756226,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5612525939941406,
+          "roughness": 0.14746159315109253,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.09470883756875992,
+          "relief_raw_m": 1.416351556777954,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5413169860839844,
+          "roughness": 0.14227811992168427,
+          "n_valid": 262144
+        },
+        {
+          "landscape": "urban",
+          "relief_m": 0.07745596766471863,
+          "relief_raw_m": 1.614245057106018,
+          "relief_from": "ndsm_ground",
+          "frac_tall": 0.5095748901367188,
+          "roughness": 0.12449850142002106,
+          "n_valid": 262144
+        }
+      ],
+      "per_class": {
+        "other": {
+          "n": 373730,
+          "rmse_m": 6.087169894808272,
+          "mae_m": 1.8297257397973148,
+          "bias_m": 0.45543770959968743,
+          "pearson_r": 0.3818412270583253,
+          "delta1": 0.5818344794370267
+        },
+        "ground": {
+          "n": 41843563,
+          "rmse_m": 1.1787246972629484,
+          "mae_m": 0.3137129942600546,
+          "bias_m": 0.08731086220354042,
+          "pearson_r": 0.29137508903611137,
+          "delta1": 0.8134565165973079
+        },
+        "low_veg": {
+          "n": 53353689,
+          "rmse_m": 1.4921891031095735,
+          "mae_m": 0.4665068444921577,
+          "bias_m": 0.2732948315006227,
+          "pearson_r": 0.3896921971925427,
+          "delta1": 0.7616804341308059
+        },
+        "building": {
+          "n": 38456881,
+          "rmse_m": 2.9195348782780104,
+          "mae_m": 1.798385001781484,
+          "bias_m": -0.5245496957458969,
+          "pearson_r": 0.9046373953415606,
+          "delta1": 0.6777613608342289
+        },
+        "water": {
+          "n": 3473338,
+          "rmse_m": 0.6926079318818379,
+          "mae_m": 0.07729502765763241,
+          "bias_m": -0.004698482057477025,
+          "pearson_r": 0.7366931876411189,
+          "delta1": 0.9694371811784513
+        },
+        "road": {
+          "n": 36255817,
+          "rmse_m": 2.1438202658215877,
+          "mae_m": 0.8524609515916487,
+          "bias_m": -0.06843675333811518,
+          "pearson_r": 0.8548745118971198,
+          "delta1": 0.7073469065667448
+        },
+        "tree": {
+          "n": 49090105,
+          "rmse_m": 4.058267202444501,
+          "mae_m": 2.9048098977298324,
+          "bias_m": -0.7963432162552666,
+          "pearson_r": 0.8917482628099945,
+          "delta1": 0.4371790404603942
+        }
+      },
+      "class_stats": {
+        "other": {
+          "px_frac": 0.0016770689922705443,
+          "mean_gt_height_m": 1.4635611796715287
+        },
+        "ground": {
+          "px_frac": 0.18776801978278176,
+          "mean_gt_height_m": 0.21171286409149898
+        },
+        "low_veg": {
+          "px_frac": 0.23941834330973166,
+          "mean_gt_height_m": 0.26740909223669146
+        },
+        "building": {
+          "px_frac": 0.1725706864970386,
+          "mean_gt_height_m": 8.168026811075068
+        },
+        "water": {
+          "px_frac": 0.015586191794811728,
+          "mean_gt_height_m": 0.09110623891356645
+        },
+        "road": {
+          "px_frac": 0.16269367318688696,
+          "mean_gt_height_m": 1.5483549670524426
+        },
+        "tree": {
+          "px_frac": 0.22028601643647874,
+          "mean_gt_height_m": 9.866471777810336
+        }
+      },
+      "seconds": 960.38,
+      "readout": {
+        "bin": "mean",
+        "head_b_weight": null,
+        "head": "fused",
+        "tta": true,
+        "scales": [
+          1.5
+        ]
+      }
+    }
+  }
+}

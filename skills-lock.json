@@ -42,6 +42,11 @@
       "sourceType": "github",
       "skillPath": "lightning-studios/SKILL.md",
       "computedHash": "f05b3c8deceaf97a97269d41915f0f29dcf7c1e598f65e4c05fe37354c210bc4"
+    },
+    "ui-taste": {
+      "source": "uizze.sh",
+      "sourceType": "well-known",
+      "computedHash": "9b73951ae54b7d1eb81e69bb2f47d1622b3813bbefbd6c0aaa36dfcf938f1f27"
     }
   }
 }
