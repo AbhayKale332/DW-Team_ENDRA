@@ -1,0 +1,62 @@
+{
+  "stem": "BART_2024_319000_4873000_r0_c0",
+  "site": "BART",
+  "month": "2024-08",
+  "easting": 319000,
+  "northing": 4873000,
+  "row_offset_px": 0,
+  "col_offset_px": 0,
+  "crs": "EPSG:32619",
+  "gsd_m": 0.5,
+  "source_store": "/mnt/depthwizard-data/kin/datasets/abhaydkale232/depthwizard-neon/val",
+  "shard": "shard_000",
+  "row": 4,
+  "reference_role": "lidar_ground_truth",
+  "folder": "dsm_ground_truth/neon_BART_2024_319000_4873000_r0_c0",
+  "type": "DSM",
+  "input_shape": [
+    1024,
+    1024
+  ],
+  "reference_shape": [
+    512,
+    512
+  ],
+  "reference_gsd_m": 1.0,
+  "vertical_datum": "NAVD88 (Geoid12A realization)",
+  "reference_product": "DP3.30024.001",
+  "source_files": [
+    {
+      "site": "BART",
+      "month": "2024-08",
+      "product": "DP3.30024.001",
+      "file": "NEON_D01_BART_DP3_319000_4873000_DSM.tif",
+      "size_bytes": 3173663,
+      "source_crc32c": "bbf327b1",
+      "sha256": "1b97526d9552d72f9349e024f4c2f97a2d3c5b8a6f2a1f86743ff1f2cb06bfe5"
+    },
+    {
+      "site": "BART",
+      "month": "2024-08",
+      "product": "DP3.30024.001",
+      "file": "NEON_D01_BART_DP3_319000_4873000_DTM.tif",
+      "size_bytes": 3182467,
+      "source_crc32c": "ec298993",
+      "sha256": "5ef557c7b89390bb6d89027e94a7ffab4ed24fc6b6f5401ac4d5e5908ad4c576"
+    }
+  ],
+  "valid_fraction": 0.9999885559082031,
+  "height_range_m": [
+    421.322998046875,
+    607.10302734375
+  ],
+  "citation": "https://data.neonscience.org/data-products/DP3.30024.001",
+  "download_date": "2026-10-03",
+  "native_crop_window": [
+    0,
+    0,
+    512,
+    512
+  ],
+  "note": "RGB exported from the Modal validation store. DSM/DTM freshly downloaded from NEON; cropped at native 1 m resolution. nDSM reference = LiDAR DSM minus LiDAR DTM."
+}

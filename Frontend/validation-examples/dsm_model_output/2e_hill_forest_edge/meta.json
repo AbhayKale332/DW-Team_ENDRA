@@ -1,0 +1,155 @@
+{
+  "stem": "2e_hill_forest_edge",
+  "product": "nDSM",
+  "units": "metres_above_ground",
+  "height_min_m": 0.009993979707360268,
+  "height_max_m": 6.016075134277344,
+  "height_mean_m": 1.3165878057479858,
+  "height_median_m": 1.1897521018981934,
+  "frac_below_1m": 0.44978904724121094,
+  "size_px": [
+    1024,
+    1024
+  ],
+  "scene": {
+    "path": "/mnt/depthwizard-data/cartosat_test/cartosat_2S_Sample/testing_crops/2e_hill_forest_edge.tif",
+    "width": 1024,
+    "height": 1024,
+    "gsd_m": 0.6,
+    "gsd_source": "geotiff",
+    "georeferenced": true,
+    "crs": "EPSG:32644",
+    "crs_epsg": 32644,
+    "transform": [
+      0.6,
+      0.0,
+      209749.19999999998,
+      0.0,
+      -0.6,
+      1729861.8
+    ],
+    "valid_frac": 1.0,
+    "source": {
+      "inputs": [
+        "/mnt/depthwizard-data/cartosat_test/cartosat_2S_Sample/testing_crops/2e_hill_forest_edge.tif"
+      ],
+      "rgb_bands": [
+        3,
+        2,
+        1
+      ],
+      "pansharpened": false
+    }
+  },
+  "preproc": {
+    "encoder_model_id": "facebook/dinov3-vitl16-pretrain-sat493m",
+    "mean": [
+      0.43,
+      0.411,
+      0.296
+    ],
+    "std": [
+      0.213,
+      0.156,
+      0.143
+    ],
+    "canonical_gsd_m": 0.5,
+    "tile_size": 512,
+    "patch": 16,
+    "radiometric_stretch": true,
+    "stretch_lo_pct": 2.0,
+    "stretch_hi_pct": 98.0,
+    "target": "nDSM_agl_metres",
+    "version": "v3"
+  },
+  "vertical_datum": "EGM2008",
+  "files": [
+    "rgb.png",
+    "ndsm16.png",
+    "ndsm_m.npy",
+    "dsm_m.npy",
+    "dtm_m.npy",
+    "ndsm_std_m.npy",
+    "shadow_img.png"
+  ],
+  "ndsm16_encode": "height_m = height_min_m + (png16/65535)*(height_max_m-height_min_m)",
+  "uncertainty": {
+    "std_median_m": 1.2732694149017334,
+    "std_p90_m": 1.6411795616149902,
+    "std_max_m": 3.829658269882202,
+    "confident_threshold_m": 1.2732694149017334,
+    "confident_frac": 0.5,
+    "valid_px": 1048576,
+    "rule": "confident = ndsm_std_m <= confident_threshold_m (max(1 m, scene median spread))"
+  },
+  "dsm_min_m": 316.0539245605469,
+  "dsm_max_m": 441.62164306640625,
+  "windowed": {
+    "band_rows": 512,
+    "halo_px": 427,
+    "overview_step": 1
+  },
+  "full_resolution": {
+    "ndsm": "/mnt/depthwizard-results/cartosat_benchmark/scenes/2e_hill_forest_edge/ndsm_m.tif",
+    "seg": "/mnt/depthwizard-results/cartosat_benchmark/scenes/2e_hill_forest_edge/seg.tif",
+    "std": "/mnt/depthwizard-results/cartosat_benchmark/scenes/2e_hill_forest_edge/ndsm_std_m.tif",
+    "dsm": "/mnt/depthwizard-results/cartosat_benchmark/scenes/2e_hill_forest_edge/dsm_m.tif",
+    "dtm": "/mnt/depthwizard-results/cartosat_benchmark/scenes/2e_hill_forest_edge/dtm_m.tif"
+  },
+  "full_resolution_stats": {
+    "height_min_m": 0.009993979707360268,
+    "height_max_m": 6.016075134277344,
+    "height_mean_m": 1.3165878057479858,
+    "frac_below_1m": 0.44978904724121094,
+    "valid_px": 1048576
+  },
+  "calibration": {
+    "mode": "dem_anchored",
+    "detail_gain": 1.0,
+    "cell_px": 50.0,
+    "cells": [
+      21,
+      21
+    ],
+    "tobler_residual_rms_m": [
+      0.3979551004506682,
+      0.08778579121670088,
+      0.04099376403969208,
+      0.022578645587864096,
+      0.01354035369272137,
+      0.008571946288272618,
+      0.0056266495313362025,
+      0.0037848554869326628,
+      0.0025904714012390797,
+      0.0017952917758136736,
+      0.001255846802708214,
+      0.0008847929564420908,
+      0.0006269969658333697,
+      0.00044679269007399475,
+      0.00031982089883572174,
+      0.00022887496084452325,
+      0.0001651627592267323,
+      0.00011885510498296476,
+      8.668870368517493e-05,
+      6.309187569027704e-05
+    ]
+  },
+  "dem": {
+    "source": "copernicus30",
+    "files": [
+      "/mnt/depthwizard-results/cartosat_benchmark/dem_cache/copernicus30_78.28_15.61_78.31_15.65.tif"
+    ],
+    "coverage": 1.0,
+    "note": "",
+    "datum": "EGM2008",
+    "min_m": 317.5328063964844,
+    "max_m": 438.6866149902344
+  },
+  "sun": {
+    "azimuth_deg": 125.0,
+    "elevation_deg": 15.0,
+    "shadow_iou": 0.21237008720582964,
+    "source": "fit",
+    "image_shadow_frac": 0.41901302337646484
+  }
+}

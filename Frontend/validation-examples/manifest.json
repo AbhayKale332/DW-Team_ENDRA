@@ -1,0 +1,224 @@
+{
+  "container_id": "ta-01M40Y06K6143RHDGADD4Y3VMS",
+  "environment": "gpu",
+  "examples": [
+    {
+      "folder": "ndsm_ground_truth/gamus_DC_02_26",
+      "type": "nDSM",
+      "reference_role": "dataset_ground_truth",
+      "source_store": "/mnt/depthwizard-data/kin/datasets/abhaydkale232/depthwizard-gamus/val/val",
+      "shard": "shard_000",
+      "row": 0,
+      "stem": "DC_02_26",
+      "shape": [
+        1024,
+        1024
+      ],
+      "gsd_m": 0.25,
+      "valid_fraction": 1.0,
+      "height_range_m": [
+        0.0,
+        41.53125
+      ]
+    },
+    {
+      "folder": "ndsm_ground_truth/gamus_DC_04_23",
+      "type": "nDSM",
+      "reference_role": "dataset_ground_truth",
+      "source_store": "/mnt/depthwizard-data/kin/datasets/abhaydkale232/depthwizard-gamus/val/val",
+      "shard": "shard_000",
+      "row": 1,
+      "stem": "DC_04_23",
+      "shape": [
+        1024,
+        1024
+      ],
+      "gsd_m": 0.25,
+      "valid_fraction": 0.9937629699707031,
+      "height_range_m": [
+        0.0,
+        45.03125
+      ]
+    },
+    {
+      "folder": "ndsm_ground_truth/gamus_DC_04_27",
+      "type": "nDSM",
+      "reference_role": "dataset_ground_truth",
+      "source_store": "/mnt/depthwizard-data/kin/datasets/abhaydkale232/depthwizard-gamus/val/val",
+      "shard": "shard_000",
+      "row": 2,
+      "stem": "DC_04_27",
+      "shape": [
+        1024,
+        1024
+      ],
+      "gsd_m": 0.25,
+      "valid_fraction": 1.0,
+      "height_range_m": [
+        0.0,
+        37.9375
+      ]
+    },
+    {
+      "folder": "dsm_model_output/2e_buildings_village",
+      "type": "DSM",
+      "reference_role": "model_output_not_ground_truth",
+      "source_scene": "/mnt/depthwizard-results/cartosat_benchmark/scenes/2e_buildings_village",
+      "source_optical": "/mnt/depthwizard-data/cartosat_test/cartosat_2S_Sample/testing_crops/2e_buildings_village.tif",
+      "note": "Generated Cartosat DSM, for loading/alignment/UI comparison only; not independent accuracy validation.",
+      "shape": [
+        1024,
+        1024
+      ],
+      "crs": "COMPD_CS[\"WGS 84 / UTM zone 44N + EGM2008 height\",PROJCS[\"WGS 84 / UTM zone 44N\",GEOGCS[\"WGS 84\",DATUM[\"WGS_1984\",SPHEROID[\"WGS 84\",6378137,298.257223563,AUTHORITY[\"EPSG\",\"7030\"]],AUTHORITY[\"EPSG\",\"6326\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4326\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",81],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH],AUTHORITY[\"EPSG\",\"32644\"]],VERT_CS[\"EGM2008 height\",VERT_DATUM[\"EGM2008 geoid\",2005,AUTHORITY[\"EPSG\",\"1027\"]],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Gravity-related height\",UP],AUTHORITY[\"EPSG\",\"3855\"]]]",
+      "height_range_m": [
+        266.07537841796875,
+        288.10247802734375
+      ],
+      "vertical_datum": "EGM2008"
+    },
+    {
+      "folder": "dsm_model_output/2e_hill_forest_edge",
+      "type": "DSM",
+      "reference_role": "model_output_not_ground_truth",
+      "source_scene": "/mnt/depthwizard-results/cartosat_benchmark/scenes/2e_hill_forest_edge",
+      "source_optical": "/mnt/depthwizard-data/cartosat_test/cartosat_2S_Sample/testing_crops/2e_hill_forest_edge.tif",
+      "note": "Generated Cartosat DSM, for loading/alignment/UI comparison only; not independent accuracy validation.",
+      "shape": [
+        1024,
+        1024
+      ],
+      "crs": "COMPD_CS[\"WGS 84 / UTM zone 44N + EGM2008 height\",PROJCS[\"WGS 84 / UTM zone 44N\",GEOGCS[\"WGS 84\",DATUM[\"WGS_1984\",SPHEROID[\"WGS 84\",6378137,298.257223563,AUTHORITY[\"EPSG\",\"7030\"]],AUTHORITY[\"EPSG\",\"6326\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4326\"]],PROJECTION[\"Transverse_Mercator\"],PARAMETER[\"latitude_of_origin\",0],PARAMETER[\"central_meridian\",81],PARAMETER[\"scale_factor\",0.9996],PARAMETER[\"false_easting\",500000],PARAMETER[\"false_northing\",0],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH],AUTHORITY[\"EPSG\",\"32644\"]],VERT_CS[\"EGM2008 height\",VERT_DATUM[\"EGM2008 geoid\",2005,AUTHORITY[\"EPSG\",\"1027\"]],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Gravity-related height\",UP],AUTHORITY[\"EPSG\",\"3855\"]]]",
+      "height_range_m": [
+        316.0539245605469,
+        441.62164306640625
+      ],
+      "vertical_datum": "EGM2008"
+    },
+    {
+      "stem": "HARV_2024_724000_4697000_r0_c0",
+      "site": "HARV",
+      "month": "2024-08",
+      "easting": 724000,
+      "northing": 4697000,
+      "row_offset_px": 0,
+      "col_offset_px": 0,
+      "crs": "EPSG:32618",
+      "gsd_m": 0.5,
+      "source_store": "/mnt/depthwizard-data/kin/datasets/abhaydkale232/depthwizard-neon/val",
+      "shard": "shard_000",
+      "row": 0,
+      "reference_role": "lidar_ground_truth",
+      "folder": "dsm_ground_truth/neon_HARV_2024_724000_4697000_r0_c0",
+      "type": "DSM",
+      "input_shape": [
+        1024,
+        1024
+      ],
+      "reference_shape": [
+        512,
+        512
+      ],
+      "reference_gsd_m": 1.0,
+      "vertical_datum": "NAVD88 (Geoid12A realization)",
+      "reference_product": "DP3.30024.001",
+      "source_files": [
+        {
+          "site": "HARV",
+          "month": "2024-08",
+          "product": "DP3.30024.001",
+          "file": "NEON_D01_HARV_DP3_724000_4697000_DSM.tif",
+          "size_bytes": 3214344,
+          "source_crc32c": "61a87eec",
+          "sha256": "4e71c10dc8a7c97c20c41fa58dc85121af59f71d820c37f0f6b01837b28eae4f"
+        },
+        {
+          "site": "HARV",
+          "month": "2024-08",
+          "product": "DP3.30024.001",
+          "file": "NEON_D01_HARV_DP3_724000_4697000_DTM.tif",
+          "size_bytes": 3137649,
+          "source_crc32c": "2eb16e94",
+          "sha256": "c5a0112c0b195862ce079d158a675ed170001830579701b3a670bc2646936700"
+        }
+      ],
+      "valid_fraction": 1.0,
+      "height_range_m": [
+        158.13499450683594,
+        217.76400756835938
+      ],
+      "citation": "https://data.neonscience.org/data-products/DP3.30024.001",
+      "download_date": "2026-10-03",
+      "native_crop_window": [
+        0,
+        0,
+        512,
+        512
+      ],
+      "note": "RGB exported from the Modal validation store. DSM/DTM freshly downloaded from NEON; cropped at native 1 m resolution. nDSM reference = LiDAR DSM minus LiDAR DTM."
+    },
+    {
+      "stem": "BART_2024_319000_4873000_r0_c0",
+      "site": "BART",
+      "month": "2024-08",
+      "easting": 319000,
+      "northing": 4873000,
+      "row_offset_px": 0,
+      "col_offset_px": 0,
+      "crs": "EPSG:32619",
+      "gsd_m": 0.5,
+      "source_store": "/mnt/depthwizard-data/kin/datasets/abhaydkale232/depthwizard-neon/val",
+      "shard": "shard_000",
+      "row": 4,
+      "reference_role": "lidar_ground_truth",
+      "folder": "dsm_ground_truth/neon_BART_2024_319000_4873000_r0_c0",
+      "type": "DSM",
+      "input_shape": [
+        1024,
+        1024
+      ],
+      "reference_shape": [
+        512,
+        512
+      ],
+      "reference_gsd_m": 1.0,
+      "vertical_datum": "NAVD88 (Geoid12A realization)",
+      "reference_product": "DP3.30024.001",
+      "source_files": [
+        {
+          "site": "BART",
+          "month": "2024-08",
+          "product": "DP3.30024.001",
+          "file": "NEON_D01_BART_DP3_319000_4873000_DSM.tif",
+          "size_bytes": 3173663,
+          "source_crc32c": "bbf327b1",
+          "sha256": "1b97526d9552d72f9349e024f4c2f97a2d3c5b8a6f2a1f86743ff1f2cb06bfe5"
+        },
+        {
+          "site": "BART",
+          "month": "2024-08",
+          "product": "DP3.30024.001",
+          "file": "NEON_D01_BART_DP3_319000_4873000_DTM.tif",
+          "size_bytes": 3182467,
+          "source_crc32c": "ec298993",
+          "sha256": "5ef557c7b89390bb6d89027e94a7ffab4ed24fc6b6f5401ac4d5e5908ad4c576"
+        }
+      ],
+      "valid_fraction": 0.9999885559082031,
+      "height_range_m": [
+        421.322998046875,
+        607.10302734375
+      ],
+      "citation": "https://data.neonscience.org/data-products/DP3.30024.001",
+      "download_date": "2026-10-03",
+      "native_crop_window": [
+        0,
+        0,
+        512,
+        512
+      ],
+      "note": "RGB exported from the Modal validation store. DSM/DTM freshly downloaded from NEON; cropped at native 1 m resolution. nDSM reference = LiDAR DSM minus LiDAR DTM."
+    }
+  ],
+  "download_sha256": "df1704770168c44df74b5e8c14a4827cde06efd5d324a4cbf781d6e3c95e4416"
+}
