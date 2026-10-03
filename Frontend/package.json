@@ -18,7 +18,17 @@
     "make-sample": "node scripts/sample-from-space.mjs",
     "cache-dem": "node scripts/cache-dem.mjs",
     "pack-sample": "node scripts/pack-sample.mjs",
-    "cache-osm": "node scripts/cache-osm.mjs"
+    "cache-osm": "node scripts/cache-osm.mjs",
+    "desktop:install": "install-electron",
+    "desktop:dev": "npm run build && electron .",
+    "desktop:backend": "python desktop/build-backend.py",
+    "desktop:pack": "npm run build && electron-builder --config electron-builder.config.cjs --dir --publish never",
+    "desktop:dist": "npm run build && electron-builder --config electron-builder.config.cjs --publish never",
+    "desktop:win": "npm run build && electron-builder --config electron-builder.config.cjs --win --x64 --publish never",
+    "desktop:mac": "npm run build && electron-builder --config electron-builder.config.cjs --mac --publish never",
+    "desktop:linux": "npm run build && electron-builder --config electron-builder.config.cjs --linux --x64 --publish never",
+    "desktop:test": "node --test desktop/*.test.mjs",
+    "desktop:smoke": "node desktop/smoke.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",
@@ -58,6 +68,8 @@
     "@types/react-dom": "^19.2.0",
     "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "^6.1.1",
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3",
     "eslint": "^9.39.0",
     "eslint-plugin-react-hooks": "^7.0.0",
     "eslint-plugin-react-refresh": "^0.4.24",
@@ -71,5 +83,11 @@
     "typescript-eslint": "^8.70.1",
     "vite": "^8.3.1",
     "vitest": "^5.0.2"
+  },
+  "main": "desktop/main.mjs",
+  "author": "DepthWizard contributors",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

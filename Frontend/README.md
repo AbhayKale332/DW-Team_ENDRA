@@ -1,5 +1,7 @@
 # DepthWizard — frontend
 
+Desktop installers for Windows, macOS and Linux: see [desktop build and release instructions](desktop/README.md).
+
 Web application for **single-view height estimation and 3D flythrough** (SIH 2026, problem statement 26175, ISRO).
 
 It does five things:

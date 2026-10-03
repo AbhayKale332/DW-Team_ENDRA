@@ -99,7 +99,7 @@ const defaults = {
   // off by default: switching it on sends the scene's bounding box to a third-party service
   osm: false,
   // on by default, but only for scenes that can be placed on the globe (canGeolocate)
-  basemap: true,
+  basemap: !new URLSearchParams(globalThis.location?.search ?? '').has('desktop'),
   poi: true,
   poiCategories: { emergency: true, education: true, civic: true, transport: true } as Record<PoiCategory, boolean>,
   compareSwipe: false,

@@ -39,7 +39,6 @@ const RUNS = Number(process.env.RATE_LIMIT_RUNS || 10);
 const WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MIN || 10) * 60_000;
 const runLimiter = createRateLimiter({ max: RUNS, windowMs: WINDOW_MS });
 const uploadLimiter = createRateLimiter({ max: RUNS * 2, windowMs: WINDOW_MS });
-if (!tokens.size) console.warn('[depthwizard] HF_TOKEN is not set — the private Space will reject requests.');
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -209,9 +208,17 @@ async function serveStatic(req, res) {
   }
 }
 
-createServer((req, res) => {
-  if (req.url.startsWith('/hf-space')) return proxy(req, res);
-  if (req.url.startsWith('/overpass/') && req.method === 'POST') return overpass(req, res);
-  if (req.method !== 'GET' && req.method !== 'HEAD') return res.writeHead(405).end();
-  return serveStatic(req, res);
-}).listen(PORT, () => console.log(`DepthWizard on http://localhost:${PORT}  →  model ${SPACE.origin}${tokens.size ? ` (${tokens.size} token${tokens.size > 1 ? 's' : ''})` : ' (NO TOKEN)'}`));
+export function createAppServer({ desktopHandler } = {}) {
+  return createServer((req, res) => {
+    if (desktopHandler && desktopHandler(req, res)) return;
+    if (req.url.startsWith('/hf-space')) return proxy(req, res);
+    if (req.url.startsWith('/overpass/') && req.method === 'POST') return overpass(req, res);
+    if (req.method !== 'GET' && req.method !== 'HEAD') return res.writeHead(405).end();
+    return serveStatic(req, res);
+  });
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  if (!tokens.size) console.warn('[depthwizard] HF_TOKEN is not set — the private Space will reject requests.');
+  createAppServer().listen(PORT, () => console.log(`DepthWizard on http://localhost:${PORT}  →  model ${SPACE.origin}${tokens.size ? ` (${tokens.size} token${tokens.size > 1 ? 's' : ''})` : ' (NO TOKEN)'}`));
+}

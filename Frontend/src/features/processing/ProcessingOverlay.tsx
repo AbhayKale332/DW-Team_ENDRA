@@ -14,7 +14,7 @@ const STAGES: Array<{ id: ProgressStage; label: string }> = [
   { id: 'connecting', label: 'Connecting to the model' },
   { id: 'uploading', label: 'Uploading image' },
   { id: 'queued', label: 'Waiting in queue' },
-  { id: 'processing', label: 'Estimating heights (GPU)' },
+  { id: 'processing', label: 'Estimating heights' },
   { id: 'fetching', label: 'Downloading results' },
   { id: 'building', label: 'Building 3D mesh' },
 ];

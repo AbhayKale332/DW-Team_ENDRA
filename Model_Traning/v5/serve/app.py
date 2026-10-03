@@ -36,7 +36,8 @@ _jobs: dict = {}
 # ---------------------------------------------------------------------
 # model
 # ---------------------------------------------------------------------
-def load_backend(ckpt: str = "", onnx: str = "", device: str = "") -> dict:
+def load_backend(ckpt: str = "", onnx: str = "", device: str = "", *,
+                 onnx_providers=None, onnx_threads: int = 0) -> dict:
     """Bring up whichever runtime was asked for.  Called once at startup."""
     import torch
 
@@ -47,10 +48,15 @@ def load_backend(ckpt: str = "", onnx: str = "", device: str = "") -> dict:
 
         meta_path = Path(str(onnx) + ".json")
         meta = json.loads(meta_path.read_text()) if meta_path.is_file() else {}
+        session_opts = {}
+        if onnx_threads:
+            options = ort.SessionOptions()
+            options.intra_op_num_threads = onnx_threads
+            session_opts["sess_options"] = options
         _state.update(
             runtime="onnx",
             session=ort.InferenceSession(
-                str(onnx), providers=["CUDAExecutionProvider", "CPUExecutionProvider"]),
+                str(onnx), providers=onnx_providers or ["CUDAExecutionProvider", "CPUExecutionProvider"], **session_opts),
             spec=PreprocSpec.from_dict(meta.get("preproc", {})),
             device=torch.device("cpu"), ckpt=str(onnx))
         print(f"[serve] onnx runtime: {onnx}  providers="
@@ -135,6 +141,7 @@ def run_job(job_id: str, image_path: Path, opts: dict) -> None:
         absolute = bool(opts.get("absolute"))
         mode = opts.get("dsm_mode") or "dem_anchored"
         gain = float(opts.get("detail_gain", 1.0))
+        batch_tiles = int(opts.get("batch_tiles") or os.environ.get("DW_BATCH_TILES", "4"))
 
         def prog(done, total):
             job.update(progress=0.15 + 0.7 * done / max(total, 1),
@@ -153,7 +160,7 @@ def run_job(job_id: str, image_path: Path, opts: dict) -> None:
                     dem_source=opts.get("dem_source", "copernicus30"),
                     dem_path=opts.get("dem", ""), detail_gain=gain,
                     tta=bool(opts.get("tta")), amp_dtype=amp,
-                    batch_tiles=int(opts.get("batch_tiles") or 4),
+                    batch_tiles=batch_tiles,
                     mesh=bool(opts.get("mesh", True)), progress=prog)
             job.update(stage="done", progress=1.0, result=payload,
                        files=sorted(p.name for p in out_dir.iterdir()),
@@ -172,7 +179,7 @@ def run_job(job_id: str, image_path: Path, opts: dict) -> None:
             height, seg, std = predict_scene(
                 _model(), rgb, meta.gsd_m, spec, device,
                 tta=bool(opts.get("tta")), amp_dtype=amp,
-                overlap=0.25, batch_tiles=int(opts.get("batch_tiles") or 4),
+                overlap=0.25, batch_tiles=batch_tiles,
                 want_seg=True, progress=prog, valid=meta.valid, return_std=True)
 
         dsm_abs, dtm, extra, datum = None, None, {}, ""

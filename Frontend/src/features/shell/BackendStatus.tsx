@@ -39,7 +39,7 @@ export function BackendStatus() {
     const on = (s: Status) => alive && setStatus(s);
     void p.status(on).then(on);
     // Re-check every 2 minutes so a sleeping Space shows up as waking/online.
-    const t = setInterval(() => void p.status().then(on), 120_000);
+    const t = setInterval(() => void p.status().then(on), p.id === 'depthwizard-serve' ? 5000 : 120_000);
     return () => {
       alive = false;
       clearInterval(t);
@@ -48,7 +48,7 @@ export function BackendStatus() {
 
   const provider = getProvider({ provider: configured, spaceId }).id;
 
-  const label = provider === 'mock' ? 'Offline demo' : LABELS[status.state];
+  const label = provider === 'mock' ? 'Offline demo' : provider === 'depthwizard-serve' && status.state === 'running' ? 'Local model ready' : LABELS[status.state];
   return (
     <Tooltip label={status.message ?? (provider === 'mock' ? 'Using the bundled sample instead of the live model' : spaceId)} multiline maw={320}>
       <UnstyledButton

@@ -1,0 +1,142 @@
+name: Build desktop releases
+
+on:
+  push:
+    tags: ['desktop-v*']
+  workflow_dispatch:
+    inputs:
+      model_url:
+        description: 'Optional HTTPS model ZIP URL (graph + .json + all .data at ZIP root)'
+        type: string
+        required: false
+      model_sha256:
+        description: 'SHA-256 of the model ZIP (required when model_url is set)'
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: windows-x64, os: windows-latest, platform: win, arch: x64 }
+          - { name: macos-arm64, os: macos-15, platform: mac, arch: arm64 }
+          - { name: macos-x64, os: macos-15-intel, platform: mac, arch: x64 }
+          - { name: linux-x64, os: ubuntu-22.04, platform: linux, arch: x64 }
+    defaults:
+      run:
+        working-directory: Frontend
+        shell: bash
+    env:
+      DESKTOP_MODEL_URL: ${{ inputs.model_url || vars.DESKTOP_MODEL_URL }}
+      DESKTOP_MODEL_SHA256: ${{ inputs.model_sha256 || vars.DESKTOP_MODEL_SHA256 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: Frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: Frontend/desktop/requirements.txt
+      - run: npm ci
+      - run: npm run desktop:install
+      - name: Set release version from desktop tag
+        if: startsWith(github.ref, 'refs/tags/desktop-v')
+        run: npm version "${GITHUB_REF_NAME#desktop-v}" --no-git-tag-version
+      - name: Install CPU inference dependencies
+        run: |
+          python -m pip install -r desktop/requirements.txt
+          if [[ "${{ matrix.name }}" == "macos-x64" ]]; then
+            python -m pip install torch==2.2.2
+          elif [[ "${{ matrix.platform }}" == "mac" ]]; then
+            python -m pip install torch==2.6.0
+          else
+            python -m pip install torch==2.6.0 --index-url https://download.pytorch.org/whl/cpu
+          fi
+      - name: Check desktop integration
+        run: |
+          npm run desktop:test
+          npm run build
+          python desktop/inference-smoke.py
+      - name: Freeze native inference runtime
+        run: |
+          npm run desktop:backend
+          if [[ "${{ matrix.platform }}" == "win" ]]; then
+            python desktop/inference-smoke.py --executable desktop/resources/backend/depthwizard-inference/depthwizard-inference.exe
+          else
+            python desktop/inference-smoke.py --executable desktop/resources/backend/depthwizard-inference/depthwizard-inference
+          fi
+      - name: Stage optional verified model
+        run: python desktop/download-model.py
+      - name: Package application
+        env:
+          CSC_LINK: ${{ matrix.platform == 'mac' && secrets.DESKTOP_MAC_CSC_LINK || matrix.platform == 'win' && secrets.DESKTOP_WIN_CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ matrix.platform == 'mac' && secrets.DESKTOP_MAC_CSC_KEY_PASSWORD || matrix.platform == 'win' && secrets.DESKTOP_WIN_CSC_KEY_PASSWORD || '' }}
+          APPLE_ID: ${{ secrets.DESKTOP_APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.DESKTOP_APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.DESKTOP_APPLE_TEAM_ID }}
+        run: npx electron-builder --config electron-builder.config.cjs --${{ matrix.platform }} --${{ matrix.arch }} --publish never
+      - name: Test packaged desktop startup
+        run: |
+          if [[ "${{ matrix.platform }}" == "win" ]]; then
+            export DW_DESKTOP_EXECUTABLE="$PWD/release/win-unpacked/DepthWizard.exe"
+            npm run desktop:smoke
+          elif [[ "${{ matrix.platform }}" == "mac" ]]; then
+            if [[ "${{ matrix.arch }}" == "arm64" ]]; then MAC_DIR=mac-arm64; else MAC_DIR=mac; fi
+            export DW_DESKTOP_EXECUTABLE="$PWD/release/$MAC_DIR/DepthWizard.app/Contents/MacOS/DepthWizard"
+            npm run desktop:smoke
+          else
+            export DW_DESKTOP_EXECUTABLE="$PWD/release/linux-unpacked/depthwizard"
+            xvfb-run -a npm run desktop:smoke
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DepthWizard-${{ matrix.name }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            Frontend/release/*.exe
+            Frontend/release/*.dmg
+            Frontend/release/*.zip
+            Frontend/release/*.AppImage
+
+  draft-release:
+    if: startsWith(github.ref, 'refs/tags/desktop-v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: DepthWizard-*
+          merge-multiple: true
+          path: desktop-release
+      - name: Generate checksums
+        working-directory: desktop-release
+        run: sha256sum * > SHA256SUMS.txt
+      - name: Upload installers to a draft GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --verify-tag --draft --title "DepthWizard ${RELEASE_TAG#desktop-v}" --notes-file Frontend/desktop/RELEASE_NOTES.md
+          fi
+          gh release upload "$RELEASE_TAG" desktop-release/* --clobber

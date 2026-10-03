@@ -25,7 +25,7 @@ function SettingsDialog() {
           onClick={async () => {
             setChecking(true);
             const st = await getProvider({ provider: s.provider, spaceId: s.spaceId }).status();
-            setResult(st.state === 'running' ? 'Connected — the model is online.' : (st.message ?? st.state));
+            setResult(st.state === 'running' ? 'Connected — the model is ready.' : (st.message ?? st.state));
             setChecking(false);
           }}
         >

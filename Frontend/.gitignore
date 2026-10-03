@@ -7,3 +7,10 @@ test-results
 .claude/settings.local.json
 .env
 .DS_Store
+release/
+.desktop-venv/
+desktop/.build/
+desktop/resources/backend/*
+!desktop/resources/backend/.gitkeep
+desktop/resources/model/*
+!desktop/resources/model/.gitkeep

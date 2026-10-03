@@ -208,6 +208,7 @@ def write_outputs(out_dir: Path, stem: str, rgb_u8, height_m, meta, spec,
     "confident" threshold the viewer and the reference validation use.
     """
     from PIL import Image
+    from config import CLASS_NAMES
 
     out_dir.mkdir(parents=True, exist_ok=True)
     fin = np.isfinite(height_m)
@@ -297,6 +298,7 @@ def write_outputs(out_dir: Path, stem: str, rgb_u8, height_m, meta, spec,
         "size_px": list(height_m.shape),
         "scene": meta.summary(),
         "preproc": spec.to_dict(),
+        "classes": {str(i): name for i, name in enumerate(CLASS_NAMES)},
         "vertical_datum": datum or None,
         "files": ["rgb.png", "ndsm16.png", "ndsm_m.npy", *extra_files, *wrote_tif,
                   *mesh_files],
