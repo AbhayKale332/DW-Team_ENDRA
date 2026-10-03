@@ -5,7 +5,6 @@
 *.bin
 *.gguf
 
-# Generated HTML reports; retain one milestone report.
+# Generated HTML reports.
 *.html
 *.htm
-!/V4_modal/Output/validation_report.html

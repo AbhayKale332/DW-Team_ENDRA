@@ -235,3 +235,6 @@ tempCodeRunnerFile.py
 *.temp
 *.swp
 *.swo
+
+# Local HTML blog export
+/DOCS/blog/medium-paste.html
