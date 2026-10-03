@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Checkbox, FileButton, Group, List, SegmentedControl, Slider, Stack, Switch, Table, Text } from '@mantine/core';
-import { IconFileReport, IconInfoCircle, IconScale, IconUpload, IconX } from '@tabler/icons-react';
-import { EmptyPanel } from '@/components/panel';
+import { Accordion, Alert, Button, Checkbox, FileButton, Group, List, SegmentedControl, Slider, Stack, Switch, Table, Text } from '@mantine/core';
+import { IconCheck, IconFileReport, IconInfoCircle, IconScale, IconUpload } from '@tabler/icons-react';
+import { EmptyPanel, PanelSection } from '@/components/panel';
 import { notifications } from '@mantine/notifications';
 import { useScene } from '@/store/scene';
 import { useView } from '@/store/view';
+import { useUi } from '@/store/ui';
 import type { ReferenceKind } from '@/domain/types';
-import { loadReference } from '@/lib/reference';
+import { loadReference, referenceKinds } from '@/lib/reference';
+import { withHeightReference } from '@/lib/dem';
 import { validate } from '@/lib/metrics';
 import { baseAxis, EChart, type ChartTheme } from '@/components/EChart';
 import { reportError } from '@/features/files/openFile';
@@ -17,46 +19,111 @@ const pct = (v: number) => (Number.isFinite(v) ? `${(v * 100).toFixed(1)} %` : '
 
 function ReferenceLoader() {
   const scene = useScene((s) => s.scene)!;
-  const [kind, setKind] = useState<ReferenceKind>(scene.product === 'DSM' ? 'DSM' : 'nDSM');
+  const kinds = referenceKinds(scene);
+  const [selectedKind, setKind] = useState<ReferenceKind>(kinds[0]);
+  const kind = kinds.includes(selectedKind) ? selectedKind : kinds[0];
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   return (
-    <Stack gap="sm">
-      <Text size="sm" fw={500}>
-        Reference raster
-      </Text>
-      <SegmentedControl
-        fullWidth
-        value={kind}
-        onChange={(k) => setKind(k as ReferenceKind)}
-        data={[
-          { value: 'nDSM', label: 'Height above ground (nDSM)' },
-          { value: 'DSM', label: 'Elevation (DSM)' },
-        ]}
-        aria-label="Reference type"
-      />
-      <FileButton
-        accept=".tif,.tiff,.npy"
-        onChange={async (file) => {
-          if (!file) return;
-          setBusy(true);
-          try {
-            const ref = await loadReference(file, kind, scene);
-            useScene.getState().setReference(ref);
-            useScene.getState().set({ removeOffset: kind === 'DSM' && scene.product !== 'DSM' });
-            notifications.show({ title: 'Reference aligned', message: ref.notes[0] ?? file.name, color: 'teal' });
-          } catch (e) {
-            reportError(e, 'Could not load reference');
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        {(props) => (
-          <Button {...props} leftSection={<IconUpload size={16} />} loading={busy}>
-            Load reference raster…
-          </Button>
+    <Stack gap="lg">
+      <PanelSection title="1 · Choose height type">
+        {kinds.length > 1 ? (
+          <SegmentedControl
+            fullWidth
+            value={kind}
+            disabled={busy}
+            onChange={(k) => {
+              setKind(k as ReferenceKind);
+              setError(null);
+            }}
+            data={kinds.map((value) => ({
+              value,
+              label: (
+                <Stack gap={2} align="center">
+                  <Text size="sm" fw={600}>
+                    {value}
+                  </Text>
+                  <Text size="xs">{value === 'DSM' ? 'Surface elevation' : 'Above-ground height'}</Text>
+                </Stack>
+              ),
+            }))}
+            aria-label="Reference height type"
+          />
+        ) : (
+          <Text size="sm" fw={600}>
+            nDSM · Height above ground
+          </Text>
         )}
-      </FileButton>
+        <Text size="xs" c="dimmed">
+          {kind === 'DSM' ? 'Compare surface elevations, including the ground level, in metres.' : 'Compare building and tree heights above the ground, in metres.'}
+          {kinds.length === 1 && ' PNG / JPG inputs use nDSM validation.'}
+        </Text>
+        {kind === 'DSM' && scene.product !== 'DSM' && !scene.anchoring && (
+          <Alert variant="light" color="gray" icon={<IconInfoCircle size={15} />} p="sm">
+            <Stack gap="xs">
+              <Text size="xs">
+                This result is above-ground height. Set a ground reference in Info to compare absolute elevations. Without it, only a constant ground offset can be removed.
+              </Text>
+              <Button size="compact-xs" variant="subtle" onClick={() => useUi.getState().set({ inspectorTab: 'info' })}>
+                Set ground reference in Info
+              </Button>
+            </Stack>
+          </Alert>
+        )}
+      </PanelSection>
+      <PanelSection title="2 · Load ground truth">
+        <Text size="xs" c="dimmed">
+          Use a measured height file covering the same area as your input image.
+        </Text>
+        <FileButton
+          accept=".tif,.tiff,.geotiff,.npy"
+          onChange={async (file) => {
+            if (!file) return;
+            setBusy(true);
+            setError(null);
+            try {
+              const ref = await loadReference(file, kind, scene);
+              const current = useScene.getState().scene;
+              if (!current || current.id !== scene.id) return;
+              const alignedScene = withHeightReference(current, kind === 'DSM' ? 'dsm' : 'ndsm');
+              if (alignedScene !== current) useScene.getState().updateScene(alignedScene);
+              useScene.getState().setReference(ref);
+              useScene.getState().set({
+                removeOffset: kind === 'DSM' && alignedScene.product !== 'DSM',
+              });
+              notifications.show({
+                title: 'Reference aligned',
+                message: ref.notes[0] ?? file.name,
+                color: 'teal',
+              });
+            } catch (e) {
+              setError(e instanceof Error ? e.message : 'Could not read this reference. Try another height file.');
+              reportError(e, 'Could not load reference');
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {(props) => (
+            <Button {...props} fullWidth leftSection={<IconUpload size={16} />} loading={busy}>
+              {busy ? 'Aligning reference…' : 'Load reference file…'}
+            </Button>
+          )}
+        </FileButton>
+        <Text size="xs">
+          <b>Supported files:</b> GeoTIFF (.tif, .tiff, .geotiff) or NumPy (.npy).
+        </Text>
+        <Text size="xs" c="dimmed">
+          Values must be in metres. NumPy files must be 2D; match the image’s crop and orientation.
+        </Text>
+        {error && (
+          <Alert color="red" variant="light" title="Reference could not be loaded" role="alert">
+            <Text size="xs" style={{ overflowWrap: 'anywhere' }}>
+              {error}
+            </Text>
+          </Alert>
+        )}
+      </PanelSection>
     </Stack>
   );
 }
@@ -68,7 +135,16 @@ function Metrics() {
   const validation = useScene((s) => s.validation);
 
   useEffect(() => {
-    const t = setTimeout(() => useScene.getState().setValidation(validate(scene.heights.data, reference.data, { removeOffset, sigma: scene.uncertainty })), 0);
+    const t = setTimeout(
+      () =>
+        useScene.getState().setValidation(
+          validate(scene.heights.data, reference.data, {
+            removeOffset,
+            sigma: scene.uncertainty,
+          }),
+        ),
+      0,
+    );
     return () => clearTimeout(t);
   }, [scene, reference, removeOffset]);
 
@@ -160,20 +236,35 @@ function Metrics() {
     [validation],
   );
 
-  if (!validation) return <Text size="xs">Computing…</Text>;
+  if (!validation)
+    return (
+      <Text size="xs" role="status">
+        Calculating accuracy…
+      </Text>
+    );
   const a = validation.all;
+  if (!a.n)
+    return (
+      <Alert color="orange" title="No valid pixels to compare">
+        Check that the reference overlaps this image and contains valid height values.
+      </Alert>
+    );
   const u = validation.uncertainty;
   const sp = u?.sparsification;
   return (
     <Stack gap="sm">
+      <span className="dw-section-title">3 · Review accuracy</span>
+      <Text size="xs" c="dimmed">
+        Lower RMSE and MAE mean a closer match. Positive bias means the prediction is too high.
+      </Text>
       <Table withTableBorder withColumnBorders fz="xs" verticalSpacing={4} aria-label="Validation metrics">
         <Table.Tbody>
           {(
             [
-              ['RMSE', f2(a.rmse)],
-              ['MAE', f2(a.mae)],
+              ['RMSE · overall error', f2(a.rmse)],
+              ['MAE · average error', f2(a.mae)],
               ['Bias (mean error)', `${a.bias >= 0 ? '+' : ''}${f2(a.bias)}`],
-              ['Pearson r', Number.isFinite(a.r) ? a.r.toFixed(3) : '—'],
+              ['Correlation (Pearson r)', Number.isFinite(a.r) ? a.r.toFixed(3) : '—'],
               ['Within ±1 m / ±2 m', `${pct(a.within1m)} / ${pct(a.within2m)}`],
               ['Balanced RMSE (strata mean)', f2(validation.balancedRmse)],
               ['Pixels compared', a.n.toLocaleString()],
@@ -193,83 +284,92 @@ function Metrics() {
           Ground offset removed: {validation.offset.toFixed(2)} m (median reference − prediction where the prediction is below 1 m).
         </Text>
       )}
-      {u ? (
-        <>
-          <span className="dw-section-title">Model uncertainty vs error</span>
-          <Table withTableBorder withColumnBorders fz="xs" verticalSpacing={4} aria-label="Uncertainty metrics">
-            <Table.Tbody>
-              {(
-                [
-                  [`RMSE on confident pixels (σ ≤ ${u.confidentM.toFixed(1)} m)`, f2(u.confident.rmse)],
-                  ['Confident share of compared pixels', pct(u.coverage)],
-                  ...(sp
-                    ? ([
-                        ['AUSE (0 = σ ranks errors perfectly)', f2(sp.ause)],
-                        ['AURG (> 0 = better than random)', `${sp.aurg >= 0 ? '+' : ''}${f2(sp.aurg)}`],
-                      ] as Array<[string, string]>)
-                    : []),
-                ] as Array<[string, string]>
-              ).map(([k, v]) => (
-                <Table.Tr key={k}>
-                  <Table.Td>{k}</Table.Td>
-                  <Table.Td className="dw-mono" ta="right" fw={600}>
-                    {v}
-                  </Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-          {sp && (
-            <>
-              <EChart
-                option={sparsify}
-                height={200}
-                ariaLabel={`Sparsification curve: RMSE of the remaining pixels as the most uncertain are removed, AUSE ${sp.ause.toFixed(2)} metres`}
-              />
-              <Text size="xs" c="dimmed">
-                If σ tracks the error, removing the most uncertain pixels first lowers the RMSE of the rest, close to the best possible order
-                (Poggi et al., CVPR 2020).{sp.n < a.n ? ` Curves from ${sp.n.toLocaleString()} evenly spaced pixels.` : ''}
-              </Text>
-            </>
-          )}
-        </>
-      ) : (
-        <Text size="xs" c="dimmed">
-          No uncertainty map in this result (ndsm_std_m.npy), so no confident-pixel RMSE or sparsification curve.
-        </Text>
-      )}
-      <span className="dw-section-title">Prediction vs reference (density)</span>
-      <EChart option={scatter} height={240} ariaLabel={`Density scatter of predicted against reference heights, Pearson r ${a.r.toFixed(3)}`} />
-      <span className="dw-section-title">Error distribution</span>
-      <EChart option={errHist} height={160} ariaLabel={`Histogram of height errors, bias ${a.bias.toFixed(2)} metres`} />
-      <span className="dw-section-title">RMSE by height stratum</span>
-      <EChart option={strata} height={160} ariaLabel="RMSE per reference height stratum" />
-      <Table fz="xs" verticalSpacing={2} striped aria-label="Per-stratum metrics">
-        <Table.Thead>
-          <Table.Tr>
-            <Table.Th>Stratum</Table.Th>
-            <Table.Th ta="right">N</Table.Th>
-            <Table.Th ta="right">RMSE</Table.Th>
-            <Table.Th ta="right">Bias</Table.Th>
-          </Table.Tr>
-        </Table.Thead>
-        <Table.Tbody>
-          {validation.strata.map((s) => (
-            <Table.Tr key={s.label}>
-              <Table.Td>{s.label}</Table.Td>
-              <Table.Td ta="right" className="dw-mono">
-                {s.n.toLocaleString()}
-              </Table.Td>
-              <Table.Td ta="right" className="dw-mono">
-                {f2(s.rmse, '')}
-              </Table.Td>
-              <Table.Td ta="right" className="dw-mono">
-                {f2(s.bias, '')}
-              </Table.Td>
-            </Table.Tr>
-          ))}
-        </Table.Tbody>
-      </Table>
+      <Accordion variant="default" keepMounted={false} transitionDuration={0}>
+        <Accordion.Item value="details">
+          <Accordion.Control>Charts & detailed metrics</Accordion.Control>
+          <Accordion.Panel>
+            <Stack gap="sm">
+              {u ? (
+                <>
+                  <span className="dw-section-title">Model uncertainty vs error</span>
+                  <Table withTableBorder withColumnBorders fz="xs" verticalSpacing={4} aria-label="Uncertainty metrics">
+                    <Table.Tbody>
+                      {(
+                        [
+                          [`RMSE on confident pixels (σ ≤ ${u.confidentM.toFixed(1)} m)`, f2(u.confident.rmse)],
+                          ['Confident share of compared pixels', pct(u.coverage)],
+                          ...(sp
+                            ? ([
+                                ['AUSE (0 = σ ranks errors perfectly)', f2(sp.ause)],
+                                ['AURG (> 0 = better than random)', `${sp.aurg >= 0 ? '+' : ''}${f2(sp.aurg)}`],
+                              ] as Array<[string, string]>)
+                            : []),
+                        ] as Array<[string, string]>
+                      ).map(([k, v]) => (
+                        <Table.Tr key={k}>
+                          <Table.Td>{k}</Table.Td>
+                          <Table.Td className="dw-mono" ta="right" fw={600}>
+                            {v}
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                  {sp && (
+                    <>
+                      <EChart
+                        option={sparsify}
+                        height={200}
+                        ariaLabel={`Sparsification curve: RMSE of the remaining pixels as the most uncertain are removed, AUSE ${sp.ause.toFixed(2)} metres`}
+                      />
+                      <Text size="xs" c="dimmed">
+                        If σ tracks the error, removing the most uncertain pixels first lowers the RMSE of the rest, close to the best possible order (Poggi et al., CVPR 2020).
+                        {sp.n < a.n ? ` Curves from ${sp.n.toLocaleString()} evenly spaced pixels.` : ''}
+                      </Text>
+                    </>
+                  )}
+                </>
+              ) : (
+                <Text size="xs" c="dimmed">
+                  This result has no uncertainty map. Height accuracy metrics are still available above.
+                </Text>
+              )}
+              <span className="dw-section-title">Prediction vs reference (density)</span>
+              <EChart option={scatter} height={240} ariaLabel={`Density scatter of predicted against reference heights, Pearson r ${a.r.toFixed(3)}`} />
+              <span className="dw-section-title">Error distribution</span>
+              <EChart option={errHist} height={160} ariaLabel={`Histogram of height errors, bias ${a.bias.toFixed(2)} metres`} />
+              <span className="dw-section-title">RMSE by height stratum</span>
+              <EChart option={strata} height={160} ariaLabel="RMSE per reference height stratum" />
+              <Table fz="xs" verticalSpacing={2} striped aria-label="Per-stratum metrics">
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Stratum</Table.Th>
+                    <Table.Th ta="right">N</Table.Th>
+                    <Table.Th ta="right">RMSE</Table.Th>
+                    <Table.Th ta="right">Bias</Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {validation.strata.map((s) => (
+                    <Table.Tr key={s.label}>
+                      <Table.Td>{s.label}</Table.Td>
+                      <Table.Td ta="right" className="dw-mono">
+                        {s.n.toLocaleString()}
+                      </Table.Td>
+                      <Table.Td ta="right" className="dw-mono">
+                        {f2(s.rmse, '')}
+                      </Table.Td>
+                      <Table.Td ta="right" className="dw-mono">
+                        {f2(s.bias, '')}
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </Stack>
+          </Accordion.Panel>
+        </Accordion.Item>
+      </Accordion>
     </Stack>
   );
 }
@@ -278,29 +378,54 @@ function Metrics() {
 export function ValidationTab() {
   const scene = useScene((s) => s.scene);
   const reference = useScene((s) => s.reference);
+  const validation = useScene((s) => s.validation);
   const removeOffset = useScene((s) => s.removeOffset);
   const compare = useView((s) => s.compareSwipe);
   const swipe = useView((s) => s.swipe);
   const layerIsError = useView((s) => s.layer3d === 'error');
   const notes = useMemo(() => reference?.notes ?? [], [reference]);
-  if (!scene) return <EmptyPanel icon={IconScale}>Open a result to validate it.</EmptyPanel>;
+  if (!scene) return <EmptyPanel icon={IconScale}>Run height estimation or open a result, then compare it with a ground-truth height file (.tif, .tiff, .geotiff or .npy).</EmptyPanel>;
   return (
     <Stack gap="md" p="md">
+      <Stack gap={4}>
+        <Text size="sm" fw={600}>
+          Compare with ground truth
+        </Text>
+        <Text size="xs" c="dimmed">
+          Check height accuracy, inspect errors, and export the results.
+        </Text>
+      </Stack>
       {!reference ? (
-        <ReferenceLoader />
+        <ReferenceLoader key={scene.id} />
       ) : (
         <>
           <Group justify="space-between" wrap="nowrap">
-            <div style={{ minWidth: 0 }}>
-              <Text size="sm" fw={600} truncate="end">
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <Group gap={4} mb={4}>
+                <IconCheck size={14} color="var(--mantine-color-teal-6)" aria-hidden />
+                <Text size="xs" fw={600}>
+                  Reference loaded
+                </Text>
+              </Group>
+              <Text size="sm" fw={600} style={{ overflowWrap: 'anywhere' }}>
                 {reference.name}
               </Text>
               <Text size="xs" c="dimmed">
                 {reference.kind} · {reference.alignment === 'georeferenced' ? 'aligned by coordinates' : 'same-extent alignment'}
               </Text>
             </div>
-            <Button size="compact-xs" variant="subtle" color="gray" leftSection={<IconX size={12} />} onClick={() => useScene.getState().setReference(null)}>
-              Remove
+            <Button
+              size="compact-xs"
+              variant="default"
+              onClick={() => {
+                useScene.getState().setReference(null);
+                useView.getState().set({
+                  compareSwipe: false,
+                  ...(layerIsError ? { layer3d: 'optical', layer2d: 'height' } : {}),
+                });
+              }}
+            >
+              Change
             </Button>
           </Group>
           {notes.length > 0 && (
@@ -313,24 +438,29 @@ export function ValidationTab() {
             </Alert>
           )}
           {reference.kind === 'DSM' && scene.product !== 'DSM' && (
-            <Checkbox
-              size="xs"
-              checked={removeOffset}
-              onChange={(e) => useScene.getState().set({ removeOffset: e.currentTarget.checked })}
-              label="Remove ground offset"
-            />
+            <Checkbox size="xs" checked={removeOffset} onChange={(e) => useScene.getState().set({ removeOffset: e.currentTarget.checked })} label="Remove ground offset" />
           )}
+          <Metrics />
+          <span className="dw-section-title">Inspect the comparison</span>
           <Group gap="xs">
-            <Button size="xs" variant="default" onClick={() => useView.getState().set({ layer3d: layerIsError ? 'optical' : 'error', layer2d: layerIsError ? 'height' : 'error' })}>
+            <Button
+              size="xs"
+              variant="default"
+              onClick={() =>
+                useView.getState().set({
+                  layer3d: layerIsError ? 'optical' : 'error',
+                  layer2d: layerIsError ? 'height' : 'error',
+                })
+              }
+            >
               {layerIsError ? 'Hide error layer' : 'Show error layer'}
             </Button>
-            <Button size="xs" variant="default" leftSection={<IconFileReport size={14} />} onClick={() => void exportValidationReport()}>
-              Export report
-            </Button>
           </Group>
-          <Switch label="Compare swipe (prediction | reference)" checked={compare} onChange={(e) => useView.getState().set({ compareSwipe: e.currentTarget.checked })} />
-          {compare && <Slider min={0.02} max={0.98} step={0.01} value={swipe} onChange={(x) => useView.getState().set({ swipe: x })} label={null} aria-label="Swipe position" />}
-          <Metrics />
+          <Switch label="Compare prediction and reference" checked={compare} onChange={(e) => useView.getState().set({ compareSwipe: e.currentTarget.checked })} />
+          {compare && <Slider min={0.02} max={0.98} step={0.01} value={swipe} onChange={(x) => useView.getState().set({ swipe: x })} label={null} thumbLabel="Swipe position" />}
+          <Button fullWidth leftSection={<IconFileReport size={16} />} disabled={!validation?.all.n} onClick={() => void exportValidationReport()}>
+            Export report
+          </Button>
         </>
       )}
     </Stack>

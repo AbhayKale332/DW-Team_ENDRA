@@ -102,6 +102,8 @@ export type ObjectKinds = Record<ObjectKind, boolean>;
 
 /** Scene contract written by the backend (meta.json). Only fields the UI reads are typed. */
 export interface SceneMeta {
+  /** Original input name, before TIFF decoding or cloud masking converts it to PNG. */
+  source_image_name?: string;
   stem?: string;
   product?: Product;
   units?: string;

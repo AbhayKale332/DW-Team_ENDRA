@@ -236,7 +236,7 @@ async function adoptProject({ manifest, files, image, heights, uncertainty, clas
     classes,
     objects,
     cloud,
-    meta: manifest.meta,
+    meta: { ...manifest.meta, ...(manifest.source ? { source_image_name: manifest.source.name } : {}) },
     gsd: manifest.gsd,
     gsdSource: manifest.gsdSource,
     inputGeoref: manifest.georef,

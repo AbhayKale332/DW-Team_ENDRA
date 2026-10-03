@@ -88,7 +88,7 @@ export async function runPrediction() {
       classes: res.classes,
       objects: res.objects,
       cloud,
-      meta: res.meta,
+      meta: { ...res.meta, source_image_name: input.name },
       gsd: effGsd,
       gsdSource: effSource,
       inputGeoref: input.georef,

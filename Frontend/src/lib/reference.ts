@@ -4,6 +4,15 @@ import { parseNpy } from './npy';
 import { makePixelMapper } from './georef';
 import { resampleGrid, sampleBilinear } from './heights';
 
+/** Use the original input, since TIFF drapes and model uploads are also PNGs. */
+export function referenceKinds(scene: Pick<Scene, 'meta' | 'georef' | 'product'>): ReferenceKind[] {
+  const name = scene.meta.source_image_name ?? scene.meta.scene?.path ?? '';
+  if (/\.(?:geo)?tiff?$/i.test(name)) return ['DSM', 'nDSM'];
+  if (/\.(png|jpe?g)$/i.test(name)) return ['nDSM'];
+  // Older samples and result bundles may have no original filename.
+  return scene.georef || scene.product === 'DSM' ? ['DSM', 'nDSM'] : ['nDSM'];
+}
+
 /** Load a reference surface and align it onto the prediction grid.
  *  • both georeferenced → each prediction pixel centre is mapped into the reference raster (CRS-aware)
  *  • otherwise → the reference is assumed to cover the same extent and is resampled bilinearly */
@@ -25,7 +34,7 @@ export async function loadReference(file: File, kind: ReferenceKind, scene: Scen
     return { name, kind, data, alignment: 'same-extent', notes };
   }
 
-  if (/\.tiff?$/.test(lower)) {
+  if (/\.(?:geo)?tiff?$/.test(lower)) {
     const ref = await decodeTiffBand(await file.arrayBuffer());
     if (ref.nodata !== null) notes.push(`NoData value ${ref.nodata} masked.`);
     const grid = { data: ref.data, width: ref.width, height: ref.height };
@@ -81,5 +90,5 @@ export async function loadReference(file: File, kind: ReferenceKind, scene: Scen
     return { name, kind, data, alignment: 'same-extent', notes };
   }
 
-  throw new Error('Use a GeoTIFF (.tif) or NumPy (.npy) reference height raster.');
+  throw new Error('Use a GeoTIFF (.tif, .tiff, .geotiff) or NumPy (.npy) reference height raster.');
 }
