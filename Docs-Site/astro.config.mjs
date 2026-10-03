@@ -123,6 +123,7 @@ export default defineConfig({
 						'reference/paper',
 						'reference/changelog',
 						'reference/team',
+						'references',
 					],
 				},
 			],
