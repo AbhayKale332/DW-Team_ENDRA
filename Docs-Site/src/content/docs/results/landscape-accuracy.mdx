@@ -1,6 +1,6 @@
 ---
 title: Accuracy by landscape
-description: Where the v5 urban, sparse, forested and overall RMSE, MAE and Pearson r come from, with the raw run log, the metrics file and a script that rebuilds the table.
+description: Four-set pooled v5 single-pass metrics and full-validation GAMUS metrics with D4 averaging and 1.5× input scaling, with raw evidence and a reproduction script.
 ---
 
 import DataTable from '../../../components/DataTable.astro';
@@ -15,23 +15,25 @@ export const row = (k) => L.rows.find((r) => r.landscape === k);
 export const cap = (s) => s[0].toUpperCase() + s.slice(1);
 export const mpx = (n) => `${(n / 1e6).toFixed(1)} M`;
 
-This page traces every number in the v5 **DSM accuracy by landscape** table back to two files from the final H100 run on Modal: `run.log` and `metrics.json`. Both are linked below, unchanged. The table is computed from `metrics.json` when the site builds, so it cannot drift from the file.
+The pooled RMSE, MAE and Pearson columns reproduce the epoch-7 single-pass metrics across MVS3DM, NEON, GAMUS and US3D. The GAMUS RMSE column uses the same epoch-7 checkpoint with D4 averaging and 1.5× input scaling on all 859 GAMUS validation tiles. Raw evidence for both evaluations is linked in the table caption.
 
 <StatGrid>
 	<Stat label="Overall RMSE" value={row('overall').rmse.toFixed(2)} unit="m" note={`MAE ${row('overall').mae.toFixed(2)} m · r ${row('overall').r.toFixed(2)}`} />
-	<Stat label="Pixels scored" value={mpx(row('overall').n)} note="718 validation tiles, 4 sources" />
+	<Stat label="Pixels scored" value={mpx(row('overall').n)} note="Single-pass pool: 718 tiles · GAMUS zoom: 859 tiles" />
 	<Stat label="Checkpoint" value={`epoch ${L.epoch}`} note={`best.pt · select score ${L.select_score.toFixed(3)} m`} />
 </StatGrid>
 
 ## The table
 
 <DataTable
-	headers={['Landscape', 'RMSE (m) ↓', 'MAE (m) ↓', 'Pearson r ↑', 'GAMUS RMSE (m) ↓', 'Pixels', 'Pooled from']}
-	rows={L.rows.map((r) => [cap(r.landscape), r.rmse, r.mae, r.r, r.gamus_rmse, mpx(r.n), r.sets.join(', ')])}
+	headers={['Landscape', 'RMSE (m) ↓', 'MAE (m) ↓', 'Pearson r ↑', 'GAMUS RMSE (m) ↓', 'Pooled pixels', 'GAMUS tiles', 'Pooled from']}
+	rows={L.rows.map((r) => [cap(r.landscape), r.rmse, r.mae, r.r, r.gamus_rmse, mpx(r.n), r.gamus_tiles, r.sets.join(', ')])}
 	digits={2}
-	caption="v5 best.pt (epoch 7), single pass, no test-time augmentation. The first three metric columns pool all four validation sets. The GAMUS column is GAMUS validation alone."
-	source={L.source[0]}
+	caption="RMSE, MAE and r: epoch-7 single-pass pool from four validation sets. GAMUS RMSE: the same checkpoint, D4 + 1.5× input, all 859 GAMUS validation tiles."
+	source={L.source.join(' · ')}
 />
+
+The D4 setting lowers full GAMUS RMSE from **2.775 m to 2.590 m** (6.64%) while taking 14.2× longer. It worsens RMSE for true heights ≥15 m (5.792 → 5.980 m). See [full GAMUS inference comparison](/results/gamus-d4/) for raw metrics and tradeoffs. This is GAMUS validation centre-crop evaluation, not held-out test or absolute DSM scoring.
 
 <Aside type="caution" title="Held out from training, not a test split">
 These are the four **validation** splits. No tile in them was trained on, but they are not all independent of model selection:
@@ -44,7 +46,7 @@ The fair held-out test, on the separate `test` splits, has not been run for v5 y
 
 ## Where each row comes from
 
-Each validation tile gets a landscape label from its own ground-truth height map (see the [landscape classifier](/results/metrics/#landscape-classifier)). The evaluation then scores all pixels of each landscape together and writes `n`, RMSE, MAE and r per landscape into `metrics.json`. These are the per-set inputs at epoch 7:
+Each validation tile gets a landscape label from its own ground-truth height map (see the [landscape classifier](/results/metrics/#landscape-classifier)). The four-set columns score all pixels of each landscape together and write `n`, RMSE, MAE and r per landscape into the epoch-7 `metrics.json`. Its per-set inputs are:
 
 <DataTable
 	headers={['Set', 'Landscape', 'Tiles', 'Pixels', 'RMSE', 'MAE', 'r']}
@@ -90,7 +92,7 @@ The last evaluation in `run.log` (lines 757–763) prints the same per-landscape
 
 - The unlabelled first line is MVS3DM, the selection set.
 - `[neon @2x pooled]` scores NEON again at half resolution. The table does not use it. It uses the full-resolution `[neon]` line (`val_neon` in `metrics.json`).
-- The `[gamus]` line is the GAMUS column as it stands: 3.26 urban, 3.15 sparse, 2.01 forested, 2.893 overall.
+- The `[gamus]` line is the original single-pass GAMUS baseline on 200 tiles. The GAMUS column above uses all 859 validation tiles with D4 + 1.5× input; exact numbers are in the linked probe metrics.
 - Epoch 7 is the last epoch, and it is also the best. The run hit its 106-minute wall-clock cap during epoch 7 and then evaluated `best.pt` again (`[final] evaluating best.pt (epoch 7)`).
 - The log does not print pixel counts. Those are in `metrics.json`.
 
@@ -99,10 +101,10 @@ The last evaluation in `run.log` (lines 757–763) prints the same per-landscape
 1. Download the two files from the run. They are the files the Modal job wrote to `depthwizard-results:/v5_final_forest/`, unchanged:
    - <a href="/evidence/v5-final/metrics.json" download>metrics.json</a> (867 KB). SHA-256 `82d361b1a6caf7bf50e20cb485ea9fc57e3b6da52c29bb4b83140036e6a4f5fb`
    - <a href="/evidence/v5-final/run.log" download>run.log</a> (110 KB). SHA-256 `e706a022bbae4ded1379e66160c2502bdc295166692e7ef648b81747a69d9ce2`
-2. Run the script below. It uses only the Python standard library:
+2. Run the script below with the epoch-7 training metrics and the GAMUS D4 probe file. It uses only the Python standard library:
 
 ```sh
-python3 reproduce_landscape_table.py metrics.json
+python3 reproduce_landscape_table.py metrics.json probe_metrics.json
 ```
 
 ```text

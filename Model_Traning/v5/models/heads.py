@@ -108,6 +108,7 @@ class HeadB(nn.Module):
     def __init__(self, dim: int, n_bins: int, hmin: float, hmax: float):
         super().__init__()
         self.n_bins, self.hmin, self.hmax = n_bins, hmin, hmax
+        self.readout = "mean"
         self.bin_widths = nn.Sequential(
             nn.AdaptiveAvgPool2d(1), nn.Flatten(), nn.Linear(dim, n_bins))
         self.pixel_logits = _conv_block(dim, n_bins)
@@ -145,6 +146,20 @@ class HeadB(nn.Module):
             height = torch.einsum("bk,bkhw->bhw", centres, probs).unsqueeze(1)
             c2 = torch.einsum("bk,bkhw->bhw", centres ** 2, probs).unsqueeze(1)
             std = (c2 - height ** 2).clamp_min(0.0).sqrt()
+            if self.readout == "single_mode":
+                # Keep the descending basin around the most probable bin.
+                # Stop at the first rise toward another mode on either side.
+                peak = probs.argmax(1, keepdim=True)
+                idx = torch.arange(self.n_bins, device=x.device)[None, :, None, None]
+                next_p = torch.cat([probs[:, 1:], probs[:, -1:]], 1)
+                prev_p = torch.cat([probs[:, :1], probs[:, :-1]], 1)
+                left_break = (idx < peak) & (probs > next_p)
+                right_break = (idx > peak) & (probs > prev_p)
+                keep_left = left_break.flip(1).cumsum(1).flip(1) == 0
+                keep_right = right_break.cumsum(1) == 0
+                local = probs * (keep_left & keep_right)
+                local = local / local.sum(1, keepdim=True).clamp_min(1e-12)
+                height = torch.einsum("bk,bkhw->bhw", centres, local).unsqueeze(1)
         return {"height": height, "logits": logits, "centres": centres, "std": std}
 
 
@@ -338,6 +353,9 @@ class DepthWizardNet(nn.Module):
         a = self.head_a(x)
         b = self.head_b(x)
         fused, alpha = self.fusion(x, a, b["height"], scale)
+        if getattr(self, "eval_head_b_weight", None) is not None:
+            weight = self.eval_head_b_weight
+            fused = (1.0 - weight) * a.float() + weight * b["height"]
 
         return {
             "a": up_h(a),

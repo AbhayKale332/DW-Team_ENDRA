@@ -80,6 +80,10 @@ class Evaluator:
         self.strata = [MetricAccum() for _ in range(len(HEIGHT_STRATA_M) - 1)]
         self.tall = MetricAccum()
         self.flat = MetricAccum()
+        self.pred_strata = [MetricAccum() for _ in self.strata]
+        self.pred_tall = MetricAccum()
+        self.block30 = MetricAccum()
+        self.block30_sizes = set()
         self.land = {k: MetricAccum() for k in LANDSCAPE_NAMES}
         self.land_tiles = {k: 0 for k in LANDSCAPE_NAMES}
         self.land_desc: list[dict] = []
@@ -134,9 +138,9 @@ class Evaluator:
         """
         import torch.nn.functional as F
 
-        p = pred.float() if pred.dim() == 4 else pred.float().unsqueeze(1)
-        t = target.float() if target.dim() == 4 else target.float().unsqueeze(1)
-        v = (valid if valid.dim() == 4 else valid.unsqueeze(1)).bool()
+        p = pred.float().reshape(-1, 1, *pred.shape[-2:])
+        t = target.float().reshape_as(p)
+        v = valid.bool().reshape_as(p)
         big = torch.where(v, t, torch.full_like(t, -1e6))
         small = torch.where(v, t, torch.full_like(t, 1e6))
         rng = F.max_pool2d(big, 3, 1, 1) + F.max_pool2d(-small, 3, 1, 1)
@@ -154,12 +158,46 @@ class Evaluator:
             self.grad_t += float(dt[vv].sum())
 
     @torch.no_grad()
+    def add_30m(self, pred, target, valid, gsd_m):
+        """Tile-aligned nDSM block diagnostic, not an absolute DEM score.
+
+        Only complete, fully valid blocks count; incomplete tile margins drop.
+        Pixel count is rounded to the closest achievable 30 m block size.
+        """
+        if not getattr(self.cfg, "eval_bias_diagnostics", False):
+            return
+        p = pred.reshape(-1, 1, *pred.shape[-2:])
+        t = target.reshape_as(p)
+        v = valid.reshape_as(p).bool() & torch.isfinite(p) & torch.isfinite(t)
+        gsds = torch.as_tensor(gsd_m).reshape(-1).tolist()
+        for i in range(p.shape[0]):
+            g = float(gsds[i % len(gsds)])
+            if not g > 0:
+                raise ValueError("30 m diagnostics require a positive GSD")
+            k = max(1, round(30.0 / g))
+            self.block30_sizes.add(round(k * g, 6))
+            if min(p.shape[-2:]) < k:
+                continue
+            # Invalid NaNs must not contaminate otherwise valid pooling cells.
+            pp, tt, vv = pool_pair(torch.where(v[i:i+1], p[i:i+1], 0),
+                                   torch.where(v[i:i+1], t[i:i+1], 0), v[i:i+1], k)
+            vv = torch.nn.functional.max_pool2d((~v[i:i+1]).float(), k) == 0
+            self.block30.update(pp[vv], tt[vv])
+
+    @torch.no_grad()
     def add(self, pred, target, valid, cls=None):
         valid = valid.bool()
         if not valid.any():
             return
         p, t = pred[valid], target[valid]
         self.g.update(p, t)
+        if getattr(self.cfg, "eval_bias_diagnostics", False):
+            for si, accum in enumerate(self.pred_strata):
+                lo, hi = HEIGHT_STRATA_M[si:si + 2]
+                sel = (p >= lo) & (p < hi)
+                accum.update(p[sel], t[sel])
+            sel = p >= 15.0
+            self.pred_tall.update(p[sel], t[sel])
         for si in range(len(self.strata)):
             lo, hi = HEIGHT_STRATA_M[si], HEIGHT_STRATA_M[si + 1]
             sel = (t >= lo) & (t < hi)
@@ -194,6 +232,13 @@ class Evaluator:
         out["balanced_rmse_m"] = sum(rmses) / len(rmses) if rmses else None
         out["tall_gt15m"] = self.tall.result()
         out["flat_lt1m"] = self.flat.result()
+        if getattr(self.cfg, "eval_bias_diagnostics", False):
+            out["tall_pred15m"] = self.pred_tall.result()
+            out["per_predicted_stratum"] = {
+                label: accum.result() for label, accum in zip(strat, self.pred_strata)}
+            out["ndsm_30m"] = {
+                **self.block30.result(), "actual_block_sizes_m": sorted(self.block30_sizes),
+                "protocol": "tile-aligned complete fully-valid block means; bias = pred - GT"}
         if self.edge.n:
             out["edge_rmse_m"] = self.edge.result()["rmse_m"]
             out["edge_band"] = self.edge.result()
@@ -249,8 +294,12 @@ def dataset_src(ds) -> str:
 
 @torch.no_grad()
 def evaluate(model, loader, cfg, device, use_tta: bool = False,
-             gpu_prep=None, pool: int = 1, mask_veg: bool = False) -> dict:
+             gpu_prep=None, pool: int = 1, mask_veg: bool = False,
+             extra_pool: int = 1) -> dict:
     """`gpu_prep` is the trainer's `GpuPreproc`, or None for the all-CPU path.
+
+    `extra_pool` adds a label-resolution companion from the same predictions,
+    keeping the native metrics and avoiding another model forward pass.
 
     The decorator matters: without it the eval pass builds an autograd graph for
     a (B, 1, 512, 512) prediction it immediately throws away.  `Evaluator.add`
@@ -266,6 +315,7 @@ def evaluate(model, loader, cfg, device, use_tta: bool = False,
 
     model.eval()
     ev = Evaluator(cfg, dataset_src(getattr(loader, "dataset", None)))
+    coarse = Evaluator(cfg, dataset_src(getattr(loader, "dataset", None))) if extra_pool > 1 else None
     amp_dt = torch.bfloat16 if cfg.amp_dtype == "bf16" else torch.float16
     use_amp = cfg.amp and device.type == "cuda"
     for batch in loader:
@@ -292,8 +342,19 @@ def evaluate(model, loader, cfg, device, use_tta: bool = False,
             cls = None
         ev.add(pred, tgt, val, cls)
         ev.add_spatial(pred, tgt, val)
-        ev.add_tiles(pred, tgt, val, batch.get("gsd_m", 1.0))
-    return ev.result(use_tta)
+        ev.add_30m(pred, tgt, val, torch.as_tensor(batch.get("gsd_m", 1.0)) * pool)
+        ev.add_tiles(pred, tgt, val, torch.as_tensor(batch.get("gsd_m", 1.0)) * pool)
+        if coarse is not None:
+            pp, tt, vv = pool_pair(pred, tgt, val, extra_pool)
+            gsd = torch.as_tensor(batch.get("gsd_m", 1.0)) * pool * extra_pool
+            coarse.add(pp, tt, vv)
+            coarse.add_spatial(pp, tt, vv)
+            coarse.add_tiles(pp, tt, vv, gsd)
+            coarse.add_30m(pp, tt, vv, gsd)
+    result = ev.result(use_tta)
+    if coarse is not None:
+        result[f"pooled{extra_pool}"] = coarse.result(use_tta)
+    return result
 
 
 def format_line(m: dict) -> str:

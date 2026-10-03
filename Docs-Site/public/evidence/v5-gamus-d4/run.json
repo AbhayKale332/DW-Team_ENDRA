@@ -1,0 +1,19 @@
+{
+  "app": "dw-gamus-confirmation",
+  "function_call_id": "fc-01M4066HPF224NG0JCY2MJFGE4",
+  "volume": "depthwizard-results",
+  "remote_output": "/v5_gamus_zoom_confirmation_20261003",
+  "candidates": [
+    "baseline",
+    "baseline_d4_zoom150"
+  ],
+  "tiles": 859,
+  "split": "val",
+  "timeout_minutes": 40,
+  "status": "completed",
+  "baseline_rmse_m": 2.7745807525174246,
+  "zoom_rmse_m": 2.5904203396852234,
+  "improvement_pct": 6.6374140549021465,
+  "baseline_seconds": 67.78,
+  "zoom_seconds": 960.38
+}

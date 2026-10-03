@@ -1,0 +1,37 @@
+---
+title: GAMUS D4 validation
+description: Full GAMUS validation metrics comparing single-pass inference with D4 averaging and 1.5× input scaling for the epoch-7 DepthWizard v5 checkpoint.
+---
+
+## Full GAMUS validation comparison
+
+DepthWizard v5 epoch-7 `best.pt`, the same checkpoint used in the [landscape table](/results/landscape-accuracy/), scored on all 859 GAMUS validation tiles. The D4 candidate averages eight rotations and reflections with 1.5× input scaling. Both settings use the same deterministic 512 px centre crop and the same valid pixels. The weights are unchanged.
+
+| Metric | Single pass | D4 + 1.5× | Change |
+|---|---:|---:|---:|
+| Global RMSE | 2.775 m | **2.590 m** | **−0.184 m (−6.64%)** |
+| Global MAE | 1.346 m | 1.264 m | −0.082 m |
+| Urban RMSE | 3.211 m | 3.061 m | −0.150 m |
+| Sparse RMSE | 2.210 m | 1.253 m | −0.957 m |
+| Forested RMSE | 2.126 m | 2.052 m | −0.075 m |
+| Building RMSE | 3.322 m | 2.920 m | −0.403 m |
+| Tree RMSE | 4.164 m | 4.058 m | −0.105 m |
+| True heights ≥15 m RMSE | 5.792 m | **5.980 m** | **+0.187 m** |
+| 30 m nDSM block RMSE | 1.285 m | 1.115 m | −0.170 m |
+| Runtime | 67.78 s | 960.38 s | 14.17× |
+
+Both candidates score the same 222,847,123 valid pixels. Zoom helps sparse tiles and buildings most. True ≥15 m heights worsen, and the earlier cross-dataset pilot showed US3D regression, so this setting is a GAMUS global-RMSE result rather than a universally safe default. The 30 m metric pools nDSM heights; it is not absolute DSM scoring. The held-out test split was not used.
+
+The gain also appears outside the original 128-tile pilot: aggregate-derived RMSE on the other 731 validation tiles is 2.755 m single-pass versus 2.602 m with zoom. This remains validation evidence, not an independent test.
+
+- [Full raw metrics JSON](/evidence/v5-gamus-d4/probe_metrics.json)
+- [Run provenance and timing](/evidence/v5-gamus-d4/run.json)
+- [Original v5 training results](/evidence/v5-final/metrics.json)
+
+## Evaluation details
+
+- Checkpoint: epoch 7 `best.pt`; 925 tensors loaded, none missing or unexpected.
+- Split: GAMUS validation, all 859 tiles; deterministic centre crop per tile.
+- GSD: 0.25 m source labels; 512 px model crop, zoom input 768 px.
+- Same preprocessing, BF16 and batch size 2; no model weights or target heights changed.
+- D4: four rotations, each with and without horizontal flip; inverse transforms averaged at the original output size.

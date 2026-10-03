@@ -141,8 +141,12 @@ data["v5_final"] = {
 
 # --- v5 final run: accuracy by landscape, pooled over the four val sets -----
 v5f = DOCS / "public/evidence/v5-final/metrics.json"   # copy of the Modal run's file
-data["v5_landscape"] = {"source": [rel(M / "v5/outputs/v5/modal/metrics.json")],
-                        **landscape_table(json.loads(v5f.read_text()))}
+v5g = DOCS / "public/evidence/v5-gamus-d4/probe_metrics.json"  # full GAMUS D4 + 1.5x val
+data["v5_landscape"] = {
+    "source": [rel(M / "v5/outputs/v5/modal/metrics.json"),
+               "Docs-Site/public/evidence/v5-gamus-d4/probe_metrics.json"],
+    **landscape_table(json.loads(v5f.read_text()), json.loads(v5g.read_text())),
+}
 
 # --- MVS3DM LiDAR validation ----------------------------------------------
 mv = ROOT / "cartosat_2S_Sample/mvs3dm_results/summary.txt"

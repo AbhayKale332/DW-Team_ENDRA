@@ -74,18 +74,19 @@ def _hist_median(h: np.ndarray, lo: float, step: float) -> float | None:
 
 
 def score_scene(out_dir: Path, meta, k: int, refs: list[str], *, dem_cache: str = "",
-                band_rows: int = 2048) -> dict:
+                band_rows: int = 2048, ref_paths: dict | None = None) -> dict:
     """Score `dsm_m.tif` in `out_dir` against each reference DEM."""
     import rasterio
     from affine import Affine
     from rasterio.windows import Window
 
     from geo.calibrate import block_mean, upsample_rows
-    from geo.dem import fetch_dem
+    from geo.dem import fetch_dem, to_datum
 
     dsm_p, nd_p = out_dir / "dsm_m.tif", out_dir / "ndsm_m.tif"
     with rasterio.open(dsm_p) as d:
         H, W = d.height, d.width
+        output_datum = d.tags(1).get("VERTICAL_DATUM", "")
     hb, wb = -(-H // k), -(-W // k)
     tr_c = meta.transform * Affine.scale(k)
     out = {}
@@ -107,11 +108,22 @@ def score_scene(out_dir: Path, meta, k: int, refs: list[str], *, dem_cache: str 
         ours_c = np.where(cell_n > 0, cell_sum / np.maximum(cell_n, 1), np.nan)
 
     for ref in refs:
-        dem = fetch_dem(tr_c, meta.crs, wb, hb, source=ref, cache_dir=dem_cache)
+        local = (ref_paths or {}).get(ref)
+        if ref_paths is not None and ref != "copernicus30" and not local:
+            out[ref] = {"error": "Regional reference was unavailable during CPU preparation"}
+            continue
+        dem = fetch_dem(tr_c, meta.crs, wb, hb, source="local" if local else ref,
+                        local_path=local or "", local_datum="EGM96" if local else "",
+                        cache_dir=dem_cache)
         if dem.coverage <= 0:
             out[ref] = {"error": dem.note}
             continue
         ref_c = dem.array.astype(np.float64)
+        ref_c, conversion = to_datum(ref_c, tr_c, meta.crs, dem.datum, output_datum)
+        if not conversion.get("applied"):
+            out[ref] = {"error": "Reference vertical datum could not be matched",
+                        "datum_conversion": conversion, "dem": dem.summary()}
+            continue
         px, lo_step = _Acc(), (-100.0, 0.05)
         hist = np.zeros(4000)
         with rasterio.open(dsm_p) as d, rasterio.open(nd_p) as nd:
@@ -120,14 +132,17 @@ def score_scene(out_dir: Path, meta, k: int, refs: list[str], *, dem_cache: str 
                 w = Window(0, r0, W, r1 - r0)
                 a = d.read(1, window=w)
                 t = upsample_rows(np.nan_to_num(ref_c, nan=np.nanmean(ref_c)), k, r0, r1, W)
+                coverage = upsample_rows(np.isfinite(ref_c).astype(np.float32), k, r0, r1, W)
+                t[coverage < 0.999] = np.nan
                 px.add(a, t)
                 g = nd.read(1, window=w) < 1.0
-                diff = (a - t)[g & np.isfinite(a)]
+                diff = (a - t)[g & np.isfinite(a) & np.isfinite(t)]
                 idx = np.clip(((diff - lo_step[0]) / lo_step[1]).astype(int), 0, hist.size - 1)
                 hist += np.bincount(idx, minlength=hist.size)[:hist.size]
         cells = _Acc()
         cells.add(ours_c, ref_c)
-        out[ref] = {"datum": dem.datum, "per_pixel": px.result(), "per_30m_cell": cells.result(),
+        out[ref] = {"datum": output_datum, "datum_conversion": conversion,
+                    "per_pixel": px.result(), "per_30m_cell": cells.result(),
                     "median_dsm_minus_ref_on_ground_m": _hist_median(hist, *lo_step),
                     "dem": dem.summary()}
     return out

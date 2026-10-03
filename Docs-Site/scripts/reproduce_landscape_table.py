@@ -4,9 +4,11 @@ Run from Docs-Site/ (standard library only):
     python3 scripts/reproduce_landscape_table.py
     python3 scripts/reproduce_landscape_table.py path/to/metrics.json
 
-The file is the one the v5 final H100 run wrote on Modal. A copy is served at
-public/evidence/v5-final/metrics.json. Every number comes from the epoch the
-run kept as best.pt (epoch 7). Nothing is re-run.
+The first file is the one the v5 final H100 run wrote on Modal. A copy is served at
+public/evidence/v5-final/metrics.json. An optional second file is the full GAMUS
+validation D4 + 1.5x confirmation for that same epoch-7 checkpoint. The pooled
+four-set columns use the training run; the GAMUS-only column uses the optional
+all-859-tile confirmation.
 
 Pooling: each validation set reports n, RMSE, MAE and Pearson r per landscape.
   RMSE  = sqrt( sum(n_i * rmse_i^2) / sum(n_i) )   exact: the same as RMSE over all pixels
@@ -40,7 +42,7 @@ def best_epoch(metrics):
     return min(metrics["history"], key=lambda h: h["select_score"])
 
 
-def landscape_table(metrics):
+def landscape_table(metrics, gamus_readout=None):
     ep = best_epoch(metrics)
     per_set = []          # every input row, so the pooling can be checked by hand
     for key, name in SETS.items():
@@ -55,20 +57,29 @@ def landscape_table(metrics):
     for land in LANDSCAPES + ["overall"]:
         blocks = [ep[k]["global"] if land == "overall" else ep[k]["per_landscape"][land]
                   for k in SETS if land == "overall" or land in ep[k]["per_landscape"]]
-        g = ep["val_gamus"]["global"] if land == "overall" else ep["val_gamus"]["per_landscape"][land]
+        if gamus_readout is None:
+            g = ep["val_gamus"]["global"] if land == "overall" else ep["val_gamus"]["per_landscape"][land]
+        else:
+            candidates = gamus_readout["sources"]["gamus"]["candidates"]
+            selected = candidates["baseline_d4_zoom150"]
+            g = selected["global"] if land == "overall" else selected["per_landscape"][land]
         rows.append({"landscape": land,
                      "sets": [SETS[k] for k in SETS
                               if land == "overall" or land in ep[k]["per_landscape"]],
-                     **pool(blocks), "gamus_rmse": g["rmse_m"]})
+                     **pool(blocks), "gamus_rmse": g["rmse_m"],
+                     "gamus_tiles": (859 if land == "overall" else g.get("tiles")),
+                     "gamus_protocol": "D4 + 1.5x, all val tiles" if gamus_readout else "single pass, 200 val tiles"})
     return {"epoch": ep["epoch"], "select_score": ep["select_score"],
             "rows": rows, "per_set": per_set}
 
 
 if __name__ == "__main__":
     path = Path(sys.argv[1] if len(sys.argv) > 1 else "public/evidence/v5-final/metrics.json")
-    t = landscape_table(json.loads(path.read_text()))
+    readout_path = Path(sys.argv[2]) if len(sys.argv) > 2 else None
+    readout = json.loads(readout_path.read_text()) if readout_path else None
+    t = landscape_table(json.loads(path.read_text()), readout)
     print(f"best.pt = epoch {t['epoch']}  (select score {t['select_score']:.3f} m)\n")
-    print(f"{'landscape':<10}{'pixels':>13}{'RMSE':>8}{'MAE':>8}{'r':>8}{'GAMUS':>8}  sets")
+    print(f"{'landscape':<10}{'pixels':>13}{'RMSE':>8}{'MAE':>8}{'r':>8}{'GAMUS':>8}{'GAMUS tiles':>13}  sets")
     for r in t["rows"]:
         print(f"{r['landscape']:<10}{r['n']:>13,}{r['rmse']:>8.2f}{r['mae']:>8.2f}"
-              f"{r['r']:>8.2f}{r['gamus_rmse']:>8.2f}  {', '.join(r['sets'])}")
+              f"{r['r']:>8.2f}{r['gamus_rmse']:>8.2f}{r['gamus_tiles']:>13}  {', '.join(r['sets'])}")

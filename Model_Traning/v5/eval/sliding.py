@@ -33,6 +33,8 @@ def sliding_eval(model, full_ds, cfg, spec, device, *, tta: bool = False,
         pred_t = torch.from_numpy(height).to(device)
         tgt_t, val_t = s["target"].to(device), s["valid"].to(device)
         ev.add(pred_t, tgt_t, val_t, s["cls"].to(device))
+        ev.add_spatial(pred_t, tgt_t, val_t)
+        ev.add_30m(pred_t, tgt_t, val_t, gsd)
         ev.add_tiles(pred_t.unsqueeze(0), tgt_t.unsqueeze(0), val_t.unsqueeze(0), gsd)
         if log_every and (i + 1) % log_every == 0:
             print(f"  [sliding] {i + 1}/{n}", flush=True)

@@ -212,7 +212,7 @@ class Replicated(torch.nn.Module):
     thread-local, so the workers re-enter grad mode and autocast explicitly.
     """
 
-    KEYS = ("fused", "seg", "b_std")
+    KEYS = ("fused", "seg", "b_std", "a", "b")
 
     def __init__(self, model, devices):
         super().__init__()
@@ -257,6 +257,10 @@ def _own_args(argv: list[str]):
     p.add_argument("--out", default="outputs/v5_test")
     p.add_argument("--skip_plain", action="store_true")
     p.add_argument("--skip_tta", action="store_true")
+    p.add_argument("--bin_readout", choices=("mean", "single_mode"), default="mean")
+    p.add_argument("--head_b_weight", type=float, default=None,
+                   help="override learned fusion with fixed Head B weight, 0..1")
+    p.add_argument("--prediction_head", choices=("fused", "a", "b"), default="fused")
     p.add_argument("--tta_scales", default="",
                    help="comma list, e.g. 1.0,1.25; empty keeps the run config's")
     p.add_argument("--qualitative", type=int, default=0,
@@ -574,6 +578,18 @@ def main(argv=None) -> None:
           + (f" {torch.cuda.get_device_properties(0).name}" if n_gpu else ""))
     cfg.hf_token = resolve_hf_token(cfg)
     model, ck = load_checkpoint(cfg, a.ckpt, a.run_config, rest, device)
+    if a.head_b_weight is not None and not 0 <= a.head_b_weight <= 1:
+        raise SystemExit("--head_b_weight must be in [0, 1]")
+    if _CODE != _HERE and (a.bin_readout != "mean" or a.head_b_weight is not None
+                           or a.prediction_head != "fused"):
+        raise SystemExit("readout experiments require this v5 model tree")
+    model.head_b.readout = a.bin_readout
+    model.eval_head_b_weight = a.head_b_weight
+    if a.prediction_head != "fused":
+        # Route existing plain, TTA, sliding and qualitative paths through one head.
+        head = a.prediction_head
+        model.register_forward_hook(lambda module, inputs, out: {**out, "fused": out[head]})
+    cfg.eval_bias_diagnostics = True
     cfg.gpu_augment = False        # the eval path normalises on the host
     cfg.per_landscape_metrics = True
     if a.tta_scales:
@@ -617,6 +633,8 @@ def main(argv=None) -> None:
         print(f"[env] one model copy per GPU — every batch split {n_gpu} ways")
 
     res: dict = {"checkpoint": str(a.ckpt), "model_code": str(_CODE), "store": str(d),
+                 "readout": {"bin": a.bin_readout, "head_b_weight": a.head_b_weight,
+                             "prediction_head": a.prediction_head},
                  "tiles_scored": n, "store_tiles": len(store),
                  "config": safe_config_dict(cfg), "preproc": spec.to_dict()}
     tag = f"test_{a.source}_{a.split}"
