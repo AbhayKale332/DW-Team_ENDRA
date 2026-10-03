@@ -42,9 +42,10 @@ export function withConfidentCut(grid: HeightGrid, meta: SceneMeta, cloudUnder?:
     data = data.slice();
     for (let i = 0; i < cloudUnder.length; i++) if (cloudUnder[i] >= 128) data[i] = NaN;
   }
+  const stats = computeStats(data);
   const given = meta.uncertainty?.confident_threshold_m;
-  const confidentM = typeof given === 'number' && given > 0 ? given : Math.max(CONFIDENT_FLOOR_M, computeStats(data).median);
-  return { ...grid, data, confidentM };
+  const confidentM = typeof given === 'number' && given > 0 ? given : Math.max(CONFIDENT_FLOOR_M, stats.median);
+  return { ...grid, data, confidentM, redlineM: stats.p98 };
 }
 
 /** σ at a grid point (pixel centres at integers, as the pick tools use); null where there is none. */

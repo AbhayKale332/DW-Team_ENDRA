@@ -36,6 +36,8 @@ export interface HeightGrid {
 export interface UncertaintyGrid extends HeightGrid {
   /** Pixels with σ at or below this are "confident": the backend's cut, max(1 m, the scene's median σ). */
   confidentM: number;
+  /** 98th-percentile σ; values above this are reserved for the red high-uncertainty color. */
+  redlineM?: number;
 }
 
 /** Per-pixel object class from the model's segmentation head, on the height grid (`seg.png`). */

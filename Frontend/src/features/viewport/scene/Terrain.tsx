@@ -176,7 +176,7 @@ export function Terrain() {
     }
     const t = createHeightTexture(u.data, u.width, u.height, 0, -1);
     uniforms.uStd.value = t;
-    uniforms.uStdMax.value = 2 * u.confidentM;
+    uniforms.uStdMax.value = u.redlineM ?? 2 * u.confidentM;
     uniforms.uHasStd.value = 1;
     invalidate();
     return () => {

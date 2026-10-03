@@ -85,7 +85,7 @@ export interface TerrainUniforms {
   uClass: THREE.IUniform<THREE.Texture | null>;
   uClassLut: THREE.IUniform<THREE.Texture | null>;
   uHasClass: THREE.IUniform<number>;
-  /** Per-pixel σ (metres, -1 = none), whether the scene has one, and the σ drawn fully red (twice the confident cut). */
+  /** Per-pixel σ (metres, -1 = none), whether the scene has one, and the p98 red cutoff. */
   uStd: THREE.IUniform<THREE.Texture | null>;
   uHasStd: THREE.IUniform<number>;
   uStdMax: THREE.IUniform<number>;
@@ -287,8 +287,9 @@ const fragmentShader = /* glsl */ `
       float s = texture2D(uStd, g).r;
       // no σ here (masked, under cloud): the photo, dimmed, never a colour that reads as confident
       if (s < 0.0) return rgb * 0.45;
-      // green = confident, yellow = at the confident cut, red = twice it and beyond (as the v5 viewer)
-      return cmap(7.0, s / uStdMax) * relief;
+      // Keep ordinary uncertainty green-to-yellow; reserve red for only the top 2%.
+      float t = s > uStdMax ? 1.0 : 0.5 * clamp(s / max(uStdMax, 1e-4), 0.0, 1.0);
+      return cmap(7.0, t) * relief;
     }
     // 0: optical + height tint — ground stays photographic, raised structures take the colormap.
     // On an absolute DSM the elevation range is terrain-dominated: tint by height above ground instead.

@@ -26,7 +26,12 @@ export function Colorbar() {
     if (layer === 'uncertainty') {
       const u = scene.uncertainty;
       if (!u) return null;
-      return { title: 'Uncertainty (1σ)', ramp: cssGradient('confidence'), ticks: [`≥ ${fmt(2 * u.confidentM, 'm')}`, fmt(u.confidentM, 'm'), '0 m'] };
+      const redline = u.redlineM ?? 2 * u.confidentM;
+      return {
+        title: 'Uncertainty (1σ)',
+        ramp: 'linear-gradient(to top, #3cbe5a 0%, #ffbe28 98%, #ff2828 98%)',
+        ticks: [`> ${fmt(redline, 'm')} (top 2%)`, fmt(redline / 2, 'm'), '0 m'],
+      };
     }
     if (layer === 'error') {
       const r = Math.max(1, (scene.stats.p98 - scene.stats.p2) * 0.25);
