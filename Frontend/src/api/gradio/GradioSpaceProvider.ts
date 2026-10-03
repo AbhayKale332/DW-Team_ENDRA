@@ -59,7 +59,7 @@ async function* readSse(res: Response, signal: AbortSignal): AsyncGenerator<{ ev
 export class GradioSpaceProvider implements InferenceProvider {
   readonly id = 'gradio-space' as const;
   readonly label = 'DepthWizard model (Hugging Face Space)';
-  readonly capabilities = { absoluteDsm: false, uncertainty: false, serverValidation: false, cancel: true };
+  readonly capabilities = { absoluteDsm: false, uncertainty: true, serverValidation: false, cancel: true };
   private readonly base: string;
 
   constructor(private readonly opts: GradioSpaceOptions) {
