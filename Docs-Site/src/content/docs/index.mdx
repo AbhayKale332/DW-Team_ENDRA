@@ -17,24 +17,34 @@ hero:
       link: /overview/quickstart/
       variant: minimal
       icon: right-arrow
-    - text: How the model works
-      link: /model/overview/
-      variant: minimal
     - text: Model weights
       link: https://www.kaggle.com/models/abhaydkale232/depthwizard-v5
-      icon: external
-      variant: minimal
+      variant: secondary
 ---
 
 import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 import Stat from '../../components/Stat.astro';
 import StatGrid from '../../components/StatGrid.astro';
 import Diagram from '../../components/Diagram.astro';
-import Figure from '../../components/Figure.astro';
 import SceneViewer from '../../components/SceneViewer.astro';
 import PipelineDiagram from '../../components/diagrams/PipelineDiagram.astro';
-import mumbai from '../../assets/figures/sample_mumbai.png';
 import infosys from '../../assets/figures/cartosat-infosys-bhubaneswar.png';
+
+<style is:global>
+	.hero .actions {
+		flex-wrap: nowrap;
+		max-width: 100%;
+		overflow-x: auto;
+	}
+	.hero .actions > a { white-space: nowrap; }
+	.hero .actions > a[href="https://www.kaggle.com/models/abhaydkale232/depthwizard-v5"]::before {
+		content: '';
+		width: 1.1rem;
+		height: 1.1rem;
+		flex: none;
+		background: url('../../assets/kaggle-logo.png') center / contain no-repeat;
+	}
+</style>
 
 <SceneViewer sample="campus" label="Cartosat-2S · 0.6 m/px · 1024 × 1024 · EPSG:32645" fallback={infosys}>
 	**Try it: Infosys campus, Bhubaneswar.** A single **Cartosat-2S** GeoTIFF (0.6 m, georeferenced) with DepthWizard's predicted heights, the same sample that ships with the web app. Drag to orbit, right-drag to pan, scroll to zoom, and hover over a building to read its height and footprint. Switch layers to see the height map or the model's land-cover classes. [View on Google Maps](https://maps.app.goo.gl/qtUwHxFjdgVSF9fE8) · [Source imagery: Bhoonidhi sample products](https://bhoonidhi.nrsc.gov.in/bhoonidhi/help/sampleProducts.html)
@@ -48,10 +58,6 @@ import infosys from '../../assets/figures/cartosat-infosys-bhubaneswar.png';
 	<Stat label="Cross-domain RMSE" value="4.97" unit="m" note="DFC23, a different sensor and continent" />
 	<Stat label="Encoder" value="303" unit="M" note="DINOv3 ViT-L/16 pretrained on 493 M satellite images" />
 </StatGrid>
-
-## Works on plain screenshots too
-
-<Figure src={mumbai} alt="Input image, predicted height map and textured 3D render of a high-rise district" caption="Without georeferencing, a screenshot is processed at an assumed 0.5 m GSD and gives a relative DSM. From left to right: the input image, the predicted height map (0 to 112.4 m) and the textured 3D render." credit="Imagery © Google Earth." />
 
 <SceneViewer sample="wankhede" label="Google Earth screenshot · 0.5 m/px (assumed) · 886 × 598 · relative DSM">
 	**Wankhede Stadium, Mumbai.** A screenshot from Google Earth of the Wankhede Stadium in Mumbai, with DepthWizard's predicted heights. [Source: Google Earth](https://earth.google.com/web/@18.93898351,72.82459925,32.08912861a,473.22418483d,30y,0h,0t,0r/data=CgRCAggBMikKJwolCiExNnNzVmxZdkhNbTFhM3NGQjlZV2xQeERWa2VDUzVOSjEgAToDCgExQgIIAEoICKvWoPcHEAE?authuser=1)

@@ -1,9 +1,9 @@
 ---
 import { Icon } from '@astrojs/starlight/components';
 const systems = [
-  { id: 'win', title: 'Windows', detail: 'Windows 10 / 11 · 64-bit', icon: 'laptop', format: '.exe installer' },
+  { id: 'win', title: 'Windows', detail: 'Windows 10 / 11 · 64-bit', icon: 'windows', format: '.exe installer' },
   { id: 'mac', title: 'macOS', detail: 'Apple Silicon or Intel', icon: 'apple', format: '.dmg disk image' },
-  { id: 'linux', title: 'Linux', detail: '64-bit · built on Ubuntu 22.04', icon: 'laptop', format: '.AppImage' },
+  { id: 'linux', title: 'Linux', detail: '64-bit', icon: 'ubuntu', format: '.AppImage' },
 ];
 ---
 <section class="downloads" aria-label="Desktop application downloads">
@@ -28,12 +28,16 @@ const systems = [
   <button id="retry-releases" hidden type="button">Try again</button>
   <div class="platforms">
     {systems.map((system) => <article class="platform" data-platform={system.id}>
-      <Icon name={system.icon as 'laptop' | 'apple'} size="2rem" />
+      {system.icon === 'windows' ? <svg class="platform-logo windows-logo" viewBox="0 0 24 24" role="img" aria-label="Windows"><path d="M2 4.2 10.7 3v8.4H2V4.2Zm9.8-1.4L22 1.3v10.1H11.8V2.8ZM2 12.7h8.7v8.4L2 19.9v-7.2Zm9.8 0H22v10l-10.2-1.4V12.7Z" fill="currentColor"/></svg> : system.icon === 'ubuntu' ? <svg class="platform-logo ubuntu-logo" viewBox="0 0 24 24" role="img" aria-label="Ubuntu"><path d="M12 3.1a8.9 8.9 0 1 0 0 17.8 8.9 8.9 0 0 0 0-17.8Zm0 2.1a6.8 6.8 0 1 1 0 13.6 6.8 6.8 0 0 1 0-13.6Z" fill="currentColor"/><circle cx="12" cy="3" r="2.1" fill="currentColor"/><circle cx="4.2" cy="16.5" r="2.1" fill="currentColor"/><circle cx="19.8" cy="16.5" r="2.1" fill="currentColor"/></svg> : <Icon name="apple" size="2rem" />}
       <h2>{system.title}</h2>
       <p class="platform-detail">{system.detail}</p>
       {system.id === 'mac' ? <div class="architecture"><label for="mac-architecture">Processor</label><select id="mac-architecture"><option value="arm64">Apple Silicon · M-series</option><option value="x64">Intel</option></select></div> : <div class="architecture"><span>{system.format}</span></div>}
       <a class="download-button" aria-disabled="true" tabindex="-1"><Icon name="download" size="1rem" /> Download {system.title}</a>
       <span class="asset-size">Waiting for release data</span>
+      <div class="install-steps">
+        <strong>Install on {system.title}</strong>
+        {system.id === 'win' ? <ol><li>Download and open the <code>.exe</code> installer.</li><li>Follow the setup prompts, then launch DepthWizard from the Start menu.</li></ol> : system.id === 'mac' ? <ol><li>Open the downloaded <code>.dmg</code> file.</li><li>Drag DepthWizard into Applications, then open it. If macOS blocks it, Control-click the app and choose <strong>Open</strong>.</li></ol> : <ol><li>Download the <code>.AppImage</code> file.</li><li>In Properties → Permissions, allow executing it as a program, then double-click to launch. Or run <code>chmod +x DepthWizard*.AppImage</code> in Terminal first.</li></ol>}
+      </div>
     </article>)}
   </div>
   <p class="model-note"><strong>One download. Model included.</strong> The model-included installer contains everything needed for local predictions. The model-free installer connects to the hosted model; images are sent online when you run an estimate.</p>
@@ -137,6 +141,13 @@ const systems = [
   .download-button:hover { opacity: .85; }
   .download-button[aria-disabled='true'] { color: var(--dw-dim); background: var(--dw-panel); cursor: not-allowed; }
   .downloads .asset-size { font-family: var(--sl-font-mono); font-size: .65rem; color: var(--dw-dim); margin-top: .7rem; align-self: center; text-align: center; }
+  .platform-logo { width: 2rem; height: 2rem; color: var(--dw-dim); }
+  .ubuntu-logo { color: #e95420; }
+  .install-steps { width: 100%; margin-top: 1.1rem; padding-top: .9rem; border-top: 1px solid var(--dw-line); font-size: .78rem; color: var(--dw-dim); }
+  .install-steps > strong { color: var(--dw-ink); }
+  .install-steps ol { padding-left: 1.2rem; margin: .65rem 0 0; line-height: 1.55; }
+  .install-steps li + li { margin-top: .35rem; }
+  .install-steps code { font-size: .9em; }
   .model-note { font-size: .84rem; line-height: 1.7; color: var(--dw-dim); margin-top: 1.5rem; }
   #desktop-release-notes { border-top: 1px solid var(--dw-line); padding-top: 1rem; margin-top: 1.5rem; font-size: .85rem; }
   #desktop-release-notes summary { cursor: pointer; font-weight: 600; }
