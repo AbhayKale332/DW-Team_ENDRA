@@ -39,6 +39,7 @@ jobs:
         working-directory: Frontend
         shell: bash
     env:
+      PYTHONUTF8: '1'
       DESKTOP_MODEL_URL: ${{ inputs.model_url || vars.DESKTOP_MODEL_URL }}
       DESKTOP_MODEL_SHA256: ${{ inputs.model_sha256 || vars.DESKTOP_MODEL_SHA256 }}
     steps:
@@ -90,7 +91,10 @@ jobs:
           APPLE_ID: ${{ secrets.DESKTOP_APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.DESKTOP_APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.DESKTOP_APPLE_TEAM_ID }}
-        run: npx electron-builder --config electron-builder.config.cjs --${{ matrix.platform }} --${{ matrix.arch }} --publish never
+        run: |
+          # An empty certificate link is treated as a file path by electron-builder.
+          if [[ -z "$CSC_LINK" ]]; then unset CSC_LINK; fi
+          npx electron-builder --config electron-builder.config.cjs --${{ matrix.platform }} --${{ matrix.arch }} --publish never
       - name: Test packaged desktop startup
         run: |
           if [[ "${{ matrix.platform }}" == "win" ]]; then
