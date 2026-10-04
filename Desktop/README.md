@@ -71,7 +71,9 @@ DW_BUNDLE_MODEL=0 npm run desktop:linux  # run on Linux
 
 Output goes to `Desktop/windows/release/<variant>/`, `Desktop/mac/release/<variant>/`, or `Desktop/linux/release/<variant>/` on the corresponding build machine. `npm run desktop:pack` creates an unpacked app for inspection. Run `npm run desktop:smoke` to test source startup after building the UI; on a headless Linux machine use `xvfb-run -a npm run desktop:smoke`. Set `DW_DESKTOP_EXECUTABLE` to test an unpacked executable instead. The smoke test uses isolated temporary application data.
 
-The backend build deliberately excludes model training dependencies. It still ships CPU torch for the existing inference engine, so application downloads are substantial even without weights. `beforePack` fails if the native inference executable is missing instead of producing an incomplete installer.
+Production builds omit source maps by default. Set `DW_BUILD_SOURCEMAPS=1` when running the UI build to generate hidden maps for release debugging. Installers include each sample `.dwproj` and its input/height quick looks; loose source rasters, intermediate results and development fixtures stay in the source tree. Complete project archives retain their embedded source and export files.
+
+The backend build deliberately excludes model training dependencies and bundled upstream native test programs. It still ships CPU torch for the existing inference engine, so application downloads are substantial even without weights. `beforePack` fails if the native inference executable is missing instead of producing an incomplete installer.
 
 ## Supply / replace the model
 

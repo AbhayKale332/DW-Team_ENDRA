@@ -76,3 +76,17 @@ def test_seg_map_is_returned_on_request():
     h, seg = predict_scene(Const(1.0), rgb, 0.5, spec, torch.device("cpu"),
                            want_seg=True)
     assert seg is not None and seg.shape == h.shape
+
+
+def test_blend_preserves_height_and_uncertainty_together():
+    class WithStd(Const):
+        def forward(self, x):
+            return {**super().forward(x), "b_std": torch.full_like(x[:, :1], 0.25)}
+
+    spec = PreprocSpec(tile_size=64, radiometric_stretch=False)
+    h, seg, std = predict_canonical(WithStd(7.5), np.zeros((93, 75, 3), np.uint8),
+                                   spec, torch.device("cpu"), want_seg=True, want_std=True)
+    assert h.shape == seg.shape == std.shape == (93, 75)
+    assert np.allclose(h, 7.5, atol=1e-4)
+    assert np.allclose(std, 0.25, atol=1e-5)
+    assert not np.shares_memory(h, std)

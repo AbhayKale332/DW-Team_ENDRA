@@ -7,10 +7,15 @@ export async function loadImageTexture(blob: Blob, maxSize: number, anisotropy: 
   const scale = Math.min(1, maxSize / Math.max(probe.width, probe.height));
   let bmp = probe;
   if (scale < 1) {
-    bmp = await createImageBitmap(blob, { resizeWidth: Math.round(probe.width * scale), resizeHeight: Math.round(probe.height * scale), resizeQuality: 'high' });
-    probe.close();
+    try {
+      bmp = await createImageBitmap(blob, { resizeWidth: Math.max(1, Math.round(probe.width * scale)), resizeHeight: Math.max(1, Math.round(probe.height * scale)), resizeQuality: 'high' });
+    } finally {
+      probe.close();
+    }
   }
   const tex = new THREE.Texture(bmp as unknown as HTMLImageElement);
+  // Texture.dispose() releases GPU storage, but ImageBitmaps need explicit CPU-side cleanup.
+  tex.addEventListener('dispose', () => bmp.close());
   tex.flipY = false;
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = anisotropy;

@@ -107,13 +107,14 @@ def predict_canonical(
         if progress:
             progress(min(b0 + batch_tiles, total), total)
 
-    height = acc / np.maximum(wsum, 1e-6)
+    np.maximum(wsum, 1e-6, out=wsum)
+    height = np.divide(acc, wsum, out=acc)
     height = height[:H, :W]
     if seg_acc is not None:
         seg_acc = seg_acc[:H, :W]
     if want_std:
         std_out = None if std_acc is None else \
-            (std_acc / np.maximum(wsum, 1e-6))[:H, :W].astype(np.float32)
+            np.divide(std_acc, wsum, out=std_acc)[:H, :W].astype(np.float32)
         return height.astype(np.float32), seg_acc, std_out
     return height.astype(np.float32), seg_acc
 
@@ -282,7 +283,8 @@ def predict_scene_windowed(
                     ds_std = rasterio.open(std_path, "w",
                                            **_geotiff_profile(source, "float32", np.nan))
                 ds_std.write(sd, 1, window=Window(0, r0, W, r1 - r0))
-                ov_std.append(sd[(-r0) % ov_step::ov_step, ::ov_step])
+                # Copy decimated pixels so the overview does not retain every full band.
+                ov_std.append(sd[(-r0) % ov_step::ov_step, ::ov_step].copy())
             if want_seg:
                 s = resize(s_c.astype(np.int32), (hh, ww), "nearest")[r0 - a0:r1 - a0]
                 s = np.where(v, s, 255).astype(np.uint8)
@@ -296,7 +298,7 @@ def predict_scene_windowed(
                 lo_h, hi_h = min(lo_h, float(hv.min())), max(hi_h, float(hv.max()))
                 below1 += int((hv < 1.0).sum())
             first = (-r0) % ov_step
-            ov_h.append(h[first::ov_step, ::ov_step])
+            ov_h.append(h[first::ov_step, ::ov_step].copy())
             if k:
                 _accumulate_blocks(h, r0, k, blk_sum, blk_n)
             if progress:

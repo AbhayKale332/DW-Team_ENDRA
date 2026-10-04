@@ -159,3 +159,56 @@ def test_windowed_equals_whole_array_across_band_seams(tmp_path):
     assert np.abs(win[fin] - whole[fin]).max() < 1e-3
     assert out["block_mean"].shape == (-(-H // 16), -(-W // 16))
     assert out["stats"]["valid_px"] == int(fin.sum())
+
+
+def test_windowed_overviews_release_previous_full_resolution_bands(tmp_path, monkeypatch):
+    import weakref
+    from infer.engine import predict_scene_windowed
+
+    _write_product(tmp_path / "p")
+    source = SceneSource(tmp_path / "p")
+    buffers = []
+    read_rows = source.read_rows
+    real_open = rasterio.open
+
+    class Writer:
+        def __init__(self, dataset):
+            self.dataset = dataset
+
+        def __enter__(self):
+            self.dataset.__enter__()
+            return self
+
+        def __exit__(self, *args):
+            return self.dataset.__exit__(*args)
+
+        def close(self):
+            self.dataset.close()
+
+        def write(self, data, *args, **kwargs):
+            if data.dtype == np.float32:
+                owner = data.base if data.base is not None else data
+                buffers.append(weakref.ref(owner))
+            return self.dataset.write(data, *args, **kwargs)
+
+    def tracked_open(path, mode="r", **kwargs):
+        dataset = real_open(path, mode, **kwargs)
+        return Writer(dataset) if mode == "w" else dataset
+
+    def tracked_rows(*args):
+        # The previous band's local variables can still be live; older bands must be freed.
+        assert all(ref() is None for ref in buffers[:-2])
+        return read_rows(*args)
+
+    class WithStd(_PerPixel):
+        def forward(self, x):
+            return {**super().forward(x), "b_std": torch.full_like(x[:, :1], 0.25)}
+
+    monkeypatch.setattr(rasterio, "open", tracked_open)
+    monkeypatch.setattr(source, "read_rows", tracked_rows)
+    result = predict_scene_windowed(WithStd(), source,
+                                   PreprocSpec(tile_size=32, canonical_gsd_m=0.6),
+                                   torch.device("cpu"), tmp_path / "out",
+                                   band_rows=20, overview_max=24)
+    assert len(buffers) > 4
+    assert result["overview_height"].shape == result["overview_std"].shape == (24, 20)

@@ -96,8 +96,8 @@ export default defineConfig(({ mode }) => {
     worker: { format: 'es' },
     build: {
       target: 'es2022',
-      // maps are built for debugging but not referenced from the bundle; server/serve.mjs does not publish them
-      sourcemap: 'hidden',
+      // Opt in when debugging a release; installers do not ship source maps.
+      sourcemap: env.DW_BUILD_SOURCEMAPS === '1' ? 'hidden' : false,
       chunkSizeWarningLimit: 1500,
       rollupOptions: {
         output: {

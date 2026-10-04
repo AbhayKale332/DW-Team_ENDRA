@@ -100,13 +100,14 @@ class _OnnxModel:
 def _onehot(seg):
     """(B,1,H,W) class ids -> (B,C,H,W) logits, because engine.py argmaxes."""
     import torch
-    import torch.nn.functional as F
-
     from config import N_SEG_CLASSES
 
-    return F.one_hot(seg[:, 0].long().clamp(0, N_SEG_CLASSES - 1),
-                     N_SEG_CLASSES).permute(0, 3, 1, 2).float() * 10.0 \
-        if torch.is_tensor(seg) else seg
+    if not torch.is_tensor(seg):
+        return seg
+    ids = seg.long().clamp(0, N_SEG_CLASSES - 1)
+    logits = torch.zeros((seg.shape[0], N_SEG_CLASSES, *seg.shape[2:]),
+                         dtype=torch.float32, device=seg.device)
+    return logits.scatter_(1, ids, 10.0)
 
 
 def _model():

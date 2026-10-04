@@ -14,7 +14,9 @@ module.exports = {
   files: [
     'shared/*.mjs', '!shared/*.test.mjs', '!shared/smoke.mjs', 'shared/icons/icon.png',
     'package.json', '!node_modules/**/*',
-    { from: '../Frontend/dist', to: 'dist', filter: ['**/*', '!**/*.map'] },
+    { from: '../Frontend/dist', to: 'dist', filter: ['**/*', '!**/*.map', '!samples/**/*'] },
+    // Projects include their source rasters and results; retain quick looks used by the sample picker.
+    { from: '../Frontend/dist/samples', to: 'dist/samples', filter: ['**/*.dwproj', '**/input.png', '**/input.jpg', '**/input.jpeg', '**/height.png', 'index.json'] },
     { from: '../Frontend/server', to: 'server', filter: ['*.mjs', '!*.test.mjs'] },
   ],
   extraResources: [

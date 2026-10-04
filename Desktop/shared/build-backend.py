@@ -1,6 +1,7 @@
 """Run with the target platform's Python after installing shared/requirements.txt."""
 from pathlib import Path
 import subprocess
+import shutil
 import sys
 
 here = Path(__file__).resolve().parent
@@ -13,7 +14,8 @@ command = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--one
            "--name", "depthwizard-inference", "--paths", str(root / "Model_Traning" / "v5"),
            "--distpath", str(here / "resources" / "backend"),
            "--workpath", str(here / ".build"), "--specpath", str(here / ".build"),
-           "--collect-all", "onnxruntime", "--collect-all", "onnx",
+           # The ONNX imports and runtime hook collect required code and provider libraries.
+           # collect-all also bundles model-zoo fixtures, exporters and tooling.
            "--collect-all", "rasterio", "--collect-all", "pyproj"]
 for module in hidden:
     command += ["--hidden-import", module]
@@ -22,3 +24,12 @@ for module in ["transformers", "huggingface_hub", "matplotlib", "pandas", "sklea
     command += ["--exclude-module", module]
 command += [str(here / "inference.py")]
 subprocess.run(command, cwd=here, check=True)
+
+# PyInstaller's torch hook copies native test programs as package data.
+# Keep the actual tensor libraries and shared-memory helper.
+torch_dir = here / "resources" / "backend" / "depthwizard-inference" / "_internal" / "torch"
+shutil.rmtree(torch_dir / "test", ignore_errors=True)
+for binary in (torch_dir / "bin").glob("*"):
+    name = binary.stem.lower()
+    if binary.is_file() and (name.startswith("test_") or name.endswith("test") or name.startswith("tutorial_")):
+        binary.unlink()

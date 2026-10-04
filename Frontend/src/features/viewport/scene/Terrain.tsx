@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { transfer } from 'comlink';
 import { useThree } from '@react-three/fiber';
 import { useScene } from '@/store/scene';
 import { activeLayer, activeObjectKinds, objectKindsKey, useView } from '@/store/view';
@@ -222,9 +223,11 @@ export function Terrain() {
     // With objects drawn as models, mesh the ground under them instead of their bumps (computed in the worker;
     // the raw heights when no class is on).
     loadObjectSurface(scene, useView.getState().objectKinds)
-      .then((heights) =>
-        terrainWorker().build({
-          heights: heights.slice(),
+      .then((heights) => {
+        if (cancelled) return null;
+        const copy = heights.slice();
+        return terrainWorker().build(transfer({
+          heights: copy,
           width: scene.heights.width,
           height: scene.heights.height,
           gsd: scene.gsd,
@@ -232,10 +235,10 @@ export function Terrain() {
           budget: BUDGET[quality],
           wallThreshold: walls ? wallThreshold : 0,
           skirtDepth: Math.max(relief * 0.08, extentMax * 0.015, 1),
-        }),
-      )
+        }, [copy.buffer]));
+      })
       .then((out) => {
-        if (cancelled) return;
+        if (cancelled || !out) return;
         setGeo((prev) => {
           prev?.terrain.dispose();
           prev?.skirt.dispose();

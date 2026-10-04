@@ -178,3 +178,14 @@ def test_external_weight_files_are_reported_so_they_can_be_shipped(
             assert out.stat().st_size > 0
     finally:
         undo()
+
+
+def test_onnx_class_adapter_preserves_logits_and_clamps_invalid_ids():
+    import torch.nn.functional as F
+    from config import N_SEG_CLASSES
+    from serve.app import _onehot
+
+    ids = torch.tensor([[[[-1, 0, 1, N_SEG_CLASSES, 3]]]], dtype=torch.int32)
+    expected = F.one_hot(ids[:, 0].long().clamp(0, N_SEG_CLASSES - 1),
+                         N_SEG_CLASSES).permute(0, 3, 1, 2).float() * 10.0
+    assert torch.equal(_onehot(ids), expected)
