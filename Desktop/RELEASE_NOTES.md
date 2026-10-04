@@ -1,14 +1,14 @@
-# DepthWizard Desktop v0.1.4
+# DepthWizard Desktop v1.0.1
 
 Download DepthWizard for Windows, macOS or Linux, with local model weights included or as a smaller application using hosted inference.
 
 ## Changes
 
-- Added a download page that follows published GitHub releases automatically, with Windows, Linux and Apple Silicon / Intel Mac choices.
-- Added **with-model** installers containing the verified V5 forest ONNX model. Local CPU inference is selected automatically on first launch; no separate model installation or settings step is needed.
-- Added **without-model** installers that use hosted Hugging Face inference by default. An internet connection is required for these predictions, and uploaded images are sent to the hosted service.
-- Import a compatible model through **Model → Install ONNX model…** to switch to local inference automatically. Explicit inference choices are saved across restarts.
-- Updated the release workflow to verify the model checksum and test both packaged variants on every supported platform.
+- Smaller installers and native runtime by excluding unused inference tooling, native test programs, duplicate sample assets, and default source maps.
+- Linux native libraries discard unused local symbols while preserving their dynamic exports.
+- Lower transient memory use for large raster overviews, tiled prediction, image textures, and worker inputs. Model weights, precision, and numerical outputs are unchanged.
+- Offline samples now include only **PNG Wankhede Stadium, Mumbai** and the **georeferenced Cartosat-2S TIFF project**, with their previews.
+- Both **with-model** and **without-model** installers are checked on Windows x64, Linux x64, Apple Silicon, and Intel Mac.
 
 ## Installation
 

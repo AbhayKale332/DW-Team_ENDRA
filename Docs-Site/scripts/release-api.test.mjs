@@ -59,3 +59,28 @@ test('published downloads keep repository credentials server-side and validate r
     else process.env.GITHUB_RELEASES_TOKEN = originalToken;
   }
 });
+
+test('standard version release tags are listed and authorized for installer downloads', async () => {
+  const originalFetch = globalThis.fetch;
+  const location = 'https://release-assets.githubusercontent.com/standard-version?signature=test';
+  const versioned = { ...published, tag_name: 'v1.0.1', assets: [{ ...asset, name: 'DepthWizard-1.0.1-win-x64-with-model.exe' }] };
+  globalThis.fetch = async (url) => url.endsWith('/releases/assets/42')
+    ? new Response(null, { status: 302, headers: { Location: location } })
+    : Response.json([versioned, { ...versioned, draft: true, assets: [{ ...asset, id: 43 }] },
+      { ...versioned, tag_name: 'model-v1.0.1', assets: [{ ...asset, id: 44 }] }]);
+  try {
+    let res = response();
+    await releases({ method: 'GET' }, res);
+    assert.equal(JSON.parse(res.body).length, 1);
+    assert.equal(JSON.parse(res.body)[0].tag_name, 'v1.0.1');
+    res = response();
+    await download({ method: 'GET', url: '/api/download?asset=42' }, res);
+    assert.equal(res.statusCode, 302);
+    assert.equal(res.headers.Location, location);
+    for (const id of ['43', '44']) {
+      res = response();
+      await download({ method: 'GET', url: `/api/download?asset=${id}` }, res);
+      assert.equal(res.statusCode, 404);
+    }
+  } finally { globalThis.fetch = originalFetch; }
+});

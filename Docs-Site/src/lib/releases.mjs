@@ -1,10 +1,14 @@
 export const RELEASES_URL = '/api/releases';
 export const RELEASES_PAGE = 'https://github.com/AbhayKale332/DepthWizard/releases';
 
+export function isDesktopReleaseTag(tag) {
+  return /^desktop-v/.test(tag) || /^v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(tag);
+}
+
 /** Only public desktop releases with real application installers, newest first. */
 export function desktopReleases(releases) {
   if (!Array.isArray(releases)) throw new Error('GitHub returned an invalid release list.');
-  return releases.filter((release) => !release.draft && /^desktop-v/.test(release.tag_name) &&
+  return releases.filter((release) => !release.draft && isDesktopReleaseTag(release.tag_name) &&
     Array.isArray(release.assets) && release.assets.some((asset) => /\.(exe|dmg|AppImage)$/.test(asset.name)))
     .sort((a, b) => Date.parse(b.published_at) - Date.parse(a.published_at));
 }

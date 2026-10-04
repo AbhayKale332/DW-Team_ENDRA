@@ -1,3 +1,4 @@
+import { isDesktopReleaseTag } from '../src/lib/releases.mjs';
 import { github, githubHeaders, assetNameAllowed } from '../src/lib/github-server.mjs';
 
 export default async function handler(req, res) {
@@ -7,7 +8,7 @@ export default async function handler(req, res) {
   try {
     // Authorize against published release assets, excluding drafts and all source archives.
     const releases = await (await github('releases?per_page=100')).json();
-    const asset = releases.filter((release) => !release.draft && release.tag_name.startsWith('desktop-v'))
+    const asset = releases.filter((release) => !release.draft && isDesktopReleaseTag(release.tag_name))
       .flatMap((release) => release.assets).find((asset) => String(asset.id) === id && asset.state === 'uploaded' && assetNameAllowed(asset.name));
     if (!asset) { res.statusCode = 404; return res.end('Download not available'); }
     const response = await github(`releases/assets/${id}`, { headers: githubHeaders('application/octet-stream'), redirect: 'manual' });

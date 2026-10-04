@@ -21,3 +21,12 @@ test('downloads follow published releases, model choice and architecture', () =>
   assert.equal(installer({ ...release, assets: [asset('DepthWizard-0.1.3-win-x64-with-model.exe', 'https://evil.test/file.exe')] }, 'win', 'x64', true), null);
   assert.equal(sizeLabel(1800000000), '1.80 GB');
 });
+
+test('standard version tags list desktop installers and exclude drafts and model-only releases', () => {
+  const versioned = { ...release, id: 5, tag_name: 'v1.0.1' };
+  assert.deepEqual(desktopReleases([
+    versioned, { ...versioned, id: 6, draft: true },
+    { ...versioned, id: 7, tag_name: 'model-v1.0.1' },
+    { ...versioned, id: 8, assets: [asset('DepthWizard-V5-model.zip')] },
+  ]).map((item) => item.id), [5]);
+});
