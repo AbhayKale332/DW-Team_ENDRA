@@ -61,7 +61,7 @@ jobs:
       - run: npm run desktop:install
       - name: Set release version from desktop tag
         if: startsWith(github.ref, 'refs/tags/desktop-v')
-        run: npm version "${GITHUB_REF_NAME#desktop-v}" --no-git-tag-version
+        run: npm version "${GITHUB_REF_NAME#desktop-v}" --no-git-tag-version --allow-same-version
       - name: Install CPU inference dependencies
         run: |
           python -m pip install -r shared/requirements.txt
