@@ -101,7 +101,7 @@ Do not add large weights to Git. Their `.data` sidecars are just as necessary as
 
 ## GitHub Releases
 
-Commit these changes and push them to GitHub. Open **Actions → Build desktop releases → Run workflow** to produce downloadable artifacts for all four OS/architecture combinations. Manual runs without `release_tag` produce artifacts only. To rebuild an existing tag using the corrected workflow, enter that `desktop-v*` tag in the optional `release_tag` input; the workflow checks out that tag and uploads both variants to its draft release.
+Commit these changes and push them to GitHub. Open **Actions → Build desktop releases → Run workflow** to produce downloadable artifacts for all four OS/architecture combinations. Manual runs without `release_tag` produce artifacts only. To rebuild an existing tag using the corrected workflow, enter that `desktop-v*` tag in the optional `release_tag` input; the workflow checks out that tag and uploads both variants to its draft release. `source_ref` explicitly overrides the source checkout when needed. For Windows-only recovery, set `windows_only` and `reuse_artifacts_from` to the previous run containing verified macOS/Linux artifacts from the same release source; the upload step requires the complete set of 12 version-matched installers. Without those previous artifacts, a Windows-only run produces artifacts only.
 
 To build and upload a **draft** GitHub release:
 

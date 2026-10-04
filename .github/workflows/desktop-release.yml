@@ -5,6 +5,18 @@ on:
     tags: ['desktop-v*']
   workflow_dispatch:
     inputs:
+      source_ref:
+        description: 'Optional source ref override for a release rebuild'
+        type: string
+        required: false
+      windows_only:
+        description: 'Build only Windows (combine with reuse_artifacts_from for recovery)'
+        type: boolean
+        default: false
+      reuse_artifacts_from:
+        description: 'Optional previous run ID containing verified macOS and Linux artifacts'
+        type: string
+        required: false
       release_tag:
         description: 'Optional existing desktop-v tag to rebuild using the current workflow'
         type: string
@@ -33,11 +45,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { name: windows-x64, os: windows-latest, platform: win, folder: windows, arch: x64 }
-          - { name: macos-arm64, os: macos-15, platform: mac, folder: mac, arch: arm64 }
-          - { name: macos-x64, os: macos-15-intel, platform: mac, folder: mac, arch: x64 }
-          - { name: linux-x64, os: ubuntu-22.04, platform: linux, folder: linux, arch: x64 }
+        include: ${{ fromJSON(inputs.windows_only && '[{"name":"windows-x64","os":"windows-latest","platform":"win","folder":"windows","arch":"x64"}]' || '[{"name":"windows-x64","os":"windows-latest","platform":"win","folder":"windows","arch":"x64"},{"name":"macos-arm64","os":"macos-15","platform":"mac","folder":"mac","arch":"arm64"},{"name":"macos-x64","os":"macos-15-intel","platform":"mac","folder":"mac","arch":"x64"},{"name":"linux-x64","os":"ubuntu-22.04","platform":"linux","folder":"linux","arch":"x64"}]') }}
     defaults:
       run:
         working-directory: Desktop
@@ -51,7 +59,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.release_tag || github.ref }}
+          ref: ${{ inputs.source_ref || inputs.release_tag || github.ref }}
       - name: Free Linux runner space for model-included installers
         if: runner.os == 'Linux'
         run: |
@@ -149,27 +157,60 @@ jobs:
             Desktop/${{ matrix.folder }}/release/*/*.AppImage
 
   draft-release:
-    if: startsWith(github.ref, 'refs/tags/desktop-v') || startsWith(inputs.release_tag, 'desktop-v')
+    if: (startsWith(github.ref, 'refs/tags/desktop-v') || startsWith(inputs.release_tag, 'desktop-v')) && (!inputs.windows_only || inputs.reuse_artifacts_from != '')
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.release_tag || github.ref }}
+          ref: ${{ inputs.source_ref || inputs.release_tag || github.ref }}
       - name: Free runner space for release assets
         run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet
+      - name: Restore verified artifacts from the previous build
+        if: inputs.reuse_artifacts_from != ''
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.reuse_artifacts_from }}
+          pattern: DepthWizard-*
+          merge-multiple: true
+          path: desktop-release
       - uses: actions/download-artifact@v4
         with:
           pattern: DepthWizard-*
           merge-multiple: true
           path: desktop-release
-      - name: Generate checksums
-        working-directory: desktop-release
+      - name: Flatten installer paths
         run: |
           python - <<'PYCODE'
           from pathlib import Path
+          root = Path('desktop-release')
+          for file in list(root.rglob('*')):
+              if file.is_file() and file.parent != root:
+                  target = root / file.name
+                  if target.exists():
+                      raise ValueError(f'Duplicate installer filename: {file.name}')
+                  file.rename(target)
+          for directory in sorted((path for path in root.rglob('*') if path.is_dir()), key=lambda path: len(path.parts), reverse=True):
+              directory.rmdir()
+          PYCODE
+      - name: Generate checksums
+        working-directory: desktop-release
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+        run: |
+          python - <<'PYCODE'
+          from pathlib import Path
+          import os
+          version = os.environ['RELEASE_TAG'].removeprefix('desktop-v')
+          targets = [('win', 'x64', ['exe']), ('linux', 'x86_64', ['AppImage']), ('mac', 'arm64', ['dmg', 'zip']), ('mac', 'x64', ['dmg', 'zip'])]
+          expected = {f'DepthWizard-{version}-{platform}-{arch}-{variant}.{extension}' for platform, arch, extensions in targets for variant in ['with-model', 'without-model'] for extension in extensions}
+          actual = {file.name for file in Path('.').iterdir() if file.is_file()}
+          if expected != actual:
+              raise ValueError(f'Incomplete or mismatched installer set: missing {expected - actual}; unexpected {actual - expected}')
           for file in Path('.').iterdir():
               if file.is_file() and file.stat().st_size >= 2 * 1024**3:
                   raise ValueError(f"Release asset exceeds GitHub's size limit: {file.name}")

@@ -15,7 +15,7 @@ if not url:
         releases = json.load(response)
     releases = sorted((release for release in releases if not release['draft']), key=lambda release: release.get('published_at') or '', reverse=True)
     for release in releases:
-        asset = next((asset for asset in release['assets'] if asset['state'] == 'uploaded' and
+        asset = next((asset for asset in sorted(release['assets'], key=lambda asset: asset.get('created_at') or '', reverse=True) if asset['state'] == 'uploaded' and
                       asset['name'].startswith('DepthWizard-V5-') and '-model' in asset['name'] and asset['name'].endswith('.zip')), None)
         if asset:
             url = asset['url']
