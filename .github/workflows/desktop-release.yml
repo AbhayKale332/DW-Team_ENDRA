@@ -53,6 +53,7 @@ jobs:
     env:
       RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
       PYTHONUTF8: '1'
+      DW_STARTUP_TRACE: '1'
       GH_TOKEN: ${{ github.token }}
       DESKTOP_MODEL_URL: ${{ inputs.model_url || vars.DESKTOP_MODEL_URL }}
       DESKTOP_MODEL_SHA256: ${{ inputs.model_sha256 || vars.DESKTOP_MODEL_SHA256 }}
@@ -126,7 +127,7 @@ jobs:
         run: |
           # An empty certificate link is treated as a file path by electron-builder.
           if [[ -z "$CSC_LINK" ]]; then unset CSC_LINK; fi
-          for VARIANT in without-model with-model; do
+          for VARIANT in with-model without-model; do
             if [[ "$VARIANT" == "with-model" ]]; then
               export DW_BUNDLE_MODEL=1 DW_EXPECT_MODEL=1
             else

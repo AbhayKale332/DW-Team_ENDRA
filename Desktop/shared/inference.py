@@ -30,6 +30,9 @@ def validate_model(graph):
 
 
 def main():
+    if os.environ.get("DW_STARTUP_TRACE") == "1":
+        import faulthandler
+        faulthandler.dump_traceback_later(30, repeat=True)
     parser = argparse.ArgumentParser()
     parser.add_argument("--onnx", required=True)
     args = parser.parse_args()
@@ -64,6 +67,8 @@ def main():
     sock.listen(128)
     print(f"DW_READY {sock.getsockname()[1]}", flush=True)
     server = uvicorn.Server(uvicorn.Config(api, host="127.0.0.1", loop="asyncio", http="h11", log_level="warning"))
+    if os.environ.get("DW_STARTUP_TRACE") == "1":
+        faulthandler.cancel_dump_traceback_later()
     try:
         server.run(sockets=[sock])
     finally:
