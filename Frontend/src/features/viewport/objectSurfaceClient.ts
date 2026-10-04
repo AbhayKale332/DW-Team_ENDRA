@@ -1,3 +1,4 @@
+import { transfer } from 'comlink';
 import type { ObjectKinds, Scene } from '@/domain/types';
 import { objectSurfaceHeights } from '@/lib/objectSurface';
 import { activeObjectKinds, anyObjectKind, objectKindsKey } from '@/store/view';
@@ -19,20 +20,20 @@ export function loadObjectSurface(scene: Scene, kinds: ObjectKinds): Promise<Flo
   if (!perScene) pending.set(scene, (perScene = new Map()));
   const hit = perScene.get(key);
   if (hit) return hit;
+  // Transfer isolated copies so posting to the worker does not duplicate them again.
+  const input = {
+    heights: { ...scene.heights, data: scene.heights.data.slice() },
+    classes: scene.classes ? { ...scene.classes, data: scene.classes.data.slice() } : null,
+    objects: scene.objects,
+    gsd: scene.gsd,
+    product: scene.product,
+    ndsm: scene.ndsm ? { ...scene.ndsm, data: scene.ndsm.data.slice() } : undefined,
+    terrain: scene.terrain ? { ...scene.terrain, data: scene.terrain.data.slice() } : undefined,
+  };
+  const buffers = [input.heights, input.classes, input.ndsm, input.terrain]
+    .flatMap((grid) => grid ? [grid.data.buffer] : []);
   const p = terrainWorker()
-    .objectSurface(
-      {
-        // copies: the worker gets its own, the scene keeps its arrays
-        heights: { ...scene.heights, data: scene.heights.data.slice() },
-        classes: scene.classes ? { ...scene.classes, data: scene.classes.data.slice() } : null,
-        objects: scene.objects,
-        gsd: scene.gsd,
-        product: scene.product,
-        ndsm: scene.ndsm ? { ...scene.ndsm, data: scene.ndsm.data.slice() } : undefined,
-        terrain: scene.terrain ? { ...scene.terrain, data: scene.terrain.data.slice() } : undefined,
-      },
-      k,
-    )
+    .objectSurface(transfer(input, buffers), k)
     .catch((e) => {
       // a worker failure costs responsiveness, never the feature
       console.warn('Object surface worker failed; computing on the main thread', e);

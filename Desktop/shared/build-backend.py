@@ -33,3 +33,10 @@ for binary in (torch_dir / "bin").glob("*"):
     name = binary.stem.lower()
     if binary.is_file() and (name.startswith("test_") or name.endswith("test") or name.startswith("tutorial_")):
         binary.unlink()
+
+# Keep dynamic exports and loadable code; discard unused native symbol tables on Linux.
+# GNU strip is supplied by binutils (preinstalled on the Linux release runner).
+if sys.platform == "linux":
+    for library in torch_dir.parent.rglob("*.so*"):
+        if library.is_file() and not library.is_symlink():
+            subprocess.run(["strip", "--strip-unneeded", str(library)], check=True)

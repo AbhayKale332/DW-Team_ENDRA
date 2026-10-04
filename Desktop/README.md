@@ -73,6 +73,8 @@ Output goes to `Desktop/windows/release/<variant>/`, `Desktop/mac/release/<varia
 
 Production builds omit source maps by default. Set `DW_BUILD_SOURCEMAPS=1` when running the UI build to generate hidden maps for release debugging. Offline installers include only the Wankhede Stadium PNG project and the georeferenced Cartosat-2S project, together with their input/height quick looks; loose source rasters, intermediate results and development fixtures stay in the source tree. Complete project archives retain their embedded source and export files.
 
+Linux backend builds require GNU `strip` from `binutils` (`sudo apt-get install binutils`). The build removes unused native symbol tables while retaining dynamic exports and loadable code. This affects native debugging detail; it preserves model weights and runtime precision. macOS and Windows libraries are not stripped.
+
 The backend build deliberately excludes model training dependencies and bundled upstream native test programs. It still ships CPU torch for the existing inference engine, so application downloads are substantial even without weights. `beforePack` fails if the native inference executable is missing instead of producing an incomplete installer.
 
 ## Supply / replace the model
