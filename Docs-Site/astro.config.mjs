@@ -121,7 +121,6 @@ export default defineConfig({
 					label: 'Reference',
 					items: [
 						'reference/limitations',
-						'reference/paper',
 						'reference/changelog',
 						'reference/team',
 						'references',
