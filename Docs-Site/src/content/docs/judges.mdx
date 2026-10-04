@@ -1,0 +1,25 @@
+---
+title: Technical Report for DepthWizard
+description: A guided overview of DepthWizard's model, training, evaluation, geospatial methods, and system architecture for SIH judges.
+template: splash
+sidebar:
+  hidden: true
+pagefind: false
+head:
+  - tag: meta
+    attrs:
+      name: robots
+      content: noindex, nofollow
+---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+## Technical overview
+
+<CardGrid>
+	<LinkCard title="Model architecture" description="Explains the satellite-pretrained DINOv3 encoder, DPT decoder, and multi-head height prediction. See how regression, adaptive depth bins, and land-cover segmentation combine into one estimate." href="/model/overview/" />
+	<LinkCard title="Training & fine-tuning" description="Covers the datasets, preprocessing, augmentations, and fine-tuning recipe, then follows the model through its five versions. Highlights the choices that improved results across sensors and regions." href="/training/versions/" />
+	<LinkCard title="Evaluation & results" description="Presents held-out GAMUS and cross-domain DFC23 results alongside LiDAR and Cartosat validation. Error breakdowns by height range and landscape show where predictions hold up." href="/results/benchmarks/" />
+	<LinkCard title="Georeferencing & scale" description="Explains how plain images get relative scale and how GeoTIFF metadata anchors predictions geographically. Shows how DEM correction produces an absolute DSM without counting buildings twice." href="/geo/scale-recovery/" />
+	<LinkCard title="System architecture" description="Traces the path from the web interface through hosted or self-hosted inference to 3D visualization and exports. Includes the API, deployment options, and ONNX support." href="/system/overview/" />
+</CardGrid>
