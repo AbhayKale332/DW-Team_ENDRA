@@ -132,17 +132,24 @@ jobs:
             else
               export DW_BUNDLE_MODEL=0 DW_EXPECT_MODEL=0
             fi
-            npx electron-builder --config electron-builder.config.cjs --${{ matrix.platform }} --${{ matrix.arch }} --publish never
             if [[ "${{ matrix.platform }}" == "win" ]]; then
-              export DW_DESKTOP_EXECUTABLE="$PWD/${{ matrix.folder }}/release/$VARIANT/win-unpacked/DepthWizard.exe"
+              npx electron-builder --config electron-builder.config.cjs --win --x64 --dir --publish never
+              APP_DIR="$PWD/${{ matrix.folder }}/release/$VARIANT/win-unpacked"
+              export DW_DESKTOP_EXECUTABLE="$APP_DIR/DepthWizard.exe"
+              if [[ "$VARIANT" == "with-model" ]]; then
+                python shared/inference-smoke.py --executable "$APP_DIR/resources/backend/depthwizard-inference/depthwizard-inference.exe" --model "$APP_DIR/resources/model/depthwizard.onnx"
+              fi
               npm run desktop:smoke
-              rm -rf "${{ matrix.folder }}/release/$VARIANT/win-unpacked"
+              npx electron-builder --config electron-builder.config.cjs --win --x64 --prepackaged "$APP_DIR" --publish never
+              node -e 'require("node:fs").rmSync(process.argv[1], { recursive: true, force: true, maxRetries: 10, retryDelay: 500 })' "$APP_DIR"
             elif [[ "${{ matrix.platform }}" == "mac" ]]; then
+              npx electron-builder --config electron-builder.config.cjs --mac --${{ matrix.arch }} --publish never
               if [[ "${{ matrix.arch }}" == "arm64" ]]; then MAC_DIR=mac-arm64; else MAC_DIR=mac; fi
               export DW_DESKTOP_EXECUTABLE="$PWD/${{ matrix.folder }}/release/$VARIANT/$MAC_DIR/DepthWizard.app/Contents/MacOS/DepthWizard"
               npm run desktop:smoke
               rm -rf "${{ matrix.folder }}/release/$VARIANT/$MAC_DIR"
             else
+              npx electron-builder --config electron-builder.config.cjs --linux --${{ matrix.arch }} --publish never
               export DW_DESKTOP_EXECUTABLE="$PWD/${{ matrix.folder }}/release/$VARIANT/linux-unpacked/depthwizard"
               xvfb-run -a npm run desktop:smoke
               rm -rf "${{ matrix.folder }}/release/$VARIANT/linux-unpacked"
