@@ -3,7 +3,7 @@ import hashlib
 import os
 from pathlib import Path
 import tempfile
-from urllib.request import urlopen
+from urllib.request import Request, urlopen, build_opener, HTTPRedirectHandler
 import zipfile
 
 url = os.environ.get("DESKTOP_MODEL_URL", "")
@@ -17,7 +17,19 @@ if url:
     target.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryFile() as archive:
         digest = hashlib.sha256()
-        with urlopen(url, timeout=120) as response:
+        headers = {}
+        if url.startswith('https://api.github.com/repos/AbhayKale332/DepthWizard/releases/assets/'):
+            headers = {'Accept': 'application/octet-stream', 'User-Agent': 'DepthWizard-release'}
+            if os.environ.get('GH_TOKEN'):
+                headers['Authorization'] = 'Bearer ' + os.environ['GH_TOKEN']
+        class AssetRedirect(HTTPRedirectHandler):
+            def redirect_request(self, request, *args, **kwargs):
+                redirected = super().redirect_request(request, *args, **kwargs)
+                if redirected is not None:
+                    redirected.remove_header('Authorization')
+                return redirected
+        request = Request(url, headers=headers)
+        with build_opener(AssetRedirect).open(request, timeout=120) as response:
             while chunk := response.read(1024 * 1024):
                 digest.update(chunk)
                 archive.write(chunk)

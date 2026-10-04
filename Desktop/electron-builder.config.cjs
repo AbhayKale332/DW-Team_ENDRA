@@ -1,12 +1,14 @@
 const path = require('node:path');
 const fs = require('node:fs');
+const bundleModel = process.env.DW_BUNDLE_MODEL !== '0';
+const variant = bundleModel ? 'with-model' : 'without-model';
 const platform = { darwin: 'mac', win32: 'windows', linux: 'linux' }[process.platform];
 
 module.exports = {
   appId: 'org.depthwizard.desktop',
   productName: 'DepthWizard',
-  artifactName: 'DepthWizard-${version}-${os}-${arch}.${ext}',
-  directories: { output: `${platform}/release` },
+  artifactName: 'DepthWizard-${version}-${os}-${arch}-' + variant + '.${ext}',
+  directories: { output: `${platform}/release/${variant}` },
   asar: true,
   npmRebuild: false,
   files: [
@@ -17,9 +19,16 @@ module.exports = {
   ],
   extraResources: [
     { from: 'shared/resources/backend', to: 'backend', filter: ['**/*', '!.gitkeep'] },
-    { from: process.env.DW_MODEL_DIR || 'shared/resources/model', to: 'model', filter: ['**/*', '!.gitkeep'] },
+    ...(bundleModel ? [{ from: process.env.DW_MODEL_DIR || 'shared/resources/model', to: 'model', filter: ['**/*', '!.gitkeep'] }] : []),
   ],
   beforePack: async () => {
+    if (bundleModel) {
+      const directory = path.resolve(__dirname, process.env.DW_MODEL_DIR || 'shared/resources/model');
+      const graphs = fs.existsSync(directory) ? fs.readdirSync(directory).filter((name) => name.endsWith('.onnx')) : [];
+      if (graphs.length !== 1 || !fs.existsSync(path.join(directory, `${graphs[0]}.json`))) {
+        throw new Error('Model-included installers require one ONNX graph and its .onnx.json metadata. Stage a verified model first.');
+      }
+    }
     const executable = process.platform === 'win32' ? 'depthwizard-inference.exe' : 'depthwizard-inference';
     if (!fs.existsSync(path.join(__dirname, 'shared/resources/backend/depthwizard-inference', executable))) {
       throw new Error('Build the native inference runtime first: npm run desktop:backend (see Desktop/README.md).');

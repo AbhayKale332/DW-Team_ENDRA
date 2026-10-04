@@ -9,7 +9,8 @@ export const IS_DESKTOP = new URLSearchParams(globalThis.location?.search ?? '')
 export const DEFAULT_SPACE_ID = (import.meta.env.VITE_SPACE_ID as string | undefined) || 'akashch1512/SingleViewHeigthEstimation';
 
 export const PROVIDER_OPTIONS: Array<{ value: ProviderId; label: string }> = [
-  ...(IS_DESKTOP ? [{ value: 'depthwizard-serve' as const, label: 'Local ONNX model (offline)' }] : [{ value: 'gradio-space' as const, label: 'Hugging Face Space (live model)' }]),
+  { value: 'gradio-space', label: 'Hugging Face Space (live model)' },
+  ...(IS_DESKTOP ? [{ value: 'depthwizard-serve' as const, label: 'Local ONNX model (offline)' }] : []),
   { value: 'mock', label: 'Offline demo (sample result)' },
 ];
 

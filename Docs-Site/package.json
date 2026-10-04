@@ -12,7 +12,8 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "extract-metrics": "python3 scripts/extract_metrics.py"
+    "extract-metrics": "python3 scripts/extract_metrics.py",
+    "test:downloads": "node --test scripts/release*.test.mjs"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.42.4",

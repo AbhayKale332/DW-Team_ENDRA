@@ -27,6 +27,14 @@ try {
   assert.equal(await page.evaluate(() => typeof window.require), 'undefined');
   const samples = await page.evaluate(async () => (await fetch('./samples/index.json')).json());
   assert.ok(Array.isArray(samples) ? samples.length : samples.samples?.length, 'Offline sample index should contain scenes');
+  const config = await page.evaluate(async () => (await fetch('./desktop-api/config')).json());
+  const expectedLocal = process.env.DW_EXPECT_MODEL === '1' || Boolean(process.env.DW_ONNX_MODEL);
+  assert.equal(Boolean(config.modelKey), expectedLocal, 'Installer model availability');
+  const selected = await page.evaluate(() => JSON.parse(localStorage.getItem('dw.settings')).state.provider);
+  assert.equal(selected, expectedLocal ? 'depthwizard-serve' : 'gradio-space', 'Inference must be selected without setup');
+  if (expectedLocal) {
+    await expect.poll(async () => page.evaluate(async () => (await fetch('./local-api/api/health')).status), { timeout: 180_000 }).toBe(200);
+  }
   const health = await page.evaluate(async () => { const res = await fetch('./local-api/api/health'); return { status: res.status, body: await res.json() }; });
   assert.ok(health.status === 200 || health.status === 503);
   if (process.env.DW_ONNX_MODEL) {

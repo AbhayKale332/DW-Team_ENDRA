@@ -7,6 +7,7 @@ export type Quality = 'fast' | 'balanced' | 'full';
 
 interface SettingsState {
   provider: ProviderId;
+  desktopModelKey?: string | null;
   spaceId: string;
   defaultTta: boolean;
   quality: Quality;
@@ -23,7 +24,7 @@ interface SettingsState {
 export const useSettings = create<SettingsState>()(
   persist(
     (set) => ({
-      provider: IS_DESKTOP ? 'depthwizard-serve' : 'gradio-space',
+      provider: 'gradio-space',
       spaceId: DEFAULT_SPACE_ID,
       defaultTta: false,
       quality: 'balanced',
@@ -36,3 +37,16 @@ export const useSettings = create<SettingsState>()(
     { name: 'dw.settings', version: 1, partialize: ({ set: _s, ...rest }) => rest },
   ),
 );
+
+/** Apply a desktop default once per model selection; preserve explicit preferences afterwards. */
+export async function configureDesktopInference() {
+  if (!IS_DESKTOP) return;
+  const response = await fetch('./desktop-api/config');
+  if (!response.ok) throw new Error('Desktop inference configuration is unavailable');
+  const { modelKey } = await response.json() as { modelKey: string | null };
+  if (modelKey !== null && typeof modelKey !== 'string') throw new Error('Invalid desktop model selection');
+  const settings = useSettings.getState();
+  if (settings.desktopModelKey !== modelKey) {
+    settings.set({ desktopModelKey: modelKey, provider: modelKey ? 'depthwizard-serve' : 'gradio-space' });
+  }
+}

@@ -14,6 +14,10 @@ import '@mantine/notifications/styles.css';
 import './theme/global.css';
 import { theme } from './theme/theme';
 import App from './App';
+import { configureDesktopInference } from './store/settings';
+
+await configureDesktopInference();
+window.addEventListener('dw-model-installed', () => void configureDesktopInference().catch(console.error));
 
 const colorSchemeManager = localStorageColorSchemeManager({ key: 'dw.color-scheme' });
 

@@ -40,6 +40,7 @@ jobs:
         shell: bash
     env:
       PYTHONUTF8: '1'
+      GH_TOKEN: ${{ github.token }}
       DESKTOP_MODEL_URL: ${{ inputs.model_url || vars.DESKTOP_MODEL_URL }}
       DESKTOP_MODEL_SHA256: ${{ inputs.model_sha256 || vars.DESKTOP_MODEL_SHA256 }}
     steps:
@@ -85,9 +86,11 @@ jobs:
           else
             python shared/inference-smoke.py --executable shared/resources/backend/depthwizard-inference/depthwizard-inference
           fi
-      - name: Stage optional verified model
+      - name: Resolve published model bundle
+        run: python shared/resolve-model.py
+      - name: Stage verified model
         run: python shared/download-model.py
-      - name: Package application
+      - name: Package and test both download options
         env:
           CSC_LINK: ${{ matrix.platform == 'mac' && secrets.DESKTOP_MAC_CSC_LINK || matrix.platform == 'win' && secrets.DESKTOP_WIN_CSC_LINK || '' }}
           CSC_KEY_PASSWORD: ${{ matrix.platform == 'mac' && secrets.DESKTOP_MAC_CSC_KEY_PASSWORD || matrix.platform == 'win' && secrets.DESKTOP_WIN_CSC_KEY_PASSWORD || '' }}
@@ -97,30 +100,35 @@ jobs:
         run: |
           # An empty certificate link is treated as a file path by electron-builder.
           if [[ -z "$CSC_LINK" ]]; then unset CSC_LINK; fi
-          npx electron-builder --config electron-builder.config.cjs --${{ matrix.platform }} --${{ matrix.arch }} --publish never
-      - name: Test packaged desktop startup
-        run: |
-          if [[ "${{ matrix.platform }}" == "win" ]]; then
-            export DW_DESKTOP_EXECUTABLE="$PWD/${{ matrix.folder }}/release/win-unpacked/DepthWizard.exe"
-            npm run desktop:smoke
-          elif [[ "${{ matrix.platform }}" == "mac" ]]; then
-            if [[ "${{ matrix.arch }}" == "arm64" ]]; then MAC_DIR=mac-arm64; else MAC_DIR=mac; fi
-            export DW_DESKTOP_EXECUTABLE="$PWD/${{ matrix.folder }}/release/$MAC_DIR/DepthWizard.app/Contents/MacOS/DepthWizard"
-            npm run desktop:smoke
-          else
-            export DW_DESKTOP_EXECUTABLE="$PWD/${{ matrix.folder }}/release/linux-unpacked/depthwizard"
-            xvfb-run -a npm run desktop:smoke
-          fi
+          for VARIANT in without-model with-model; do
+            if [[ "$VARIANT" == "with-model" ]]; then
+              export DW_BUNDLE_MODEL=1 DW_EXPECT_MODEL=1
+            else
+              export DW_BUNDLE_MODEL=0 DW_EXPECT_MODEL=0
+            fi
+            npx electron-builder --config electron-builder.config.cjs --${{ matrix.platform }} --${{ matrix.arch }} --publish never
+            if [[ "${{ matrix.platform }}" == "win" ]]; then
+              export DW_DESKTOP_EXECUTABLE="$PWD/${{ matrix.folder }}/release/$VARIANT/win-unpacked/DepthWizard.exe"
+              npm run desktop:smoke
+            elif [[ "${{ matrix.platform }}" == "mac" ]]; then
+              if [[ "${{ matrix.arch }}" == "arm64" ]]; then MAC_DIR=mac-arm64; else MAC_DIR=mac; fi
+              export DW_DESKTOP_EXECUTABLE="$PWD/${{ matrix.folder }}/release/$VARIANT/$MAC_DIR/DepthWizard.app/Contents/MacOS/DepthWizard"
+              npm run desktop:smoke
+            else
+              export DW_DESKTOP_EXECUTABLE="$PWD/${{ matrix.folder }}/release/$VARIANT/linux-unpacked/depthwizard"
+              xvfb-run -a npm run desktop:smoke
+            fi
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: DepthWizard-${{ matrix.name }}
           if-no-files-found: error
           retention-days: 14
           path: |
-            Desktop/${{ matrix.folder }}/release/*.exe
-            Desktop/${{ matrix.folder }}/release/*.dmg
-            Desktop/${{ matrix.folder }}/release/*.zip
-            Desktop/${{ matrix.folder }}/release/*.AppImage
+            Desktop/${{ matrix.folder }}/release/*/*.exe
+            Desktop/${{ matrix.folder }}/release/*/*.dmg
+            Desktop/${{ matrix.folder }}/release/*/*.zip
+            Desktop/${{ matrix.folder }}/release/*/*.AppImage
 
   draft-release:
     if: startsWith(github.ref, 'refs/tags/desktop-v')
@@ -137,7 +145,14 @@ jobs:
           path: desktop-release
       - name: Generate checksums
         working-directory: desktop-release
-        run: sha256sum * > SHA256SUMS.txt
+        run: |
+          python - <<'PYCODE'
+          from pathlib import Path
+          for file in Path('.').iterdir():
+              if file.is_file() and file.stat().st_size >= 2 * 1024**3:
+                  raise ValueError(f"Release asset exceeds GitHub's size limit: {file.name}")
+          PYCODE
+          sha256sum * > SHA256SUMS.txt
       - name: Upload installers to a draft GitHub release
         env:
           GH_TOKEN: ${{ github.token }}

@@ -1,0 +1,160 @@
+---
+import { Icon } from '@astrojs/starlight/components';
+const systems = [
+  { id: 'win', title: 'Windows', detail: 'Windows 10 / 11 · 64-bit', icon: 'laptop', format: '.exe installer' },
+  { id: 'mac', title: 'macOS', detail: 'Apple Silicon or Intel', icon: 'apple', format: '.dmg disk image' },
+  { id: 'linux', title: 'Linux', detail: '64-bit · built on Ubuntu 22.04', icon: 'laptop', format: '.AppImage' },
+];
+---
+<section class="downloads" aria-label="Desktop application downloads">
+  <div class="release-bar">
+    <div><label for="desktop-release">Release</label><select id="desktop-release" disabled><option>Loading releases…</option></select></div>
+    <a id="release-notes" href="#desktop-release-notes">Release notes <span aria-hidden="true">↗︎</span></a>
+  </div>
+  <fieldset class="inference-choice">
+    <legend>Choose how you’ll run the model</legend>
+    <label class="mode">
+      <input type="radio" name="download-model" value="included" checked />
+      <span><strong>Include the ONNX model</strong><small>Ready for local CPU inference. Works offline, with no model setup.</small></span>
+      <span class="mode-note">Larger download</span>
+    </label>
+    <label class="mode">
+      <input type="radio" name="download-model" value="hosted" />
+      <span><strong>Download without the model</strong><small>Uses Hugging Face inference online. Import your own ONNX model anytime.</small></span>
+      <span class="mode-note">Smaller download</span>
+    </label>
+  </fieldset>
+  <p id="download-status" role="status" aria-live="polite">Checking GitHub for available installers…</p>
+  <button id="retry-releases" hidden type="button">Try again</button>
+  <div class="platforms">
+    {systems.map((system) => <article class="platform" data-platform={system.id}>
+      <Icon name={system.icon as 'laptop' | 'apple'} size="2rem" />
+      <h2>{system.title}</h2>
+      <p class="platform-detail">{system.detail}</p>
+      {system.id === 'mac' ? <div class="architecture"><label for="mac-architecture">Processor</label><select id="mac-architecture"><option value="arm64">Apple Silicon · M-series</option><option value="x64">Intel</option></select></div> : <div class="architecture"><span>{system.format}</span></div>}
+      <a class="download-button" aria-disabled="true" tabindex="-1"><Icon name="download" size="1rem" /> Download {system.title}</a>
+      <span class="asset-size">Waiting for release data</span>
+    </article>)}
+  </div>
+  <p class="model-note"><strong>One download. Model included.</strong> The model-included installer contains everything needed for local predictions. The model-free installer connects to the hosted model; images are sent online when you run an estimate.</p>
+  <details id="desktop-release-notes"><summary>Release notes</summary><p id="selected-release-notes">Choose a release to read its notes.</p></details>
+  <noscript><p>Enable JavaScript to choose a release and download the application from this page.</p></noscript>
+</section>
+
+<script>
+  import { desktopReleases, installer, RELEASES_URL, sizeLabel } from '../lib/releases.mjs';
+  const releaseSelect = document.querySelector<HTMLSelectElement>('#desktop-release')!;
+  const macSelect = document.querySelector<HTMLSelectElement>('#mac-architecture')!;
+  const status = document.querySelector<HTMLParagraphElement>('#download-status')!;
+  const retry = document.querySelector<HTMLButtonElement>('#retry-releases')!;
+  const notes = document.querySelector<HTMLAnchorElement>('#release-notes')!;
+  let releases: ReturnType<typeof desktopReleases> = [];
+  function render() {
+    const release = releases.find((entry) => String(entry.id) === releaseSelect.value);
+    const withModel = document.querySelector<HTMLInputElement>('input[name="download-model"]:checked')?.value === 'included';
+    let available = 0;
+    document.querySelectorAll<HTMLElement>('.platform').forEach((card) => {
+      const platform = card.dataset.platform!;
+      const asset = release && installer(release, platform, platform === 'mac' ? macSelect.value : 'x64', withModel);
+      const button = card.querySelector<HTMLAnchorElement>('.download-button')!;
+      button.setAttribute('aria-disabled', String(!asset));
+      button.tabIndex = asset ? 0 : -1;
+      if (asset) { button.href = asset.browser_download_url; available++; }
+      else button.removeAttribute('href');
+      card.querySelector('.asset-size')!.textContent = asset ? `${sizeLabel(asset.size)} · ${withModel ? 'model included' : 'app only'}` : release ? 'Unavailable for this release' : 'Waiting for release data';
+    });
+    if (release) {
+      notes.href = '#desktop-release-notes';
+      document.querySelector('#selected-release-notes')!.textContent = release.body || 'No notes were published for this release.';
+      const modern = release.assets.some((asset: { name: string }) => asset.name.includes('-without-model.'));
+      status.textContent = !available ? 'These installers aren’t available for this release yet. Choose another release or the other download option.' :
+        !modern && !withModel ? 'This older release requires importing a local model. Automatic hosted inference is available in newer model-free installers.' :
+        `${release.name || release.tag_name} · Published ${new Date(release.published_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}${release.prerelease ? ' · Pre-release' : ''}`;
+    }
+  }
+  async function load() {
+    retry.hidden = true;
+    status.textContent = 'Checking GitHub for available installers…';
+    try {
+      const response = await fetch(RELEASES_URL, { headers: { Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(15000) });
+      if (!response.ok) throw new Error('GitHub releases are temporarily unavailable.');
+      releases = desktopReleases(await response.json());
+      releaseSelect.replaceChildren();
+      if (!releases.length) {
+        releaseSelect.add(new Option('No desktop releases yet', ''));
+        releaseSelect.disabled = true;
+        status.textContent = 'No desktop installers have been published yet. Check GitHub Releases or try again later.';
+        retry.hidden = false;
+        render();
+        return;
+      }
+      releases.forEach((release, index) => releaseSelect.add(new Option(`${release.name || release.tag_name}${index === 0 ? ' — Latest' : ''}`, String(release.id))));
+      releaseSelect.disabled = false;
+      render();
+    } catch {
+      status.textContent = 'Couldn’t load releases from GitHub. Please try again in a moment.';
+      releaseSelect.disabled = true;
+      retry.hidden = false;
+    }
+  }
+  releaseSelect.addEventListener('change', render);
+  macSelect.addEventListener('change', render);
+  document.querySelectorAll('input[name="download-model"]').forEach((radio) => radio.addEventListener('change', render));
+  retry.addEventListener('click', load);
+  void load();
+</script>
+
+<style>
+  .downloads :is(article, label, input, span, select, a, svg) { margin-top: 0; }
+  .downloads { margin-block: 1.8rem; }
+  .release-bar { display: flex; align-items: end; justify-content: space-between; gap: 1rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--dw-line); }
+  .release-bar > div { display: grid; gap: .5rem; flex: 1; max-width: 24rem; }
+  label, legend { font-size: .85rem; font-weight: 600; }
+  select { font: inherit; color: var(--dw-ink); background: var(--dw-surface); border: 1px solid var(--dw-line); border-radius: 5px; padding: .65rem .8rem; min-height: 44px; width: 100%; }
+  select:focus-visible, .download-button:focus-visible, input:focus-visible, button:focus-visible { outline: 2px solid var(--dw-blue); outline-offset: 3px; }
+  .release-bar a { font-size: .85rem; white-space: nowrap; padding-block: .7rem; }
+  .inference-choice { border: 0; padding: 0; margin: 1.6rem 0 0; display: grid; gap: .7rem; min-width: 0; }
+  legend { padding: 0 0 .8rem; }
+  .mode { display: flex; align-items: center; gap: .8rem; padding: 1rem; border: 1px solid var(--dw-line); border-radius: var(--dw-radius); font-weight: 400; cursor: pointer; }
+  .mode:has(input:checked) { border-color: var(--dw-blue); background: var(--dw-blue-soft); }
+  .mode input { accent-color: var(--dw-blue); width: 18px; height: 18px; flex: none; }
+  .mode > span:first-of-type { flex: 1; }
+  .mode strong { display: block; font-size: .92rem; color: var(--dw-ink); }
+  .mode small { display: block; margin-top: .3rem; line-height: 1.5; color: var(--dw-dim); font-size: .82rem; }
+  .mode-note { color: var(--dw-dim); font-size: .75rem; white-space: nowrap; }
+  #download-status { font-size: .8rem; color: var(--dw-dim); min-height: 1.4rem; margin-block: 1rem; }
+  .platforms { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--dw-line); border-radius: var(--dw-radius); overflow: hidden; }
+  .platform { padding: 1.4rem 1.1rem; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+  .platform + .platform { border-left: 1px solid var(--dw-line); }
+  .platform :global(svg) { color: var(--dw-dim); }
+  .platform h2 { font-size: 1.2rem; margin: 1rem 0 .3rem; padding: 0; border: 0; }
+  .platform-detail { font-size: .75rem; line-height: 1.5; color: var(--dw-dim); min-height: 2.3rem; margin: 0; }
+  .architecture { display: flex; align-items: center; font-size: .78rem; color: var(--dw-dim); height: 4.5rem; width: 100%; margin: .6rem 0; }
+  .architecture label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .architecture select { padding: .5rem; font-size: .76rem; }
+  .download-button { display: flex; gap: .5rem; align-items: center; justify-content: center; width: 100%; min-height: 44px; padding: .6rem .25rem; font-size: .8rem; font-weight: 600; color: var(--sl-color-black); background: var(--sl-color-white); border-radius: 5px; text-decoration: none; }
+  .download-button :global(svg) { color: inherit; }
+  .download-button:hover { opacity: .85; }
+  .download-button[aria-disabled='true'] { color: var(--dw-dim); background: var(--dw-panel); cursor: not-allowed; }
+  .downloads .asset-size { font-family: var(--sl-font-mono); font-size: .65rem; color: var(--dw-dim); margin-top: .7rem; align-self: center; text-align: center; }
+  .model-note { font-size: .84rem; line-height: 1.7; color: var(--dw-dim); margin-top: 1.5rem; }
+  #desktop-release-notes { border-top: 1px solid var(--dw-line); padding-top: 1rem; margin-top: 1.5rem; font-size: .85rem; }
+  #desktop-release-notes summary { cursor: pointer; font-weight: 600; }
+  #selected-release-notes { white-space: pre-wrap; color: var(--dw-dim); line-height: 1.7; }
+  .model-note strong { color: var(--dw-ink); }
+  #retry-releases { font: inherit; border: 1px solid var(--dw-line); color: var(--dw-ink); background: var(--dw-panel); border-radius: 5px; padding: .5rem .9rem; cursor: pointer; margin-bottom: 1rem; }
+  @media (max-width: 42rem) {
+    .release-bar { align-items: flex-start; flex-direction: column; gap: .4rem; }
+    .release-bar > div { width: 100%; max-width: none; }
+    .mode { align-items: flex-start; }
+    .mode input { margin-top: .2rem; }
+    .mode-note { display: none; }
+    .platforms { grid-template-columns: 1fr; }
+    .platform + .platform { border-left: 0; border-top: 1px solid var(--dw-line); }
+    .platform { padding: 1.5rem; }
+    .platform-detail { min-height: 0; }
+    .architecture { height: auto; min-height: 2.7rem; margin-block: .8rem; }
+    .download-button { font-size: .9rem; }
+    .downloads .asset-size { font-size: .75rem; }
+  }
+</style>

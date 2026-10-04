@@ -47,6 +47,7 @@ export default defineConfig({
 					label: 'Getting Started',
 					items: [
 						{ label: 'Introduction', link: '/' },
+						'download',
 						'overview/motivation',
 						'overview/quickstart',
 						'overview/concepts',

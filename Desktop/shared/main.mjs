@@ -9,6 +9,7 @@ import { desktopHandler } from './local-api.mjs';
 import { findModel, installModel, modelFiles } from './model.mjs';
 
 const { createAppServer } = await import(app.isPackaged ? '../server/serve.mjs' : '../../Frontend/server/serve.mjs');
+const hosted = await import(app.isPackaged ? '../server/guard.mjs' : '../../Frontend/server/guard.mjs');
 const here = dirname(fileURLToPath(import.meta.url));
 let window, server, child, log, graph, origin;
 let backend = { message: 'No model installed. Use Model → Install ONNX model…' };
@@ -67,7 +68,8 @@ async function importModel() {
     if (selection.canceled) return;
     graph = await installModel(selection.filePaths[0], app.getPath('userData'));
     await startBackend();
-    await dialog.showMessageBox(window, { type: 'info', message: 'Model installed', detail: 'The local model is loading. Select Local ONNX model in File → Settings, then Test connection. Replacing a model stops any active prediction.' });
+    await window.webContents.executeJavaScript("window.dispatchEvent(new Event('dw-model-installed'))");
+    await dialog.showMessageBox(window, { type: 'info', message: 'Model installed', detail: 'Local inference is selected automatically. The model is loading. Replacing a model stops any active prediction.' });
   } catch (error) { dialog.showErrorBox('Could not install model', error.message); }
   finally { installing = false; }
 }
@@ -99,7 +101,7 @@ if (singleInstance) app.whenReady().then(async () => {
   graph = process.env.DW_ONNX_MODEL || config.graph || await findModel(join(app.isPackaged ? process.resourcesPath : join(here, 'resources'), 'model'));
   // A stable saved port preserves IndexedDB projects and localStorage across restarts.
   const port = Number(await readFile(join(data, 'port'), 'utf8').catch(() => 0));
-  server = createAppServer({ desktopHandler: desktopHandler(() => backend) });
+  server = createAppServer({ desktopHandler: desktopHandler(() => backend, { getModel: () => graph, hosted }) });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve); });
   const address = server.address();
   origin = `http://127.0.0.1:${address.port}`;

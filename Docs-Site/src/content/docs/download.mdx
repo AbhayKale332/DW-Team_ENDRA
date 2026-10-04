@@ -1,0 +1,26 @@
+---
+title: Download DepthWizard
+description: Download DepthWizard for Windows, macOS or Linux, with a ready-to-use local ONNX model or hosted Hugging Face inference.
+tableOfContents: false
+---
+
+import Downloads from '../../components/Downloads.astro';
+
+Bring height estimation and 3D terrain to your desktop. Choose your operating system and whether to include the model. Releases and download sizes are fetched directly from GitHub.
+
+<Downloads />
+
+## Start with an image
+
+Install the application, open a PNG, JPG or GeoTIFF, then select **Estimate heights**. A model-included download selects local inference automatically. A model-free download selects hosted Hugging Face inference and needs an internet connection.
+
+You can add your own compatible DepthWizard V5 ONNX model later through **Model → Install ONNX model…**. Keep its `.onnx.json` metadata and any external weight files alongside the graph. Importing it selects local inference automatically.
+
+## Before downloading
+
+- Choose **Apple Silicon** for an M-series Mac, or **Intel** for an Intel Mac.
+- On Linux, mark the AppImage executable before opening it.
+- Model-included downloads are larger and use your CPU for predictions. Basemaps, remote elevation data and live OSM still need internet access.
+- Unsigned installers may show an operating system security prompt. Download from the official release and verify its `SHA256SUMS.txt` when needed.
+
+[Read the first-estimate guide](/guide/first-estimate/) · [Troubleshooting](/guide/troubleshooting/)
