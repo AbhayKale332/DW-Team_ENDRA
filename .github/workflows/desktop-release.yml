@@ -5,6 +5,10 @@ on:
     tags: ['desktop-v*']
   workflow_dispatch:
     inputs:
+      release_tag:
+        description: 'Optional existing desktop-v tag to rebuild using the current workflow'
+        type: string
+        required: false
       model_url:
         description: 'Optional HTTPS model ZIP URL (graph + .json + all .data at ZIP root)'
         type: string
@@ -39,12 +43,21 @@ jobs:
         working-directory: Desktop
         shell: bash
     env:
+      RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
       PYTHONUTF8: '1'
       GH_TOKEN: ${{ github.token }}
       DESKTOP_MODEL_URL: ${{ inputs.model_url || vars.DESKTOP_MODEL_URL }}
       DESKTOP_MODEL_SHA256: ${{ inputs.model_sha256 || vars.DESKTOP_MODEL_SHA256 }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
+      - name: Free Linux runner space for model-included installers
+        if: runner.os == 'Linux'
+        run: |
+          # These SDKs are preinstalled on hosted runners and unused by this build.
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet
+          df -h .
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -61,8 +74,8 @@ jobs:
       - run: npm ci --prefix ../Frontend
       - run: npm run desktop:install
       - name: Set release version from desktop tag
-        if: startsWith(github.ref, 'refs/tags/desktop-v')
-        run: npm version "${GITHUB_REF_NAME#desktop-v}" --no-git-tag-version --allow-same-version
+        if: startsWith(env.RELEASE_TAG, 'desktop-v')
+        run: npm version "${RELEASE_TAG#desktop-v}" --no-git-tag-version --allow-same-version
       - name: Install CPU inference dependencies
         run: |
           python -m pip install -r shared/requirements.txt
@@ -86,6 +99,8 @@ jobs:
           else
             python shared/inference-smoke.py --executable shared/resources/backend/depthwizard-inference/depthwizard-inference
           fi
+      - name: Remove intermediate backend build files
+        run: rm -rf shared/.build
       - name: Resolve published model bundle
         run: python shared/resolve-model.py
       - name: Stage verified model
@@ -110,13 +125,16 @@ jobs:
             if [[ "${{ matrix.platform }}" == "win" ]]; then
               export DW_DESKTOP_EXECUTABLE="$PWD/${{ matrix.folder }}/release/$VARIANT/win-unpacked/DepthWizard.exe"
               npm run desktop:smoke
+              rm -rf "${{ matrix.folder }}/release/$VARIANT/win-unpacked"
             elif [[ "${{ matrix.platform }}" == "mac" ]]; then
               if [[ "${{ matrix.arch }}" == "arm64" ]]; then MAC_DIR=mac-arm64; else MAC_DIR=mac; fi
               export DW_DESKTOP_EXECUTABLE="$PWD/${{ matrix.folder }}/release/$VARIANT/$MAC_DIR/DepthWizard.app/Contents/MacOS/DepthWizard"
               npm run desktop:smoke
+              rm -rf "${{ matrix.folder }}/release/$VARIANT/$MAC_DIR"
             else
               export DW_DESKTOP_EXECUTABLE="$PWD/${{ matrix.folder }}/release/$VARIANT/linux-unpacked/depthwizard"
               xvfb-run -a npm run desktop:smoke
+              rm -rf "${{ matrix.folder }}/release/$VARIANT/linux-unpacked"
             fi
           done
       - uses: actions/upload-artifact@v4
@@ -131,13 +149,15 @@ jobs:
             Desktop/${{ matrix.folder }}/release/*/*.AppImage
 
   draft-release:
-    if: startsWith(github.ref, 'refs/tags/desktop-v')
+    if: startsWith(github.ref, 'refs/tags/desktop-v') || startsWith(inputs.release_tag, 'desktop-v')
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
       - uses: actions/download-artifact@v4
         with:
           pattern: DepthWizard-*
@@ -156,7 +176,7 @@ jobs:
       - name: Upload installers to a draft GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
           if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release create "$RELEASE_TAG" --verify-tag --draft --title "DepthWizard ${RELEASE_TAG#desktop-v}" --notes-file Desktop/RELEASE_NOTES.md
