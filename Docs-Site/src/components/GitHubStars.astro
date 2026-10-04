@@ -1,0 +1,67 @@
+---
+import config from 'virtual:starlight/user-config';
+import { Icon } from '@astrojs/starlight/components';
+
+const links = config.social || [];
+---
+
+{links.map(({ label, href, icon }) => (
+	<a href={href} rel="me" class="social-link" aria-label={icon === 'github' ? undefined : label}>
+		<Icon name={icon} />
+		{icon === 'github' && (
+			<span class="stars" data-stars aria-label="GitHub stars loading">
+				<svg aria-hidden="true" viewBox="0 0 16 16"><path d="M8 .9 10.1 5l4.5.7-3.3 3.2.8 4.5L8 11.2l-4.1 2.2.8-4.5L1.4 5.7 5.9 5 8 .9Z" /></svg>
+				<span data-count>…</span>
+			</span>
+		)}
+	</a>
+))}
+
+<script>
+	const badges = document.querySelectorAll('[data-stars]');
+	if (badges.length) {
+		fetch('/api/github-stars')
+			.then((response) => {
+				if (!response.ok) throw new Error('Unavailable');
+				return response.json();
+			})
+			.then(({ stars }) => {
+				const count = new Intl.NumberFormat(undefined, {
+					notation: 'compact', maximumFractionDigits: 1,
+				}).format(stars);
+				badges.forEach((badge) => {
+					badge.querySelector('[data-count]').textContent = count;
+					badge.setAttribute('aria-label', `${stars.toLocaleString()} GitHub stars`);
+				});
+			})
+			.catch(() => {
+				badges.forEach((badge) => {
+					badge.querySelector('[data-count]').textContent = '—';
+					badge.setAttribute('aria-label', 'GitHub star count unavailable');
+				});
+			});
+	}
+</script>
+
+<style>
+	.social-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.55rem;
+		padding: 0.45rem 0.65rem;
+		border: 1px solid var(--sl-color-gray-5);
+		border-radius: 0.55rem;
+		color: var(--sl-color-text);
+		font-size: 0.875rem;
+		font-weight: 600;
+		text-decoration: none;
+		transition: border-color 140ms ease, background-color 140ms ease;
+	}
+	.social-link:hover {
+		border-color: var(--sl-color-accent);
+		background: var(--sl-color-gray-6);
+	}
+	.social-link :global(svg) { width: 1.25rem; height: 1.25rem; flex: none; }
+	.stars { display: inline-flex; align-items: center; gap: 0.25rem; color: var(--sl-color-text); font-variant-numeric: tabular-nums; }
+	.stars svg { fill: currentColor; width: 0.9rem; height: 0.9rem; }
+</style>

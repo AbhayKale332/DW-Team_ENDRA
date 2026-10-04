@@ -26,7 +26,10 @@ export default defineConfig({
 				'Single-view metric height estimation and 3D flythrough from aerial and satellite imagery.',
 			logo: { src: './src/assets/logo.svg', alt: 'DepthWizard' },
 			favicon: '/favicon.svg',
-			components: { ThemeSelect: './src/components/ThemeToggle.astro' },
+			components: {
+				ThemeSelect: './src/components/ThemeToggle.astro',
+				SocialIcons: './src/components/GitHubStars.astro',
+			},
 			social: [
 				{ icon: 'github', label: 'GitHub', href: 'https://github.com/AbhayKale332/DepthWizard' },
 			],

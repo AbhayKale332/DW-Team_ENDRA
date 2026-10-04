@@ -16,6 +16,19 @@
 			.card { border: 1px solid #27313b; border-radius: 1rem; padding: 1.4rem; background: #141a20; }
 			.label { margin: 0; font-size: .9rem; }
 			.value { margin: .5rem 0 0; color: #75d8bb; font-size: clamp(2.5rem, 10vw, 4rem); font-variant-numeric: tabular-nums; line-height: 1; }
+			.chart-card { border: 1px solid #27313b; border-radius: 1rem; padding: 1.4rem; background: #141a20; }
+			.chart-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+			.chart-heading h2 { margin: 0; font-size: 1rem; }
+			.legend { display: flex; gap: 1rem; color: #aab4c0; font-size: .8rem; }
+			.legend span { display: inline-flex; align-items: center; gap: .4rem; }
+			.legend i { display: inline-block; width: .55rem; height: .55rem; border-radius: 50%; background: #75d8bb; }
+			.legend span:last-child i { background: #f0b66d; }
+			#visits-chart { display: block; width: 100%; height: auto; margin-top: 1rem; overflow: visible; }
+			.chart-grid { stroke: #27313b; stroke-width: 1; }
+			.chart-label { fill: #aab4c0; font: 11px ui-sans-serif, system-ui, sans-serif; }
+			.chart-line { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+			.chart-home { stroke: #75d8bb; }
+			.chart-ppt { stroke: #f0b66d; }
 			#status, #latest { font-size: .9rem; }
 			@media (max-width: 480px) { body { padding: 1.25rem; } .cards { grid-template-columns: 1fr; } }
 		</style>
@@ -35,6 +48,13 @@
 					<p class="value" id="ppt">—</p>
 				</article>
 			</section>
+			<section class="chart-card" aria-labelledby="chart-title">
+				<div class="chart-heading">
+					<h2 id="chart-title">Loads per day · last 30 days</h2>
+					<div class="legend" aria-hidden="true"><span><i></i>Homepage</span><span><i></i>?ppt</span></div>
+				</div>
+				<svg id="visits-chart" viewBox="0 0 720 260" role="img" aria-label="Daily homepage and ppt loads over the last 30 days"></svg>
+			</section>
 			<p id="status" role="status">Loading counts…</p>
 			<p id="latest"></p>
 		</main>
@@ -45,15 +65,55 @@
 					if (!response.ok) throw new Error('Unavailable');
 					return response.json();
 				})
-				.then(({ homepage, ppt, latest }) => {
+				.then(({ homepage, ppt, latest, daily }) => {
 					document.querySelector('#homepage').textContent = homepage.toLocaleString();
 					document.querySelector('#ppt').textContent = ppt.toLocaleString();
+					drawChart(daily);
 					status.textContent = 'Counts are up to date.';
 					document.querySelector('#latest').textContent = latest
 						? `Latest recorded load: ${new Date(latest).toLocaleString()}`
 						: 'No visits recorded yet.';
 				})
 				.catch(() => { status.textContent = 'Counts are temporarily unavailable.'; });
+
+			function drawChart(days) {
+				const svg = document.querySelector('#visits-chart');
+				const ns = 'http://www.w3.org/2000/svg';
+				const left = 44, right = 8, top = 12, bottom = 34;
+				const width = 720 - left - right, height = 260 - top - bottom;
+				const max = Math.max(1, ...days.flatMap(({ homepage, ppt }) => [homepage, ppt]));
+				const add = (name, attrs, parent = svg) => {
+					const node = document.createElementNS(ns, name);
+					for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+					parent.append(node);
+					return node;
+				};
+				const labels = add('g', {});
+				for (let tick = 0; tick <= 4; tick++) {
+					const y = top + height * tick / 4;
+					add('line', { x1: left, x2: left + width, y1: y, y2: y, class: 'chart-grid' });
+					const label = add('text', { x: left - 9, y: y + 4, 'text-anchor': 'end', class: 'chart-label' }, labels);
+					label.textContent = Math.round(max * (4 - tick) / 4);
+				}
+				for (const [key, className] of [['homepage', 'chart-home'], ['ppt', 'chart-ppt']]) {
+					const points = days.map(({ [key]: value }, index) => {
+						const x = left + width * index / Math.max(1, days.length - 1);
+						const y = top + height * (1 - value / max);
+						return `${x},${y}`;
+					}).join(' ');
+					add('polyline', { points, class: `chart-line ${className}` });
+				}
+				for (const index of [0, 7, 14, 21, 29]) {
+					const day = days[index]?.date;
+					if (!day) continue;
+					const date = new Date(`${day}T00:00:00Z`);
+					const label = add('text', {
+						x: left + width * index / Math.max(1, days.length - 1), y: 250,
+						'text-anchor': 'middle', class: 'chart-label',
+					}, labels);
+					label.textContent = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+				}
+			}
 		</script>
 	</body>
 </html>

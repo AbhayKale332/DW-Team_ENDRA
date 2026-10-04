@@ -43,6 +43,12 @@
       "skillPath": "lightning-studios/SKILL.md",
       "computedHash": "f05b3c8deceaf97a97269d41915f0f29dcf7c1e598f65e4c05fe37354c210bc4"
     },
+    "shadcn": {
+      "source": "shadcn-ui/ui",
+      "sourceType": "github",
+      "skillPath": "skills/shadcn/SKILL.md",
+      "computedHash": "f615de216e085a84e31593ad0fa9062232adc40cd87b7c7ab2b8e49abf6500be"
+    },
     "ui-taste": {
       "source": "uizze.sh",
       "sourceType": "well-known",
