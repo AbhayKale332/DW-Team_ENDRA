@@ -25,7 +25,7 @@ function stopBackend() {
   previous?.kill('SIGKILL');
 }
 
-async function startBackend() {
+async function startBackend(waitForReady = false) {
   stopBackend();
   if (!graph) { backend.message = 'No model installed. Use Model → Install ONNX model…'; return; }
   try {
@@ -41,6 +41,10 @@ async function startBackend() {
       env: { ...process.env, DW_DESKTOP_TOKEN: token, DW_JOBS_DIR: join(app.getPath('userData'), 'jobs'), HF_HUB_OFFLINE: '1', TRANSFORMERS_OFFLINE: '1', PROJ_NETWORK: 'OFF', PYTHONUNBUFFERED: '1', DW_CKPT: '', DW_ONNX: '' },
     });
     child = proc;
+    let ready;
+    const loaded = waitForReady ? new Promise((resolve) => { ready = resolve; }) : null;
+    const timeout = waitForReady ? setTimeout(() => ready(), 120_000) : null;
+    const settled = () => { clearTimeout(timeout); ready?.(); };
     let pending = '';
     proc.stdout.on('data', (data) => {
       log.write(data);
@@ -48,13 +52,17 @@ async function startBackend() {
       const lines = pending.split(/\r?\n/);
       pending = lines.pop();
       for (const line of lines) {
-        if (child === proc && /^DW_READY \d+$/.test(line)) backend = { token, port: Number(line.slice(9)), message: 'Local model ready' };
+        if (child === proc && /^DW_READY \d+$/.test(line)) {
+          backend = { token, port: Number(line.slice(9)), message: 'Local model ready' };
+          settled();
+        }
       }
     });
     proc.stderr.on('data', (data) => log.write(data));
-    const failed = (message) => { if (child === proc) { backend = { message: `${message} See Model → Open application data → inference.log.` }; child = null; } };
+    const failed = (message) => { settled(); if (child === proc) { backend = { message: `${message} See Model → Open application data → inference.log.` }; child = null; } };
     proc.on('error', (error) => failed(error.message));
     proc.on('exit', (code) => failed(`Inference service exited (${code}).`));
+    await loaded;
   } catch (error) {
     backend = { message: error.message };
   }
@@ -74,7 +82,7 @@ async function importModel() {
   finally { installing = false; }
 }
 
-function createWindow() {
+function createWindow(ready) {
   window = new BrowserWindow({ width: 1440, height: 900, minWidth: 900, minHeight: 600, title: 'DepthWizard', icon: join(here, 'icons', 'icon.png'), backgroundColor: '#f4f5f7', show: true, webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true, backgroundThrottling: false } });
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//.test(url)) void shell.openExternal(url);
@@ -84,7 +92,14 @@ function createWindow() {
   // Save downloads with a native dialog rather than navigating the app to the export.
   window.webContents.session.removeAllListeners('will-download');
   window.webContents.session.on('will-download', (_event, item) => item.setSaveDialogOptions({ title: 'Save DepthWizard export', defaultPath: join(app.getPath('downloads'), item.getFilename()) }));
-  void window.loadURL(`${origin}/?desktop`);
+  if (ready) {
+    // Software 3D rendering can exhaust Windows runner resources during model startup.
+    const loading = '<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'"><title>DepthWizard</title><style>body{margin:0;min-height:100vh;display:grid;place-content:center;background:#f4f5f7;color:#202b42;font:16px system-ui}h1{font-size:28px;margin:0 0 12px}p{margin:0;color:#526079}</style><h1>DepthWizard</h1><p>Loading your local model…</p>';
+    const opening = window;
+    void opening.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(loading)}`).then(() => ready).then(() => {
+      if (!opening.isDestroyed()) return opening.loadURL(`${origin}/?desktop`);
+    });
+  } else void window.loadURL(`${origin}/?desktop`);
   window.on('closed', () => { window = null; });
 }
 
@@ -113,6 +128,7 @@ if (singleInstance) app.whenReady().then(async () => {
     { role: 'editMenu' }, { role: 'viewMenu' }, { role: 'windowMenu' },
     { label: 'Help', submenu: [{ label: 'About DepthWizard', click: () => void dialog.showMessageBox(window, { message: `DepthWizard ${app.getVersion()}`, detail: 'Local ONNX inference, 3D terrain, analysis and exports. Install a model using the Model menu. Online basemaps and OSM need internet access.' }) }, { role: 'quit' }] },
   ]));
-  createWindow();
-  await startBackend();
+  const ready = startBackend(process.platform === 'win32');
+  createWindow(process.platform === 'win32' && graph ? ready : null);
+  await ready;
 }).catch((error) => { dialog.showErrorBox('Could not start DepthWizard', error.message); app.quit(); });

@@ -53,7 +53,6 @@ jobs:
     env:
       RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
       PYTHONUTF8: '1'
-      DW_STARTUP_TRACE: '1'
       GH_TOKEN: ${{ github.token }}
       DESKTOP_MODEL_URL: ${{ inputs.model_url || vars.DESKTOP_MODEL_URL }}
       DESKTOP_MODEL_SHA256: ${{ inputs.model_sha256 || vars.DESKTOP_MODEL_SHA256 }}
