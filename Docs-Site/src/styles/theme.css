@@ -87,6 +87,21 @@ body {
 	font-feature-settings: 'cv11', 'ss01';
 	-webkit-font-smoothing: antialiased;
 }
+
+.hero .actions {
+	flex-wrap: nowrap;
+	max-width: 100%;
+	overflow-x: auto;
+}
+.hero .actions > a { white-space: nowrap; }
+.hero .actions > a[href="https://www.kaggle.com/models/abhaydkale232/depthwizard-v5"]::before {
+	content: '';
+	width: 1.1rem;
+	height: 1.1rem;
+	flex: none;
+	background: url('../assets/kaggle-logo.png') center / contain no-repeat;
+}
+
 .sl-markdown-content h1,
 .sl-markdown-content h2,
 .sl-markdown-content h3 {

@@ -30,22 +30,6 @@ import SceneViewer from '../../components/SceneViewer.astro';
 import PipelineDiagram from '../../components/diagrams/PipelineDiagram.astro';
 import infosys from '../../assets/figures/cartosat-infosys-bhubaneswar.png';
 
-<style is:global>
-	.hero .actions {
-		flex-wrap: nowrap;
-		max-width: 100%;
-		overflow-x: auto;
-	}
-	.hero .actions > a { white-space: nowrap; }
-	.hero .actions > a[href="https://www.kaggle.com/models/abhaydkale232/depthwizard-v5"]::before {
-		content: '';
-		width: 1.1rem;
-		height: 1.1rem;
-		flex: none;
-		background: url('../../assets/kaggle-logo.png') center / contain no-repeat;
-	}
-</style>
-
 <SceneViewer sample="campus" label="Cartosat-2S · 0.6 m/px · 1024 × 1024 · EPSG:32645" fallback={infosys}>
 	**Try it: Infosys campus, Bhubaneswar.** A single **Cartosat-2S** GeoTIFF (0.6 m, georeferenced) with DepthWizard's predicted heights, the same sample that ships with the web app. Drag to orbit, right-drag to pan, scroll to zoom, and hover over a building to read its height and footprint. Switch layers to see the height map or the model's land-cover classes. [View on Google Maps](https://maps.app.goo.gl/qtUwHxFjdgVSF9fE8) · [Source imagery: Bhoonidhi sample products](https://bhoonidhi.nrsc.gov.in/bhoonidhi/help/sampleProducts.html)
 </SceneViewer>
