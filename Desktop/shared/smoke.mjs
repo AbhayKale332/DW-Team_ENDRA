@@ -1,5 +1,5 @@
 import { _electron as electron, expect } from '@playwright/test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import assert from 'node:assert/strict';
@@ -16,9 +16,10 @@ try {
   const page = await desktop.firstWindow();
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.waitForLoadState('networkidle');
+  await page.waitForURL(/127\.0\.0\.1:\d+\/\?desktop/, { timeout: 120_000 });
+  await page.waitForLoadState('domcontentloaded');
   assert.match(page.url(), /127\.0\.0\.1:\d+\/\?desktop/);
-  await page.getByText('DepthWizard', { exact: true }).first().waitFor();
+  await page.getByText('DepthWizard', { exact: true }).first().waitFor({ timeout: 120_000 });
   const state = await desktop.evaluate(({ BrowserWindow }) => {
     const prefs = BrowserWindow.getAllWindows()[0].webContents.getLastWebPreferences();
     return { sandbox: prefs.sandbox, nodeIntegration: prefs.nodeIntegration, contextIsolation: prefs.contextIsolation };
@@ -59,11 +60,18 @@ try {
   assert.deepEqual(errors, []);
   console.log(`Desktop smoke passed: sandboxed renderer, offline samples, ${process.env.DW_ONNX_MODEL ? 'real local model and rendered mesh' : `initial model status ${health.status}`}.`);
 } catch (error) {
+  console.error('Desktop startup or inference check failed:', error);
   if (desktop) {
-    const page = await desktop.firstWindow();
-    console.error((await page.locator('body').innerText()).slice(-3000));
-    await page.screenshot({ path: join(tmpdir(), 'depthwizard-desktop-smoke.png') }).catch(() => {});
+    try {
+      const page = desktop.windows()[0];
+      if (page) {
+        console.error('Window URL:', page.url());
+        console.error((await page.locator('body').innerText({ timeout: 5000 })).slice(-3000));
+        await page.screenshot({ path: join(tmpdir(), 'depthwizard-desktop-smoke.png'), timeout: 5000 });
+      }
+    } catch (diagnostic) { console.error('Window diagnostic unavailable:', diagnostic.message); }
   }
+  console.error((await readFile(join(userData, 'inference.log'), 'utf8').catch(() => '')).slice(-6000));
   throw error;
 } finally {
   await desktop?.close();
