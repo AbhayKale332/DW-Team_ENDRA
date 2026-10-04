@@ -30,13 +30,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: windows-x64, os: windows-latest, platform: win, arch: x64 }
-          - { name: macos-arm64, os: macos-15, platform: mac, arch: arm64 }
-          - { name: macos-x64, os: macos-15-intel, platform: mac, arch: x64 }
-          - { name: linux-x64, os: ubuntu-22.04, platform: linux, arch: x64 }
+          - { name: windows-x64, os: windows-latest, platform: win, folder: windows, arch: x64 }
+          - { name: macos-arm64, os: macos-15, platform: mac, folder: mac, arch: arm64 }
+          - { name: macos-x64, os: macos-15-intel, platform: mac, folder: mac, arch: x64 }
+          - { name: linux-x64, os: ubuntu-22.04, platform: linux, folder: linux, arch: x64 }
     defaults:
       run:
-        working-directory: Frontend
+        working-directory: Desktop
         shell: bash
     env:
       PYTHONUTF8: '1'
@@ -48,20 +48,23 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: Frontend/package-lock.json
+          cache-dependency-path: |
+            Frontend/package-lock.json
+            Desktop/package-lock.json
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: pip
-          cache-dependency-path: Frontend/desktop/requirements.txt
+          cache-dependency-path: Desktop/shared/requirements.txt
       - run: npm ci
+      - run: npm ci --prefix ../Frontend
       - run: npm run desktop:install
       - name: Set release version from desktop tag
         if: startsWith(github.ref, 'refs/tags/desktop-v')
         run: npm version "${GITHUB_REF_NAME#desktop-v}" --no-git-tag-version
       - name: Install CPU inference dependencies
         run: |
-          python -m pip install -r desktop/requirements.txt
+          python -m pip install -r shared/requirements.txt
           if [[ "${{ matrix.name }}" == "macos-x64" ]]; then
             python -m pip install torch==2.2.2
           elif [[ "${{ matrix.platform }}" == "mac" ]]; then
@@ -73,17 +76,17 @@ jobs:
         run: |
           npm run desktop:test
           npm run build
-          python desktop/inference-smoke.py
+          python shared/inference-smoke.py
       - name: Freeze native inference runtime
         run: |
           npm run desktop:backend
           if [[ "${{ matrix.platform }}" == "win" ]]; then
-            python desktop/inference-smoke.py --executable desktop/resources/backend/depthwizard-inference/depthwizard-inference.exe
+            python shared/inference-smoke.py --executable shared/resources/backend/depthwizard-inference/depthwizard-inference.exe
           else
-            python desktop/inference-smoke.py --executable desktop/resources/backend/depthwizard-inference/depthwizard-inference
+            python shared/inference-smoke.py --executable shared/resources/backend/depthwizard-inference/depthwizard-inference
           fi
       - name: Stage optional verified model
-        run: python desktop/download-model.py
+        run: python shared/download-model.py
       - name: Package application
         env:
           CSC_LINK: ${{ matrix.platform == 'mac' && secrets.DESKTOP_MAC_CSC_LINK || matrix.platform == 'win' && secrets.DESKTOP_WIN_CSC_LINK || '' }}
@@ -98,14 +101,14 @@ jobs:
       - name: Test packaged desktop startup
         run: |
           if [[ "${{ matrix.platform }}" == "win" ]]; then
-            export DW_DESKTOP_EXECUTABLE="$PWD/release/win-unpacked/DepthWizard.exe"
+            export DW_DESKTOP_EXECUTABLE="$PWD/${{ matrix.folder }}/release/win-unpacked/DepthWizard.exe"
             npm run desktop:smoke
           elif [[ "${{ matrix.platform }}" == "mac" ]]; then
             if [[ "${{ matrix.arch }}" == "arm64" ]]; then MAC_DIR=mac-arm64; else MAC_DIR=mac; fi
-            export DW_DESKTOP_EXECUTABLE="$PWD/release/$MAC_DIR/DepthWizard.app/Contents/MacOS/DepthWizard"
+            export DW_DESKTOP_EXECUTABLE="$PWD/${{ matrix.folder }}/release/$MAC_DIR/DepthWizard.app/Contents/MacOS/DepthWizard"
             npm run desktop:smoke
           else
-            export DW_DESKTOP_EXECUTABLE="$PWD/release/linux-unpacked/depthwizard"
+            export DW_DESKTOP_EXECUTABLE="$PWD/${{ matrix.folder }}/release/linux-unpacked/depthwizard"
             xvfb-run -a npm run desktop:smoke
           fi
       - uses: actions/upload-artifact@v4
@@ -114,10 +117,10 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           path: |
-            Frontend/release/*.exe
-            Frontend/release/*.dmg
-            Frontend/release/*.zip
-            Frontend/release/*.AppImage
+            Desktop/${{ matrix.folder }}/release/*.exe
+            Desktop/${{ matrix.folder }}/release/*.dmg
+            Desktop/${{ matrix.folder }}/release/*.zip
+            Desktop/${{ matrix.folder }}/release/*.AppImage
 
   draft-release:
     if: startsWith(github.ref, 'refs/tags/desktop-v')
@@ -141,6 +144,6 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release create "$RELEASE_TAG" --verify-tag --draft --title "DepthWizard ${RELEASE_TAG#desktop-v}" --notes-file Frontend/desktop/RELEASE_NOTES.md
+            gh release create "$RELEASE_TAG" --verify-tag --draft --title "DepthWizard ${RELEASE_TAG#desktop-v}" --notes-file Desktop/RELEASE_NOTES.md
           fi
           gh release upload "$RELEASE_TAG" desktop-release/* --clobber

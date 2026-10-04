@@ -1,4 +1,4 @@
-"""Run with the target platform's Python after installing desktop/requirements.txt."""
+"""Run with the target platform's Python after installing shared/requirements.txt."""
 from pathlib import Path
 import subprocess
 import sys

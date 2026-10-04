@@ -38,7 +38,7 @@ try {
       HTMLInputElement.prototype.click = function () { if (this.type !== 'file') click.call(this); };
     });
     await page.getByRole('button', { name: 'Open image…' }).click({ force: true });
-    const image = await desktop.evaluate(({ nativeImage }, filename) => nativeImage.createFromPath(filename).resize({ width: 128, height: 128 }).toPNG().toString('base64'), resolve('e2e/fixtures/rgb.png'));
+    const image = await desktop.evaluate(({ nativeImage }, filename) => nativeImage.createFromPath(filename).resize({ width: 128, height: 128 }).toPNG().toString('base64'), resolve('../Frontend/e2e/fixtures/rgb.png'));
     await page.locator('input[type=file]').last().setInputFiles({ name: 'desktop-smoke.png', mimeType: 'image/png', buffer: Buffer.from(image, 'base64') });
     const run = page.getByRole('button', { name: 'Estimate heights' });
     await expect(run).toBeEnabled();

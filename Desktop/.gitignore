@@ -1,0 +1,11 @@
+node_modules/
+release/
+mac/release/
+windows/release/
+linux/release/
+.desktop-venv/
+shared/.build/
+shared/resources/backend/*
+!shared/resources/backend/.gitkeep
+shared/resources/model/*
+!shared/resources/model/.gitkeep

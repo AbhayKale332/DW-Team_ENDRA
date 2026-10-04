@@ -5,10 +5,10 @@ import { existsSync, createWriteStream } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createAppServer } from '../server/serve.mjs';
 import { desktopHandler } from './local-api.mjs';
 import { findModel, installModel, modelFiles } from './model.mjs';
 
+const { createAppServer } = await import(app.isPackaged ? '../server/serve.mjs' : '../../Frontend/server/serve.mjs');
 const here = dirname(fileURLToPath(import.meta.url));
 let window, server, child, log, graph, origin;
 let backend = { message: 'No model installed. Use Model → Install ONNX model…' };
