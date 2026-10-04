@@ -106,8 +106,8 @@ Commit these changes and push them to GitHub. Open **Actions → Build desktop r
 To build and upload a **draft** GitHub release:
 
 ```bash
-git tag desktop-v0.1.3
-git push origin desktop-v0.1.3
+git tag desktop-v0.1.4
+git push origin desktop-v0.1.4
 ```
 
 Use a new semantic version for each release. The workflow sets the application version from the tag, builds and smoke-tests each native inference runtime and both packaged variants (`with-model` and `without-model`), uploads installers and `SHA256SUMS.txt` to a draft release. Review the installers before publishing the draft. Existing releases can have their assets replaced when rerunning the same tag workflow.

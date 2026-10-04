@@ -1,4 +1,4 @@
-# DepthWizard Desktop v0.1.3
+# DepthWizard Desktop v0.1.4
 
 Download DepthWizard for Windows, macOS or Linux, with local model weights included or as a smaller application using hosted inference.
 

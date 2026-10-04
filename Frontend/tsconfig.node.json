@@ -4,7 +4,7 @@
     "target": "ES2023",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "types": ["node"],
+    "types": ["node", "vite/client"],
     "strict": true,
     "skipLibCheck": true,
     "isolatedModules": true,
