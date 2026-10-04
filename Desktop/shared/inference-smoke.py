@@ -59,7 +59,10 @@ def main():
                         stderr.seek(0)
                         raise RuntimeError(stderr.read())
                     time.sleep(0.2)
-                assert port, "Inference runtime did not start in 120 seconds"
+                if not port:
+                    stdout.seek(0)
+                    stderr.seek(0)
+                    raise RuntimeError("Inference runtime did not start in 120 seconds\n" + stdout.read() + stderr.read())
                 origin = f"http://127.0.0.1:{port}"
 
                 def fetch(path, body=None, content_type=None, authenticated=True):

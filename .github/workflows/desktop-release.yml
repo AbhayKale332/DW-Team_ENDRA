@@ -113,6 +113,9 @@ jobs:
         run: python shared/resolve-model.py
       - name: Stage verified model
         run: python shared/download-model.py
+      - name: Verify Windows runtime with the bundled model
+        if: runner.os == 'Windows'
+        run: python shared/inference-smoke.py --executable shared/resources/backend/depthwizard-inference/depthwizard-inference.exe --model shared/resources/model/depthwizard.onnx
       - name: Package and test both download options
         env:
           CSC_LINK: ${{ matrix.platform == 'mac' && secrets.DESKTOP_MAC_CSC_LINK || matrix.platform == 'win' && secrets.DESKTOP_WIN_CSC_LINK || '' }}

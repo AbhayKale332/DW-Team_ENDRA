@@ -66,6 +66,7 @@ try {
       const page = desktop.windows()[0];
       if (page) {
         console.error('Window URL:', page.url());
+        console.error('Inference health:', await page.evaluate(async () => (await fetch('./local-api/api/health')).text()));
         console.error((await page.locator('body').innerText({ timeout: 5000 })).slice(-3000));
         await page.screenshot({ path: join(tmpdir(), 'depthwizard-desktop-smoke.png'), timeout: 5000 });
       }

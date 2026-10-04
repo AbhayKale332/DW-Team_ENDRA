@@ -36,8 +36,10 @@ def main():
     token = os.environ.get("DW_DESKTOP_TOKEN", "")
     if not token:
         raise ValueError("The desktop launcher must supply DW_DESKTOP_TOKEN")
+    print("[desktop] Validating ONNX model", flush=True)
     graph = validate_model(args.onnx)
 
+    print("[desktop] Loading inference dependencies", flush=True)
     from serve.app import create_app, load_backend
     import uvicorn
     from fastapi.responses import JSONResponse
@@ -46,6 +48,7 @@ def main():
     import torch
     torch.set_num_threads(threads)
     os.environ.setdefault("DW_BATCH_TILES", "1")
+    print("[desktop] Loading ONNX session", flush=True)
     load_backend(onnx=str(graph), onnx_providers=["CPUExecutionProvider"], onnx_threads=threads)
     api = create_app()
 
