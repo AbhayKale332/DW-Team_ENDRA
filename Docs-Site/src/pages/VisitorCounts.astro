@@ -13,24 +13,18 @@
 			h1 { margin: 0; font-size: clamp(2rem, 7vw, 3.25rem); letter-spacing: -.04em; }
 			.eyebrow { margin: 0 0 .6rem; color: #8ca7bb; font: 600 .75rem/1.4 ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase; }
 			.cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 2rem 0; }
-			.card { border: 1px solid #27313b; border-radius: 1rem; padding: 1.4rem; background: #141a20; }
+			.card, .chart-card { border: 1px solid #27313b; border-radius: 1rem; padding: 1.4rem; background: #141a20; }
 			.label { margin: 0; font-size: .9rem; }
 			.value { margin: .5rem 0 0; color: #75d8bb; font-size: clamp(2.5rem, 10vw, 4rem); font-variant-numeric: tabular-nums; line-height: 1; }
-			.chart-card { border: 1px solid #27313b; border-radius: 1rem; padding: 1.4rem; background: #141a20; }
 			.chart-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 			.chart-heading h2 { margin: 0; font-size: 1rem; }
 			.legend { display: flex; gap: 1rem; color: #aab4c0; font-size: .8rem; }
 			.legend span { display: inline-flex; align-items: center; gap: .4rem; }
 			.legend i { display: inline-block; width: .55rem; height: .55rem; border-radius: 50%; background: #75d8bb; }
 			.legend span:last-child i { background: #f0b66d; }
-			#visits-chart { display: block; width: 100%; height: auto; margin-top: 1rem; overflow: visible; }
-			.chart-grid { stroke: #27313b; stroke-width: 1; }
-			.chart-label { fill: #aab4c0; font: 11px ui-sans-serif, system-ui, sans-serif; }
-			.chart-line { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
-			.chart-home { stroke: #75d8bb; }
-			.chart-ppt { stroke: #f0b66d; }
+			#visits-chart { display: block; width: 100%; height: auto; margin-top: 1rem; }
 			#status, #latest { font-size: .9rem; }
-			@media (max-width: 480px) { body { padding: 1.25rem; } .cards { grid-template-columns: 1fr; } }
+			@media (max-width: 480px) { body { padding: 1.25rem; } .cards { grid-template-columns: 1fr; } .chart-card { padding: 1rem; } }
 		</style>
 	</head>
 	<body>
@@ -53,7 +47,9 @@
 					<h2 id="chart-title">Loads per day · last 30 days</h2>
 					<div class="legend" aria-hidden="true"><span><i></i>Homepage</span><span><i></i>?ppt</span></div>
 				</div>
-				<svg id="visits-chart" viewBox="0 0 720 260" role="img" aria-label="Daily homepage and ppt loads over the last 30 days"></svg>
+				<svg id="visits-chart" viewBox="0 0 720 280" role="img" aria-labelledby="chart-title chart-description">
+					<desc id="chart-description">Grouped bars show daily homepage loads and loads with the ppt parameter.</desc>
+				</svg>
 			</section>
 			<p id="status" role="status">Loading counts…</p>
 			<p id="latest"></p>
@@ -79,39 +75,57 @@
 			function drawChart(days) {
 				const svg = document.querySelector('#visits-chart');
 				const ns = 'http://www.w3.org/2000/svg';
-				const left = 44, right = 8, top = 12, bottom = 34;
-				const width = 720 - left - right, height = 260 - top - bottom;
-				const max = Math.max(1, ...days.flatMap(({ homepage, ppt }) => [homepage, ppt]));
+				const left = 44, right = 12, top = 14, bottom = 42;
+				const width = 720 - left - right, height = 280 - top - bottom;
+				const peak = Math.max(0, ...days.flatMap(({ homepage, ppt }) => [homepage, ppt]));
+				const max = Math.max(5, Math.ceil(peak / 5) * 5);
 				const add = (name, attrs, parent = svg) => {
 					const node = document.createElementNS(ns, name);
 					for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
 					parent.append(node);
 					return node;
 				};
-				const labels = add('g', {});
-				for (let tick = 0; tick <= 4; tick++) {
-					const y = top + height * tick / 4;
-					add('line', { x1: left, x2: left + width, y1: y, y2: y, class: 'chart-grid' });
-					const label = add('text', { x: left - 9, y: y + 4, 'text-anchor': 'end', class: 'chart-label' }, labels);
-					label.textContent = Math.round(max * (4 - tick) / 4);
+
+				for (let tick = 0; tick <= 5; tick++) {
+					const y = top + height * tick / 5;
+					add('line', { x1: left, x2: left + width, y1: y, y2: y, stroke: '#27313b', 'stroke-width': 1 });
+					const label = add('text', {
+						x: left - 9, y: y + 4, 'text-anchor': 'end', fill: '#aab4c0',
+						'font-family': 'Inter, system-ui, sans-serif', 'font-size': 11,
+					});
+					label.textContent = String(Math.round(max * (5 - tick) / 5));
 				}
-				for (const [key, className] of [['homepage', 'chart-home'], ['ppt', 'chart-ppt']]) {
-					const points = days.map(({ [key]: value }, index) => {
-						const x = left + width * index / Math.max(1, days.length - 1);
-						const y = top + height * (1 - value / max);
-						return `${x},${y}`;
-					}).join(' ');
-					add('polyline', { points, class: `chart-line ${className}` });
+
+				const groupWidth = width / days.length;
+				const barWidth = Math.min(7, groupWidth * 0.3);
+				for (const [index, day] of days.entries()) {
+					const groupX = left + index * groupWidth;
+					for (const [series, color, offset] of [['homepage', '#75d8bb', 0], ['ppt', '#f0b66d', 1]]) {
+						const value = day[series];
+						const barHeight = height * value / max;
+						const bar = add('rect', {
+							x: groupX + (groupWidth - 2 * barWidth - 2) / 2 + offset * (barWidth + 2),
+							y: top + height - barHeight,
+							width: barWidth,
+							height: Math.max(value ? 1 : 0, barHeight),
+							rx: 2,
+							fill: color,
+						});
+						const title = add('title', {}, bar);
+						title.textContent = `${day.date}: ${value} ${series === 'homepage' ? 'homepage' : '?ppt'} loads`;
+					}
 				}
+
 				for (const index of [0, 7, 14, 21, 29]) {
 					const day = days[index]?.date;
 					if (!day) continue;
-					const date = new Date(`${day}T00:00:00Z`);
 					const label = add('text', {
-						x: left + width * index / Math.max(1, days.length - 1), y: 250,
-						'text-anchor': 'middle', class: 'chart-label',
-					}, labels);
-					label.textContent = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+						x: left + groupWidth * (index + 0.5), y: 258, 'text-anchor': 'middle', fill: '#aab4c0',
+						'font-family': 'Inter, system-ui, sans-serif', 'font-size': 11,
+					});
+					label.textContent = new Date(`${day}T00:00:00Z`).toLocaleDateString(undefined, {
+						month: 'short', day: 'numeric', timeZone: 'UTC',
+					});
 				}
 			}
 		</script>
