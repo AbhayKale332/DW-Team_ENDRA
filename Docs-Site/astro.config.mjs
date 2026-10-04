@@ -1,6 +1,7 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import sitemap from '@astrojs/sitemap';
 import mermaid from 'astro-mermaid';
 import starlightLinksValidator from 'starlight-links-validator';
 
@@ -8,6 +9,7 @@ export default defineConfig({
 	site: 'https://depthwizard-docs.vercel.app',
 	devToolbar: { enabled: false },
 	integrations: [
+		sitemap({ filter: (page) => page !== 'https://depthwizard-docs.vercel.app/VisitorCounts/' }),
 		mermaid({
 			theme: 'neutral',
 			autoTheme: true,
@@ -24,6 +26,7 @@ export default defineConfig({
 				'Single-view metric height estimation and 3D flythrough from aerial and satellite imagery.',
 			logo: { src: './src/assets/logo.svg', alt: 'DepthWizard' },
 			favicon: '/favicon.svg',
+			components: { ThemeSelect: './src/components/ThemeToggle.astro' },
 			social: [
 				{ icon: 'github', label: 'GitHub', href: 'https://github.com/AbhayKale332/DepthWizard' },
 			],

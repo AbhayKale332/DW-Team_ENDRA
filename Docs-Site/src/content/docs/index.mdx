@@ -28,7 +28,10 @@ import StatGrid from '../../components/StatGrid.astro';
 import Diagram from '../../components/Diagram.astro';
 import SceneViewer from '../../components/SceneViewer.astro';
 import PipelineDiagram from '../../components/diagrams/PipelineDiagram.astro';
+import HomepageTracker from '../../components/HomepageTracker.astro';
 import infosys from '../../assets/figures/cartosat-infosys-bhubaneswar.png';
+
+<HomepageTracker />
 
 <SceneViewer sample="campus" label="Cartosat-2S · 0.6 m/px · 1024 × 1024 · EPSG:32645" fallback={infosys}>
 	**Try it: Infosys campus, Bhubaneswar.** A single **Cartosat-2S** GeoTIFF (0.6 m, georeferenced) with DepthWizard's predicted heights, the same sample that ships with the web app. Drag to orbit, right-drag to pan, scroll to zoom, and hover over a building to read its height and footprint. Switch layers to see the height map or the model's land-cover classes. [View on Google Maps](https://maps.app.goo.gl/qtUwHxFjdgVSF9fE8) · [Source imagery: Bhoonidhi sample products](https://bhoonidhi.nrsc.gov.in/bhoonidhi/help/sampleProducts.html)

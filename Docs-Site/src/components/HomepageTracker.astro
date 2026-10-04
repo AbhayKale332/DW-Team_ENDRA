@@ -1,0 +1,9 @@
+<script>
+  const isPptVisit = new URLSearchParams(window.location.search).has('ppt');
+  fetch('/api/track-visit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ppt: isPptVisit }),
+    keepalive: true,
+  }).catch(() => {});
+</script>
