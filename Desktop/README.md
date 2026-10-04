@@ -101,7 +101,7 @@ Do not add large weights to Git. Their `.data` sidecars are just as necessary as
 
 ## GitHub Releases
 
-Commit these changes and push them to GitHub. Open **Actions → Build desktop releases → Run workflow** to produce downloadable artifacts for all four OS/architecture combinations. Manual runs do not publish a release.
+Commit these changes and push them to GitHub. Open **Actions → Build desktop releases → Run workflow** to produce downloadable artifacts for all four OS/architecture combinations. Manual runs without `release_tag` produce artifacts only. To rebuild an existing tag using the corrected workflow, enter that `desktop-v*` tag in the optional `release_tag` input; the workflow checks out that tag and uploads both variants to its draft release.
 
 To build and upload a **draft** GitHub release:
 
