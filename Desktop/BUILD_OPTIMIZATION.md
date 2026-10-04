@@ -4,8 +4,8 @@ Measured on Modal container `ta-01M436VK4JPABGHCHD442QE3FS`, 2026-10-04, startin
 
 | Measurement | Before (MiB) | After (MiB) | Reduction |
 | --- | ---: | ---: | ---: |
-| Linux AppImage (without model) | 541.0 | 478.1 | 11.6% |
-| Installed Linux app (without model) | 1432.8 | 1253.7 | 12.5% |
+| Linux AppImage (without model) | 541.0 | 422.2 | 22.0% |
+| Installed Linux app (without model) | 1432.8 | 1184.9 | 17.3% |
 | Frozen inference runtime | 1031.3 | 861.9 | 16.4% |
 | Frontend build output (includes maps in baseline) | 134.3 | 118.9 | 11.5% |
 | Frontend build peak RSS | 2059.9 | 1874.0 | 9.0% |
@@ -15,7 +15,7 @@ Measured on Modal container `ta-01M436VK4JPABGHCHD442QE3FS`, 2026-10-04, startin
 
 - Collect the ONNX code and native providers through normal PyInstaller analysis/hooks instead of collecting the entire packages and their test fixtures/tooling.
 - Remove upstream PyTorch native test programs after freezing. Preserve tensor libraries, provider libraries and the shared-memory helper. CPU torch remains because the existing tiling/preprocessing engine uses it.
-- Package complete sample `.dwproj` archives and their advertised input/height previews. Omit loose duplicate rasters and intermediate results from installers. All three committed offline projects and advertised previews were compared byte-for-byte inside the actual ASAR.
+- Package complete sample `.dwproj` archives and their advertised input/height previews. Omit loose duplicate rasters and intermediate results from installers. The two selected offline projects and advertised previews were compared byte-for-byte inside the actual ASAR.
 - Generate source maps only with `DW_BUILD_SOURCEMAPS=1`. They were already excluded from installers; this reduces build output and peak build RAM.
 - Transfer the isolated terrain height copy to the worker instead of structured-cloning it again; skip cancelled builds before dispatch.
 - Close CPU ImageBitmaps when their GPU textures are disposed, and release the probe bitmap if resizing fails. Keep live bitmaps for context restoration.
@@ -44,3 +44,9 @@ Optimized installer: `repo/Desktop/linux/release/without-model/DepthWizard-0.1.4
 The standalone `benchmark-windowed.py` in the results directory compares the saved original engine (`engine-before.py`) with this working tree. Run it with the same CPU Python environment and `before` / `after` arguments. `sizes.json`, the two `windowed-*.json` files and `/usr/bin/time -v` outputs contain raw measurements.
 
 Build with the documented dependencies: `npm ci` in Desktop and Frontend, install the Python requirements and CPU torch, run `python shared/build-backend.py`, then `DW_BUNDLE_MODEL=0 npm run desktop:linux`. For the model-included variant, stage the same verified model and keep `DW_BUNDLE_MODEL=1`.
+
+## Offline sample selection
+
+Offline installers now bundle only `PNG-Wankhede_Stadium_Mumbai` and `GeoReferenced .tif From Cartosat2S`, including their complete project archives and input/height previews. Other sample folders are excluded from desktop packaging, including preview-only folders. Website source samples are unchanged. The desktop server generates its sample index from the packaged folders, avoiding a stale index containing removed projects.
+
+The actual packaged ASAR contains exactly two projects and no other sample directories. A live Electron check confirms the two sample IDs and HTTP 200 responses for both project downloads and all four previews. `two-samples-package.json` and `two-samples-live-index.json` capture those checks.

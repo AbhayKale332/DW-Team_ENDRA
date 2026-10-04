@@ -15,8 +15,12 @@ module.exports = {
     'shared/*.mjs', '!shared/*.test.mjs', '!shared/smoke.mjs', 'shared/icons/icon.png',
     'package.json', '!node_modules/**/*',
     { from: '../Frontend/dist', to: 'dist', filter: ['**/*', '!**/*.map', '!samples/**/*'] },
-    // Projects include their source rasters and results; retain quick looks used by the sample picker.
-    { from: '../Frontend/dist/samples', to: 'dist/samples', filter: ['**/*.dwproj', '**/input.png', '**/input.jpg', '**/input.jpeg', '**/height.png', 'index.json'] },
+    // Offline installers include only these two projects and their quick looks.
+    // The desktop server generates the index from the packaged folders.
+    ...['PNG-Wankhede_Stadium_Mumbai', 'GeoReferenced .tif From Cartosat2S'].map((sample) => ({
+      from: `../Frontend/dist/samples/${sample}`, to: `dist/samples/${sample}`,
+      filter: ['*.dwproj', 'input.png', 'input.jpg', 'input.jpeg', 'height.png'],
+    })),
     { from: '../Frontend/server', to: 'server', filter: ['*.mjs', '!*.test.mjs'] },
   ],
   extraResources: [
