@@ -6,9 +6,9 @@ Turn one aerial or satellite image into estimated heights and an interactive 3D 
 
 ## ▶️ Watch the demo
 
-[![Play the project demo on YouTube](https://img.youtube.com/vi/EKys48tC0X8/hqdefault.jpg)](https://youtu.be/EKys48tC0X8)
-
-**[▶ Play demo on YouTube](https://youtu.be/EKys48tC0X8)**
+<p align="center">
+  <a href="https://youtu.be/EKys48tC0X8"><img src="https://img.youtube.com/vi/EKys48tC0X8/hqdefault.jpg" alt="Play the project demo on YouTube" width="640"></a>
+</p>
 
 ## 🏔️ From image to 3D
 
