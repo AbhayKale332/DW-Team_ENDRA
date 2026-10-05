@@ -7,7 +7,7 @@ export function githubHeaders(accept = 'application/vnd.github+json') {
 }
 
 export async function github(path, options = {}) {
-  const response = await fetch(`https://api.github.com/repos/${repository}/${path}`, {
+  const response = await fetch(`https://api.github.com/repos/${repository}${path ? `/${path}` : ''}`, {
     headers: githubHeaders(), signal: AbortSignal.timeout(15000), ...options,
   });
   if (!response.ok && response.status !== 302) throw new Error('GitHub release service is unavailable');

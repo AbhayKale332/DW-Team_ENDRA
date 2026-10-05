@@ -20,12 +20,12 @@ const links = config.social || [];
 <script>
 	const badges = document.querySelectorAll('[data-stars]');
 	if (badges.length) {
-		fetch('/api/github-stars')
+		fetch('https://api.github.com/repos/AbhayKale332/DW-Team_ENDRA')
 			.then((response) => {
 				if (!response.ok) throw new Error('Unavailable');
 				return response.json();
 			})
-			.then(({ stars }) => {
+			.then(({ stargazers_count: stars }) => {
 				const count = new Intl.NumberFormat(undefined, {
 					notation: 'compact', maximumFractionDigits: 1,
 				}).format(stars);

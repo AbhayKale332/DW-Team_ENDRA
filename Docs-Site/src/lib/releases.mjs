@@ -1,4 +1,4 @@
-export const RELEASES_URL = '/api/releases';
+export const RELEASES_URL = 'https://api.github.com/repos/AbhayKale332/DW-Team_ENDRA/releases?per_page=100';
 export const RELEASES_PAGE = 'https://github.com/AbhayKale332/DW-Team_ENDRA/releases';
 
 export function isDesktopReleaseTag(tag) {

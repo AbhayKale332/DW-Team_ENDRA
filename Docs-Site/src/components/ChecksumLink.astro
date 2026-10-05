@@ -1,8 +1,9 @@
 <a href="https://github.com/AbhayKale332/DW-Team_ENDRA/releases" data-checksum-link><slot /></a>
 
 <script>
+  import { RELEASES_URL } from '../lib/releases.mjs';
   const checksumLinks = document.querySelectorAll('[data-checksum-link]');
-  fetch('/api/releases')
+  fetch(RELEASES_URL)
     .then((response) => response.ok ? response.json() : Promise.reject())
     .then((releases) => {
       const release = releases.find((item) => Array.isArray(item.assets) && item.assets.some((asset) => asset.name === 'SHA256SUMS.txt'));
