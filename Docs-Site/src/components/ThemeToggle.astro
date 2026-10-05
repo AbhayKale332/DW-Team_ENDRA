@@ -4,8 +4,8 @@ import { Icon } from '@astrojs/starlight/components';
 
 <starlight-theme-toggle>
 	<button class="theme-toggle" type="button" role="switch" aria-label="Dark mode" aria-checked="false" title="Switch to dark mode">
-		<Icon name="sun" size="0.8rem" class="sun" />
-		<Icon name="moon" size="0.8rem" class="moon" />
+		<Icon name="sun" size="1rem" class="sun" />
+		<Icon name="moon" size="1rem" class="moon" />
 		<span class="thumb"></span>
 	</button>
 </starlight-theme-toggle>
@@ -41,11 +41,12 @@ import { Icon } from '@astrojs/starlight/components';
 	.theme-toggle {
 		position: relative;
 		display: inline-flex;
+		box-sizing: border-box;
 		align-items: center;
 		justify-content: space-between;
-		width: 2.75rem;
-		height: 1.5rem;
-		padding: 0 0.2rem;
+		width: 3.5rem;
+		height: 1.875rem;
+		padding: 0 0.25rem;
 		border: 1px solid var(--sl-color-hairline);
 		border-radius: 999px;
 		background: var(--sl-color-gray-6);
@@ -69,10 +70,10 @@ import { Icon } from '@astrojs/starlight/components';
 
 	.thumb {
 		position: absolute;
-		top: 0.125rem;
+		top: 0.1875rem;
 		left: 0.125rem;
-		width: 1.125rem;
-		height: 1.125rem;
+		width: 1.375rem;
+		height: 1.375rem;
 		border-radius: 50%;
 		background: var(--sl-color-white);
 		box-shadow: 0 1px 3px rgb(0 0 0 / 24%);
@@ -80,7 +81,7 @@ import { Icon } from '@astrojs/starlight/components';
 	}
 
 	:global(html[data-theme='dark']) .thumb {
-		transform: translateX(1.125rem);
+		transform: translateX(1.875rem);
 	}
 
 	@media (prefers-reduced-motion: reduce) {
