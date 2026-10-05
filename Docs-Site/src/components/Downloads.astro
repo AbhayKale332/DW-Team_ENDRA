@@ -20,7 +20,6 @@ const systems = [
       <p class="platform-detail">{system.detail}</p>
       {system.id === 'mac' ? <div class="architecture"><label for="mac-architecture">Processor</label><select id="mac-architecture"><option value="arm64">Apple Silicon · M-series</option><option value="x64">Intel</option></select></div> : <div class="architecture"><span>{system.format}</span></div>}
       <button class="download-button" type="button" disabled><Icon name="download" size="1rem" /> Download {system.title}</button>
-      <span class="asset-size">Choose an install type after clicking Download</span>
       <div class="install-steps">
         <strong>Install on {system.title}</strong>
         {system.id === 'win' ? <ol><li>Download and open the <code>.exe</code> installer.</li><li>Follow the setup prompts, then launch DepthWizard from the Start menu.</li></ol> : system.id === 'mac' ? <ol><li>Open the downloaded <code>.dmg</code> file.</li><li>Drag DepthWizard into Applications, then open it. If macOS blocks it, Control-click the app and choose <strong>Open</strong>.</li></ol> : <ol><li>Download the <code>.AppImage</code> file.</li><li>In Properties → Permissions, allow executing it as a program, then double-click to launch. Or run <code>chmod +x DepthWizard*.AppImage</code> in Terminal first.</li></ol>}
@@ -157,10 +156,9 @@ const systems = [
   .download-button :global(svg) { color: inherit; }
   .download-button:hover:not(:disabled) { opacity: .85; }
   .download-button:disabled { color: var(--dw-dim); background: var(--dw-panel); cursor: not-allowed; }
-  .downloads .asset-size { font-family: var(--sl-font-mono); font-size: .65rem; color: var(--dw-dim); margin-top: .7rem; align-self: center; text-align: center; }
   .platform-logo { width: 2rem; height: 2rem; color: var(--dw-dim); }
   .linux-logo { object-fit: contain; }
-  #download-choice { box-sizing: border-box; width: min(32rem, calc(100% - 2rem)); max-height: min(90vh, 42rem); padding: 1.5rem; color: var(--dw-ink); background: var(--dw-surface); border: 1px solid var(--dw-line); border-radius: var(--dw-radius); }
+  #download-choice { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); box-sizing: border-box; width: min(32rem, calc(100% - 2rem)); max-height: min(90vh, 42rem); overflow: auto; margin: 0; padding: 1.5rem; color: var(--dw-ink); background: var(--dw-surface); border: 1px solid var(--dw-line); border-radius: var(--dw-radius); }
   #download-choice::backdrop { background: rgb(0 0 0 / .68); }
   #download-choice h2 { margin: 0; font-size: 1.25rem; }
   #download-choice > p { color: var(--dw-dim); font-size: .88rem; }
@@ -202,6 +200,5 @@ const systems = [
     .platform-detail { min-height: 0; }
     .architecture { height: auto; min-height: 2.7rem; margin-block: .8rem; }
     .download-button { font-size: .9rem; }
-    .downloads .asset-size { font-size: .75rem; }
   }
 </style>

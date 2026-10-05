@@ -1,0 +1,13 @@
+<a href="https://github.com/AbhayKale332/DepthWizard/releases" data-checksum-link><slot /></a>
+
+<script>
+  const checksumLinks = document.querySelectorAll('[data-checksum-link]');
+  fetch('/api/releases')
+    .then((response) => response.ok ? response.json() : Promise.reject())
+    .then((releases) => {
+      const release = releases.find((item) => Array.isArray(item.assets) && item.assets.some((asset) => asset.name === 'SHA256SUMS.txt'));
+      const checksum = release?.assets.find((asset) => asset.name === 'SHA256SUMS.txt');
+      if (checksum?.browser_download_url) checksumLinks.forEach((link) => link.href = checksum.browser_download_url);
+    })
+    .catch(() => {});
+</script>
