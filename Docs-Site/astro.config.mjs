@@ -31,10 +31,10 @@ export default defineConfig({
 				SocialIcons: './src/components/GitHubStars.astro',
 			},
 			social: [
-				{ icon: 'github', label: 'GitHub', href: 'https://github.com/AbhayKale332/DepthWizard' },
+				{ icon: 'github', label: 'GitHub', href: 'https://github.com/AbhayKale332/DW-Team_ENDRA' },
 			],
 			editLink: {
-				baseUrl: 'https://github.com/AbhayKale332/DepthWizard/edit/main/Docs-Site/',
+				baseUrl: 'https://github.com/AbhayKale332/DW-Team_ENDRA/edit/main/Docs-Site/',
 			},
 			customCss: [
 				'@fontsource/inter/400.css',

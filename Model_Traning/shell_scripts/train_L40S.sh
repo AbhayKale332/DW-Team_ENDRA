@@ -316,7 +316,7 @@ fi
 # ===========================================================================
 # 5. Repo + dependencies
 # ===========================================================================
-GH_REPO="github.com/akashch1512/DepthWizard.git"
+GH_REPO="github.com/AbhayKale332/DW-Team_ENDRA.git"
 GH_TOKEN="${DW_GITHUB_TOKEN:-}"
 if [ -z "$GH_TOKEN" ]; then
     for f in "$WORK_ROOT/.gh_token" "$HOME/.gh_token"; do

@@ -1,4 +1,4 @@
-const repository = 'AbhayKale332/DepthWizard';
+const repository = 'AbhayKale332/DW-Team_ENDRA';
 export const assetNameAllowed = (name) => /^DepthWizard-.*\.(exe|dmg|AppImage|zip)(\.sha256)?$/.test(name) || name === 'SHA256SUMS.txt';
 
 export function githubHeaders(accept = 'application/vnd.github+json') {

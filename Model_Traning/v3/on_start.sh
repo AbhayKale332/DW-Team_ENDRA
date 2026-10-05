@@ -11,7 +11,7 @@
 # DepthWizard-results/results_v3.zip
 #
 # What it does, end to end:
-#   1. clone (or pull) akashch1512/DepthWizard into  <studio home>/DepthWizard
+#   1. clone (or pull) AbhayKale332/DW-Team_ENDRA into  <studio home>/DepthWizard
 #   2. install FineTunning/v3/requirements.txt
 #   3. PREPARE — materialise HF datasets into memmap shards on the persistent
 #      disk (one time, resumable, idempotent). Training never touches the
@@ -239,7 +239,7 @@ PY="${DW_PYTHON:-}"
 # script ends up in git history). For a private checkout, put a PAT in the
 # Studio env as DW_GITHUB_TOKEN, or in $WORK_ROOT/.gh_token, or configure
 #   git config --global credential.helper store
-GH_REPO="github.com/akashch1512/DepthWizard.git"
+GH_REPO="github.com/AbhayKale332/DW-Team_ENDRA.git"
 GH_TOKEN="${DW_GITHUB_TOKEN:-}"
 if [ -z "$GH_TOKEN" ]; then
     for f in "$WORK_ROOT/.gh_token" "$HOME/.gh_token"; do

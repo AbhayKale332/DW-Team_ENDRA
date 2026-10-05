@@ -3,7 +3,7 @@
 Use Python with a compatible PyTorch/torchvision installation for your CPU or CUDA environment. The v5 requirements deliberately leave PyTorch unpinned.
 
 ```bash
-git clone https://github.com/AbhayKale332/DepthWizard.git
+git clone https://github.com/AbhayKale332/DW-Team_ENDRA.git
 cd DepthWizard/Model_Traning/v5
 pip install torch torchvision
 pip install -r requirements.txt

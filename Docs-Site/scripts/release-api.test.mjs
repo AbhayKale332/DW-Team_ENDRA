@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import releases from '../api/releases.mjs';
 import download from '../api/download.mjs';
 
-const asset = { id: 42, name: 'DepthWizard-0.1.3-win-x64-with-model.exe', state: 'uploaded', size: 123, browser_download_url: 'https://github.com/AbhayKale332/DepthWizard/releases/download/desktop-v0.1.3/app.exe' };
+const asset = { id: 42, name: 'DepthWizard-0.1.3-win-x64-with-model.exe', state: 'uploaded', size: 123, browser_download_url: 'https://github.com/AbhayKale332/DW-Team_ENDRA/releases/download/desktop-v0.1.3/app.exe' };
 const published = { id: 3, tag_name: 'desktop-v0.1.3', draft: false, assets: [asset] };
 function response() { return { statusCode: 200, headers: {}, setHeader(key, value) { this.headers[key] = value; }, end(body) { this.body = body; } }; }
 test('published downloads keep repository credentials server-side and validate redirects', async () => {

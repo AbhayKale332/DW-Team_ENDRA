@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { desktopReleases, installer, sizeLabel } from '../src/lib/releases.mjs';
 
-const asset = (name, url = 'https://github.com/AbhayKale332/DepthWizard/releases/download/desktop-v0.1.3/' + name) => ({ name, browser_download_url: url, state: 'uploaded', size: 1800000000 });
+const asset = (name, url = 'https://github.com/AbhayKale332/DW-Team_ENDRA/releases/download/desktop-v0.1.3/' + name) => ({ name, browser_download_url: url, state: 'uploaded', size: 1800000000 });
 const release = { id: 3, tag_name: 'desktop-v0.1.3', name: 'DepthWizard 0.1.3', draft: false, published_at: '2026-10-04T06:00:00Z', assets: [
   asset('DepthWizard-0.1.3-win-x64-with-model.exe'), asset('DepthWizard-0.1.3-win-x64-without-model.exe'),
   asset('DepthWizard-0.1.3-mac-arm64-with-model.dmg'), asset('DepthWizard-0.1.3-mac-x64-with-model.dmg'),

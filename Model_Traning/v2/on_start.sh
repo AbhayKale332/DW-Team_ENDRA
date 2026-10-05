@@ -11,7 +11,7 @@
 # DepthWizard-results/v2/stageP_last.pt
 #
 # What it does, end to end:
-#   1. clone (or pull) akashch1512/DepthWizard into  <studio home>/DepthWizard
+#   1. clone (or pull) AbhayKale332/DW-Team_ENDRA into  <studio home>/DepthWizard
 #   2. install the v2 dependency set (requirements-kaggle.txt + extras)
 #   3. run the two-stage fine-tune (SynRS3D pretrain -> GAMUS+GeoNRW finetune)
 #      with every cache redirected off the repo and onto a disposable path
@@ -206,7 +206,7 @@ PY="${DW_PYTHON:-}"
 # 4. Clone / pull the repository
 # ===========================================================================
 GH_TOKEN="${DW_GITHUB_TOKEN:-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}"
-GH_REPO="github.com/akashch1512/DepthWizard.git"
+GH_REPO="github.com/AbhayKale332/DW-Team_ENDRA.git"
 GH_URL="https://x-access-token:${GH_TOKEN}@${GH_REPO}"
 
 if [ "$IN_PLACE" = "1" ]; then

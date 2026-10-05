@@ -4,7 +4,7 @@ DepthWizard v5 estimates a **normalised digital surface model (nDSM), in metres 
 
 This release is the **`forest-final` PyTorch checkpoint**, selected at epoch 7 of the `v5_final_forest` fine-tune on a Modal H100 on 29 September 2026. It was warm-started from `resume-v4-1.6`, with emphasis on forested and sparse landscapes. The project supports geospatial reconstruction and 3D visualisation for SIH 2026, problem statement 26175 (ISRO).
 
-- **Model code:** [DepthWizard repository](https://github.com/AbhayKale332/DepthWizard), directory `Model_Traning/v5`.
+- **Model code:** [DepthWizard repository](https://github.com/AbhayKale332/DW-Team_ENDRA), directory `Model_Traning/v5`.
 - **Download handle:** `abhaydkale232/depthwizard-v5/pyTorch/forest-final/1`.
 - **Release evidence:** the bundled `RESULTS.md`, `config.json` and `preproc.json` describe this checkpoint. They take precedence over historical runbooks and default settings in the repository.
 
@@ -109,4 +109,4 @@ The Kaggle variation is currently labelled **MIT**, and the repository code has 
 
 Training data sources retain their own licenses and attribution requirements. Consult the source cards and original publications for [GAMUS](https://huggingface.co/datasets/earthflow/GAMUS), [SynRS3D](https://huggingface.co/datasets/JTRNEO/SynRS3D), NEON, MVS3DM and US3D before reproducing training or redistributing data. External DEM products also have their own attribution requirements.
 
-For bug reports, include the versioned Kaggle handle, repository revision, saved preprocessing contract, input sensor/GSD and inference options through the [project issue tracker](https://github.com/AbhayKale332/DepthWizard/issues).
+For bug reports, include the versioned Kaggle handle, repository revision, saved preprocessing contract, input sensor/GSD and inference options through the [project issue tracker](https://github.com/AbhayKale332/DW-Team_ENDRA/issues).

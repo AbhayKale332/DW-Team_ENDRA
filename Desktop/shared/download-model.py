@@ -18,7 +18,7 @@ if url:
     with tempfile.TemporaryFile() as archive:
         digest = hashlib.sha256()
         headers = {}
-        if url.startswith('https://api.github.com/repos/AbhayKale332/DepthWizard/releases/assets/'):
+        if url.startswith('https://api.github.com/repos/AbhayKale332/DW-Team_ENDRA/releases/assets/'):
             headers = {'Accept': 'application/octet-stream', 'User-Agent': 'DepthWizard-release'}
             if os.environ.get('GH_TOKEN'):
                 headers['Authorization'] = 'Bearer ' + os.environ['GH_TOKEN']

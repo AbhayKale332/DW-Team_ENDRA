@@ -6,7 +6,7 @@ from urllib.request import Request, urlopen
 url = os.environ.get('DESKTOP_MODEL_URL', '')
 checksum = os.environ.get('DESKTOP_MODEL_SHA256', '')
 if not url:
-    repository = os.environ.get('GITHUB_REPOSITORY', 'AbhayKale332/DepthWizard')
+    repository = os.environ.get('GITHUB_REPOSITORY', 'AbhayKale332/DW-Team_ENDRA')
     headers = {'Accept': 'application/vnd.github+json', 'User-Agent': 'DepthWizard-release'}
     if os.environ.get('GH_TOKEN'):
         headers['Authorization'] = 'Bearer ' + os.environ['GH_TOKEN']

@@ -1,5 +1,5 @@
 export const RELEASES_URL = '/api/releases';
-export const RELEASES_PAGE = 'https://github.com/AbhayKale332/DepthWizard/releases';
+export const RELEASES_PAGE = 'https://github.com/AbhayKale332/DW-Team_ENDRA/releases';
 
 export function isDesktopReleaseTag(tag) {
   return /^desktop-v/.test(tag) || /^v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(tag);
@@ -24,7 +24,7 @@ export function installer(release, platform, arch, withModel) {
   let url;
   try { url = new URL(asset.browser_download_url); } catch { return null; }
   if (url.protocol !== 'https:' || url.hostname !== 'github.com' ||
-      !url.pathname.startsWith('/AbhayKale332/DepthWizard/releases/download/')) return null;
+      !url.pathname.startsWith('/AbhayKale332/DW-Team_ENDRA/releases/download/')) return null;
   return asset;
 }
 

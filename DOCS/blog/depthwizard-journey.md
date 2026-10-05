@@ -189,7 +189,7 @@ are in December, and I'll add each run's results here as they land.
 
 ---
 
-*DepthWizard is a team project for SIH 2026. Code: [github.com/AbhayKale332/DepthWizard](https://github.com/AbhayKale332/DepthWizard)*
+*DepthWizard is a team project for SIH 2026. Code: [github.com/AbhayKale332/DW-Team_ENDRA](https://github.com/AbhayKale332/DW-Team_ENDRA)*
 
 <!--
 SOURCES (strip this block before pasting to Medium)
