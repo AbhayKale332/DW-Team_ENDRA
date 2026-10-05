@@ -12,9 +12,9 @@ Turn one aerial or satellite image into estimated heights and an interactive 3D 
 
 ## 🏔️ From image to 3D
 
-![Aerial image, predicted height map and textured 3D reconstruction of a stadium and domed hall](Docs-Site/src/assets/figures/sample_stadium.png)
+![Wankhede Stadium, Mumbai: input aerial image, predicted height map, and 3D viewer screenshot](DOCS/Test_IMG/readme_assets/input-height-map-3d-viewer.png)
 
-*Image → height map → 3D view. Example from v3; imagery © Google Earth.*
+*Wankhede Stadium, Mumbai. Left to right: input image → predicted height map → 3D viewer. Imagery © Google Earth.*
 
 | 🖼️ Import | 🏔️ Explore | 📏 Measure | 📦 Export |
 |---|---|---|---|
@@ -32,7 +32,12 @@ flowchart LR
 
 ## 📊 Results
 
-![GAMUS validation height RMSE: single pass versus D4 averaging with 1.5× input scaling, across overall, urban, sparse and forested tiles](DOCS/assets/gamus-validation.png)
+| GAMUS validation metric | Single pass | D4 + 1.5× input scaling |
+|---|---:|---:|
+| Overall RMSE | 2.775 m | **2.590 m** |
+| Urban RMSE | 3.211 m | **3.061 m** |
+| Sparse RMSE | 2.210 m | **1.253 m** |
+| Forested RMSE | 2.126 m | **2.052 m** |
 
 **2.775 → 2.590 m RMSE** on 859 GAMUS validation tiles. D4 averages eight rotations/reflections; this setting takes about **14× longer** and increases error for heights ≥15 m. These are validation results.
 
