@@ -84,6 +84,7 @@ export default defineConfig({
 					items: [
 						'results/metrics',
 						'results/benchmarks',
+						'results/encoder-comparison',
 						'results/landscape-accuracy',
 						'results/error-analysis',
 						'results/lidar-validation',

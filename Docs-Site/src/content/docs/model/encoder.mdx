@@ -26,7 +26,7 @@ The encoder is **DINOv3 ViT-L/16** (`facebook/dinov3-vitl16-pretrain-sat493m`), 
 
 Nadir imagery looks nothing like the ground-level photos most depth models are trained on: there is no horizon or perspective, and height cues come from shadows, roof shape and parallax. Starting from a satellite-native representation removes most of that domain gap.
 
-The project compared encoders directly. **Depth Anything V2 (Base)** with its own pretrained DPT neck (`DAV2_V1`) was trained under the same protocol:
+The project evaluated **Depth Anything V2 (Base)** with its own pretrained DPT neck (`DAV2_V1`) alongside DINOv3 configurations. The test evaluation used shared source splits and inference modes, while the training settings and input grids differed:
 
 | Encoder | Val RMSE (TTA) | GAMUS test RMSE (TTA) |
 |---|---|---|
@@ -34,7 +34,7 @@ The project compared encoders directly. **Depth Anything V2 (Base)** with its ow
 | DINOv3 SAT-493M (v4-modal) | 3.631 m | **3.321 m** |
 | Depth Anything V2 Base | 3.432 m | 3.396 m |
 
-DINOv3 gives the best result on each split. DAv2 lands between the two DINOv3 runs, and the gap between those two runs comes from training choices, not from the encoder ([Design findings](/training/findings/)).
+DINOv3 v3 has the lowest validation TTA RMSE, while v4-modal has the lowest test TTA RMSE. DAv2 wins on sliding-window test RMSE and sparse landscapes. See [Depth Anything V2 vs DINOv3](/results/encoder-comparison/) for the graphs, run differences and reasons DINOv3 was retained; [Design findings](/training/findings/) explains the training and validation differences between the DINOv3 runs.
 
 ## Freezing and unfreezing
 

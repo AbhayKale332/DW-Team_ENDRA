@@ -1,0 +1,152 @@
+---
+title: Depth Anything V2 vs DINOv3
+description: The completed DAV2/V1 experiment, measured trade-offs against DINOv3 SAT-493M, and why DepthWizard retained DINOv3.
+---
+
+import Chart from '../../../components/Chart.astro';
+import DataTable from '../../../components/DataTable.astro';
+import evidence from '../../../../public/evidence/encoder-comparison.json';
+import { Aside } from '@astrojs/starlight/components';
+
+export const D = evidence.runs.dav2;
+export const V = evidence.runs.dinov3;
+export const modes = ['plain', 'tta', 'sliding_tta'];
+export const modeNames = ['Plain', 'TTA', 'Sliding + TTA'];
+export const models = [
+    { key: 'dinov3', name: 'DINOv3 · v4-modal', run: V },
+    { key: 'dav2', name: 'DAv2 · Base', run: D },
+];
+export const landscapeNames = { urban: 'Urban', sparse: 'Sparse', forested: 'Forested' };
+export const gain = (dav2, dino) => ((dav2 - dino) / dav2 * 100).toFixed(2);
+
+DepthWizard retained **DINOv3 ViT-L/16 SAT-493M** as its encoder. In the completed **Depth Anything V2 Base** experiment (`DAV2_V1`), DINOv3's v4-modal configuration had lower overall GAMUS test RMSE with plain inference and TTA, and lower India validation RMSE. Its satellite pretraining also matches the imagery DepthWizard processes.
+
+**The advantage is modest and depends on the inference setting:** GAMUS test TTA RMSE is **3.321 m for DINOv3 versus 3.396 m for DAv2**, a **0.074 m (2.19%)** reduction from the unrounded metrics. DAv2 wins with sliding-window TTA. The choice therefore reflects the deployment target and measured trade-offs, rather than a win on every metric.
+
+## What the experiment compared
+
+The DAv2 variant reused the v4 training and evaluation pipeline, retaining DepthWizard's metric height, segmentation and normal heads. It kept DAv2's **pretrained encoder and DPT neck**, removed its original relative-depth head, and fine-tuned for **height above ground in metres (nDSM)**. Both variants predict metric heights after training; this is a comparison of adapted DepthWizard models.
+
+| Property | Depth Anything V2 Base · DAV2/V1 | DINOv3 · v4-modal |
+|---|---|---|
+| Encoder | DINOv2 ViT-B/14 | DINOv3 ViT-L/16 SAT-493M |
+| Encoder parameters, approximately | 86 M | 303 M |
+| Pretraining emphasis | Monocular depth with synthetic labels and real pseudo-labels | Self-supervised satellite imagery |
+| DPT neck at the start of training | Pretrained for depth | Randomly initialised |
+| Patch / input tile | 14 px / 518 × 518 px | 16 px / 512 × 512 px |
+| Decoder channels | 128 | 256 |
+| Completed epochs | 40 | 30 |
+| Unfrozen encoder blocks | All 12 | Top 16 of 24 |
+| Layer-wise LR decay | 0.85 | 0.90 |
+| Stratum weighting β / clip | 0.5 / 5.0 | 0.7 / 8.0 |
+
+Architecture details come from `DAV2_V1/README.md` and `models/dav2.py`; the run settings above come from the completed metrics files. The upstream [DAv2 model card](https://huggingface.co/depth-anything/Depth-Anything-V2-Base-hf) describes its DINOv2/DPT architecture and depth training, while Meta's [DINOv3 model card](https://huggingface.co/facebook/dinov3-vitl16-pretrain-sat493m) records SAT-493M's 493 million satellite images.
+
+<Aside type="caution" title="Shared evaluation, different training configurations">
+This is a comparison of trained configurations, not an isolated encoder ablation. Encoder size, decoder initialisation, loss weighting, unfreezing, epoch budgets and training data all differ. DINOv3 v4-modal also trained on DFC23; DAv2's completed configuration did not. The shared evaluation report uses the same source splits and inference modes, but DAv2's 518 px grid scores more pixels than DINOv3's 512 px grid. These results support a model choice, but do not establish that pretraining alone caused the difference.
+</Aside>
+
+## Measured RMSE differences
+
+Lower is better. Plain and TTA score the full **2,861-tile GAMUS test split**; sliding-window TTA scores the first **400 test tiles**. India is a separate **35-tile validation split**, not an independent test split. TTA uses rotations/reflections and input scales of 1.0× and 1.25×.
+
+<Chart
+    height={400}
+    caption="RMSE in metres. DINOv3 v4-modal leads on GAMUS plain/TTA and India plain; DAv2 leads on the 400-tile sliding-window test. Each row is a separate evaluation setting."
+    source="/evidence/encoder-comparison.json; India from v3_vs_v4_vs_dav2.md"
+    option={{
+        legend: { top: 0, type: 'scroll' },
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        grid: { left: 8, right: 52, top: 48, bottom: 48, containLabel: true },
+        xAxis: { type: 'value', name: 'RMSE (m) ↓', nameLocation: 'middle', nameGap: 28, min: 0, max: 4.5 },
+        yAxis: { type: 'category', inverse: true, data: ['GAMUS test\nPlain', 'GAMUS test\nTTA', 'GAMUS test\nSliding + TTA', 'India val\nPlain'], axisLabel: { lineHeight: 15 } },
+        series: models.map(({ key, name, run }) => ({
+            name, type: 'bar', horizontal: true, barMaxWidth: 22,
+            data: [...modes.map((mode) => +run.test[mode].global.rmse_m.toFixed(3)), evidence.india_plain[key].rmse_m],
+            label: { show: true, position: 'right', formatter: '{c}', fontSize: 11 },
+        })),
+    }}
+/>
+
+<DataTable
+    headers={['Split · inference', 'DAv2 RMSE (m) ↓', 'DINOv3 RMSE (m) ↓']}
+    rows={[
+        ...modes.map((mode, i) => [`GAMUS test · ${modeNames[i]}`, D.test[mode].global.rmse_m, V.test[mode].global.rmse_m]),
+        ['India val · plain', evidence.india_plain.dav2.rmse_m, evidence.india_plain.dinov3.rmse_m],
+    ]}
+    bestRow
+    caption="Best RMSE in each row is highlighted. India values are available only to three decimal places in the shared report."
+    source="/evidence/encoder-comparison.json"
+/>
+
+On GAMUS test, DINOv3 reduces plain RMSE by **0.051 m (1.48%)** and TTA RMSE by **0.074 m (2.19%)**. On India validation, the reduction is **0.247 m (8.16%)**. DAv2 reduces sliding-window TTA RMSE by **0.114 m (2.95%)** relative to DINOv3. No repeated-seed results or confidence intervals are recorded, so these are observed differences rather than established statistical significance.
+
+### Other metrics matter too
+
+<DataTable
+    headers={['GAMUS test metric', 'DAv2 · plain', 'DINOv3 · plain', 'DAv2 · TTA', 'DINOv3 · TTA']}
+    rows={[
+        ['MAE (m) ↓', D.test.plain.global.mae_m, V.test.plain.global.mae_m, D.test.tta.global.mae_m, V.test.tta.global.mae_m],
+        ['Balanced RMSE (m) ↓', D.test.plain.balanced_rmse_m, V.test.plain.balanced_rmse_m, D.test.tta.balanced_rmse_m, V.test.tta.balanced_rmse_m],
+        ['Pearson r ↑', D.test.plain.global.pearson_r, V.test.plain.global.pearson_r, D.test.tta.global.pearson_r, V.test.tta.global.pearson_r],
+        ['δ1 ↑', D.test.plain.global.delta1, V.test.plain.global.delta1, D.test.tta.global.delta1, V.test.tta.global.delta1],
+    ]}
+    caption="Arrows show the preferred direction. Balanced RMSE gives each height band equal weight; δ1 is the shifted height-ratio accuracy defined on the Metrics page."
+    source="test_gamus_test_plain and test_gamus_test_tta in both completed metrics files"
+/>
+
+DAv2 has **lower plain MAE (1.514 vs 1.549 m)** and **higher plain δ1 (0.646 vs 0.627)** even though DINOv3 has lower plain RMSE. With TTA, DINOv3 leads on all four metrics above. See [metric definitions](/results/metrics/) for how RMSE, balanced RMSE and δ1 measure different aspects of height error.
+
+## Where the models differ by landscape
+
+<Chart
+    height={340}
+    caption="GAMUS test with TTA, grouped by ground-truth landscape. DINOv3 has lower urban and forested RMSE; DAv2 has lower sparse RMSE. These are landscape subsets of the test split, not additional datasets."
+    source="test_gamus_test_tta.per_landscape in /evidence/encoder-comparison.json"
+    option={{
+        legend: { top: 0, type: 'scroll' },
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        grid: { left: 8, right: 52, top: 48, bottom: 48, containLabel: true },
+        xAxis: { type: 'value', name: 'RMSE (m) ↓', nameLocation: 'middle', nameGap: 28, min: 0, max: 4.5 },
+        yAxis: { type: 'category', inverse: true, data: Object.values(landscapeNames) },
+        series: models.map(({ name, run }) => ({
+            name, type: 'bar', horizontal: true, barMaxWidth: 24,
+            data: Object.keys(landscapeNames).map((land) => +run.test.tta.per_landscape[land].rmse_m.toFixed(3)),
+            label: { show: true, position: 'right', formatter: '{c}', fontSize: 11 },
+        })),
+    }}
+/>
+
+<DataTable
+    headers={['Landscape · TTA', 'DAv2 RMSE (m) ↓', 'DINOv3 RMSE (m) ↓']}
+    rows={Object.entries(landscapeNames).map(([key, label]) => [label, D.test.tta.per_landscape[key].rmse_m, V.test.tta.per_landscape[key].rmse_m])}
+    bestRow
+    source="/evidence/encoder-comparison.json"
+/>
+
+The largest landscape advantage for DINOv3 is **forested tiles: 3.505 vs 3.712 m**, a **{gain(D.test.tta.per_landscape.forested.rmse_m, V.test.tta.per_landscape.forested.rmse_m)}%** RMSE reduction. Sparse tiles favour DAv2 (**1.096 vs 1.276 m**). For pixels with true height above 15 m, DINOv3 also has lower TTA RMSE (**8.253 vs 8.591 m**), though both underestimate tall structures on average (bias **−3.052 vs −3.235 m**).
+
+## Why DINOv3 was retained
+
+1. **Better overall accuracy in the principal test modes.** The v4-modal DINOv3 configuration had lower GAMUS test RMSE in plain and TTA inference, lower balanced RMSE, and lower India validation RMSE. This favours DINOv3 when the goal is overall metric height accuracy under these settings.
+2. **Pretraining matches the input domain.** SAT-493M uses satellite imagery, whereas DAv2's pretrained neck is specialised for monocular depth. Overhead height estimation depends on cues such as roof structure, shadows and canopy texture. Satellite pretraining is a plausible reason to prefer DINOv3's features for this task; the experiment does not isolate or prove that mechanism.
+3. **The test supports the project's canopy and tall-height priorities.** DINOv3 v4-modal had lower forested and tall-pixel TTA RMSE. The later [v5 training choices](/training/findings/#stratum-weighting-as-a-trade-off) continue this encoder while addressing canopy errors through data and loss changes. Those later v5 results are separate from this experiment.
+
+DAv2 remains a credible alternative: its encoder is roughly **3.5× smaller**, its neck starts with depth-specific weights, and it wins on sliding-window RMSE and sparse landscapes. Parameter count alone does not establish a latency or memory advantage in deployment; this comparison did not record a matched inference-speed benchmark.
+
+The tested **DAv2 Base** weights also carry a **CC-BY-NC-4.0** licence, as documented in the [upstream repository](https://github.com/DepthAnything/Depth-Anything-V2#license). This is an additional deployment consideration. DINOv3 uses Meta's [DINOv3 licence](https://huggingface.co/facebook/dinov3-vitl16-pretrain-sat493m#model-description); it should not be described as Apache-2.0. DAv2 Small has a different licence and was not the model tested here.
+
+## Evidence and scope
+
+- **Completed DAv2 result:** `Model_Traning/DAV2_V1/outputs/dav2-v1/metrics.json`, 40 epochs. `DAV2_V1/Logs/metrics.json` is the earlier 24-epoch snapshot and is not used here.
+- **DINOv3 comparator:** `Model_Traning/V4_modal/Output/metrics.json`, 30 epochs. The labels “v4” in the shared report and “v4-modal” on this page refer to this run.
+- **Shared evaluation report:** `Model_Traning/v3/outputs/v3_vs_v4_vs_dav2.md`. India values come from this report; it contains no DAv2 DFC23 result, so no DAv2-versus-DINOv3 DFC23 comparison is claimed.
+- **Download:** [metrics extract with source paths, SHA-256 hashes, run settings and pixel counts](/evidence/encoder-comparison.json). The extract retains full precision from the GAMUS metrics files.
+
+Regenerate the extract from the local experiment artefacts:
+
+```bash
+python3 scripts/extract_encoder_comparison.py
+```
+
+The earlier DINOv3 v3 run achieved **2.605 m validation TTA RMSE**, compared with DAv2's **3.432 m** and v4-modal's **3.631 m**. These validation results used different tile packings and were used for checkpoint selection. They are not the basis for the test graphs above. See [Benchmarks](/results/benchmarks/#same-protocol-test-comparison) and [validation-set differences](/training/findings/#validation-sets-that-were-not-the-same) for context.

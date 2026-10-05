@@ -99,6 +99,8 @@ These are the most trustworthy numbers: **v4-modal** on data never used for trai
 
 To remove validation-set differences, v3, v4-modal and the DAv2 ablation were scored with **one protocol on the same held-out tiles** (`eval_test.py --compare`).
 
+The dedicated [Depth Anything V2 vs DINOv3 comparison](/results/encoder-comparison/) explains the model choice, landscape differences and limits of this comparison, including DAv2's larger input grid and different training settings.
+
 <Chart
 	height={320}
 	caption="Held-out RMSE under an identical protocol. v4-modal is best on GAMUS test with single-pass and TTA inference, and by far the best on India (v3 never trained on it). DAv2 edges ahead on sliding-window inference."
