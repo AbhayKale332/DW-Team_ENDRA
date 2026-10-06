@@ -1,6 +1,6 @@
 # 🛰️ Single-View 3D Mapping
 
-Turn one Aerial or Satellite Image into estimated heights and an interactive 3D scene.
+Turn One Aerial or Satellite Image into estimated heights and an interactive 3D scene.
 
 **[🌐 Open app](https://depthwizard.teamendra.tech/)** · **[📖 Documentation](https://depthwizard-docs.vercel.app/)** · **[🧠 Kaggle model](https://www.kaggle.com/models/abhaydkale232/depthwizard-v5)** · **[💻 Desktop downloads](https://github.com/AbhayKale332/DW-Team_ENDRA/releases)**
 
