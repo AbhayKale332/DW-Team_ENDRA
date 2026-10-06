@@ -74,7 +74,7 @@ Open `http://localhost:5173` and choose **Try a sample scene**. For inference, f
 |---|---|
 | Use the app | [Quick start](Docs-Site/src/content/docs/overview/quickstart.mdx) · [First estimate](Docs-Site/src/content/docs/guide/first-estimate.mdx) · [Export](Docs-Site/src/content/docs/guide/export.mdx) |
 | Run & build | [Frontend](Frontend/README.md) · [Desktop](Desktop/README.md) · [Docs site](Docs-Site/README.md) · [Deployment](Docs-Site/src/content/docs/system/deployment.mdx) |
-| Train & evaluate | [v5 guide](Model_Traning/v5/README.md) · [Datasets](Docs-Site/src/content/docs/training/datasets.mdx) · [Training recipe](Docs-Site/src/content/docs/training/recipe.mdx) · [Validation examples](Frontend/validation-examples/README.md) |
+| Train & evaluate | [V5 guide](Model_Traning/v5/README.md) · [Datasets](Docs-Site/src/content/docs/training/datasets.mdx) · [Training recipe](Docs-Site/src/content/docs/training/recipe.mdx) · [Validation examples](Frontend/validation-examples/README.md) |
 | Understand the model | [Architecture](Docs-Site/src/content/docs/model/overview.mdx) · [API](Docs-Site/src/content/docs/system/api-reference.mdx) · [Limitations](Docs-Site/src/content/docs/reference/limitations.mdx) |
 | Research & history | [Papers](DOCS/CompetitionContext/Research_Papers) · [References](Docs-Site/src/content/docs/references.mdx) · [Development blog](DOCS/blog/README.md) · [Changelog](Docs-Site/src/content/docs/reference/changelog.mdx) |
 
