@@ -9,9 +9,14 @@ export default async function handler(req, res) {
 
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    const page = body?.page ?? 'homepage';
+    if (!['homepage', 'judges', 'downloadPpt'].includes(page)) {
+      res.statusCode = 400;
+      return res.end(JSON.stringify({ error: 'Unknown tracked page' }));
+    }
     const timestamp = new Date().toISOString();
     const date = timestamp.slice(0, 10);
-    const events = ['homepage', ...(body?.ppt === true ? ['ppt'] : [])];
+    const events = [page, ...(page === 'homepage' && body?.ppt === true ? ['ppt'] : [])];
 
     await Promise.all(events.map((type) => put(
       `visitor-counts/${date}/${type}/${crypto.randomUUID()}.json`,

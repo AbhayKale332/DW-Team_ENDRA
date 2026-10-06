@@ -10,19 +10,17 @@ export default async function handler(req, res) {
   try {
     let cursor;
     let hasMore = true;
-    let homepage = 0;
-    let ppt = 0;
+    const totals = { homepage: 0, ppt: 0, judges: 0, downloadPpt: 0 };
     let latest = null;
     const byDay = new Map();
 
     while (hasMore) {
       const page = await list({ prefix: 'visitor-counts/', cursor, limit: 1000 });
       for (const blob of page.blobs) {
-        const [, date, type] = blob.pathname.match(/^visitor-counts\/(\d{4}-\d{2}-\d{2})\/(homepage|ppt)\//) ?? [];
+        const [, date, type] = blob.pathname.match(/^visitor-counts\/(\d{4}-\d{2}-\d{2})\/(homepage|ppt|judges|downloadPpt)\//) ?? [];
         if (!type) continue;
-        if (type === 'homepage') homepage++;
-        else ppt++;
-        const counts = byDay.get(date) ?? { homepage: 0, ppt: 0 };
+        totals[type]++;
+        const counts = byDay.get(date) ?? { homepage: 0, ppt: 0, judges: 0, downloadPpt: 0 };
         counts[type]++;
         byDay.set(date, counts);
         if (!latest || blob.uploadedAt > latest) latest = blob.uploadedAt;
@@ -37,12 +35,12 @@ export default async function handler(req, res) {
       const date = new Date(today);
       date.setUTCDate(date.getUTCDate() - 29 + index);
       const day = date.toISOString().slice(0, 10);
-      return { date: day, ...(byDay.get(day) ?? { homepage: 0, ppt: 0 }) };
+      return { date: day, ...(byDay.get(day) ?? { homepage: 0, ppt: 0, judges: 0, downloadPpt: 0 }) };
     });
 
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Cache-Control', 'no-store');
-    res.end(JSON.stringify({ homepage, ppt, latest: latest?.toISOString() ?? null, daily }));
+    res.end(JSON.stringify({ ...totals, latest: latest?.toISOString() ?? null, daily }));
   } catch {
     res.statusCode = 503;
     res.setHeader('Content-Type', 'application/json');

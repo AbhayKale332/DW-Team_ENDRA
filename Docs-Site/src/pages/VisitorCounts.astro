@@ -22,7 +22,7 @@
 			.legend span { display: inline-flex; align-items: center; gap: .4rem; }
 			.legend i { display: inline-block; width: .55rem; height: .55rem; border-radius: 50%; background: #75d8bb; }
 			.legend span:last-child i { background: #f0b66d; }
-			#visits-chart { display: block; width: 100%; height: auto; margin-top: 1rem; }
+			.visits-chart { display: block; width: 100%; height: auto; margin-top: 1rem; }
 			#status, #latest { font-size: .9rem; }
 			@media (max-width: 480px) { body { padding: 1.25rem; } .cards { grid-template-columns: 1fr; } .chart-card { padding: 1rem; } }
 		</style>
@@ -31,14 +31,14 @@
 		<main>
 			<p class="eyebrow">DepthWizard · private dashboard</p>
 			<h1>Visitor counts</h1>
-			<p>Homepage loads recorded since tracking began.</p>
+			<p>Page loads recorded since tracking began. Daily graphs use UTC dates.</p>
 			<section class="cards" aria-label="Visit totals" aria-live="polite">
 				<article class="card">
 					<p class="label">Homepage loads</p>
 					<p class="value" id="homepage">—</p>
 				</article>
 				<article class="card">
-					<p class="label">Loads with <code>?ppt</code></p>
+					<p class="label">Homepage loads with <code>?ppt</code></p>
 					<p class="value" id="ppt">—</p>
 				</article>
 			</section>
@@ -47,8 +47,27 @@
 					<h2 id="chart-title">Loads per day · last 30 days</h2>
 					<div class="legend" aria-hidden="true"><span><i></i>Homepage</span><span><i></i>?ppt</span></div>
 				</div>
-				<svg id="visits-chart" viewBox="0 0 720 280" role="img" aria-labelledby="chart-title chart-description">
+				<svg class="visits-chart" id="visits-chart" viewBox="0 0 720 280" role="img" aria-labelledby="chart-title chart-description">
 					<desc id="chart-description">Grouped bars show daily homepage loads and loads with the ppt parameter.</desc>
+				</svg>
+			</section>
+			<section class="cards" aria-label="Tracked page totals" aria-live="polite">
+				<article class="card">
+					<p class="label">Judges page opens</p>
+					<p class="value" id="judges">—</p>
+				</article>
+				<article class="card">
+					<p class="label">Download opens with <code>?ppt</code></p>
+					<p class="value" id="downloadPpt">—</p>
+				</article>
+			</section>
+			<section class="chart-card" aria-labelledby="page-chart-title">
+				<div class="chart-heading">
+					<h2 id="page-chart-title">Page opens per day · last 30 days</h2>
+					<div class="legend" aria-hidden="true"><span><i></i>Judges</span><span><i></i>Download ?ppt</span></div>
+				</div>
+				<svg class="visits-chart" id="page-visits-chart" viewBox="0 0 720 280" role="img" aria-labelledby="page-chart-title page-chart-description">
+					<desc id="page-chart-description">Grouped bars show daily opens of the judges page and the download page with the ppt parameter.</desc>
 				</svg>
 			</section>
 			<p id="status" role="status">Loading counts…</p>
@@ -61,10 +80,13 @@
 					if (!response.ok) throw new Error('Unavailable');
 					return response.json();
 				})
-				.then(({ homepage, ppt, latest, daily }) => {
+				.then(({ homepage, ppt, judges, downloadPpt, latest, daily }) => {
 					document.querySelector('#homepage').textContent = homepage.toLocaleString();
 					document.querySelector('#ppt').textContent = ppt.toLocaleString();
-					drawChart(daily);
+					document.querySelector('#judges').textContent = judges.toLocaleString();
+					document.querySelector('#downloadPpt').textContent = downloadPpt.toLocaleString();
+					drawChart(daily, '#visits-chart', [['homepage', 'Homepage'], ['ppt', 'Homepage ?ppt']]);
+					drawChart(daily, '#page-visits-chart', [['judges', 'Judges'], ['downloadPpt', 'Download ?ppt']]);
 					status.textContent = 'Counts are up to date.';
 					document.querySelector('#latest').textContent = latest
 						? `Latest recorded load: ${new Date(latest).toLocaleString()}`
@@ -72,12 +94,12 @@
 				})
 				.catch(() => { status.textContent = 'Counts are temporarily unavailable.'; });
 
-			function drawChart(days) {
-				const svg = document.querySelector('#visits-chart');
+			function drawChart(days, selector, series) {
+				const svg = document.querySelector(selector);
 				const ns = 'http://www.w3.org/2000/svg';
 				const left = 44, right = 12, top = 14, bottom = 42;
 				const width = 720 - left - right, height = 280 - top - bottom;
-				const peak = Math.max(0, ...days.flatMap(({ homepage, ppt }) => [homepage, ppt]));
+				const peak = Math.max(0, ...days.flatMap((day) => series.map(([key]) => day[key])));
 				const max = Math.max(5, Math.ceil(peak / 5) * 5);
 				const add = (name, attrs, parent = svg) => {
 					const node = document.createElementNS(ns, name);
@@ -100,8 +122,9 @@
 				const barWidth = Math.min(7, groupWidth * 0.3);
 				for (const [index, day] of days.entries()) {
 					const groupX = left + index * groupWidth;
-					for (const [series, color, offset] of [['homepage', '#75d8bb', 0], ['ppt', '#f0b66d', 1]]) {
-						const value = day[series];
+					for (const [offset, [key, label]] of series.entries()) {
+						const color = ['#75d8bb', '#f0b66d'][offset];
+						const value = day[key];
 						const barHeight = height * value / max;
 						const bar = add('rect', {
 							x: groupX + (groupWidth - 2 * barWidth - 2) / 2 + offset * (barWidth + 2),
@@ -112,7 +135,7 @@
 							fill: color,
 						});
 						const title = add('title', {}, bar);
-						title.textContent = `${day.date}: ${value} ${series === 'homepage' ? 'homepage' : '?ppt'} loads`;
+						title.textContent = `${day.date}: ${value} ${label} loads`;
 					}
 				}
 

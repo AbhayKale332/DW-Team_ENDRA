@@ -1,9 +1,11 @@
 <script>
+  const page = window.location.pathname.replace(/\/+$/, '') || '/';
   const isPptVisit = new URLSearchParams(window.location.search).has('ppt');
-  fetch('/api/track-visit', {
+  const trackedPage = page === '/' ? 'homepage' : page === '/judges' ? 'judges' : page === '/download' && isPptVisit ? 'downloadPpt' : null;
+  if (trackedPage) fetch('/api/track-visit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ppt: isPptVisit }),
+    body: JSON.stringify({ page: trackedPage, ppt: isPptVisit }),
     keepalive: true,
   }).catch(() => {});
 </script>

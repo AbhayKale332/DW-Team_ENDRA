@@ -13,7 +13,8 @@
     "preview": "astro preview",
     "astro": "astro",
     "extract-metrics": "python3 scripts/extract_metrics.py",
-    "test:downloads": "node --test scripts/release*.test.mjs"
+    "test:downloads": "node --test scripts/release*.test.mjs",
+    "test:visitors": "node --experimental-test-module-mocks --test scripts/visitor-counts.test.mjs"
   },
   "dependencies": {
     "@astrojs/sitemap": "^3.7.4",
