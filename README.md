@@ -94,3 +94,4 @@ Open `http://localhost:5173` and choose **Try a sample scene**. For inference, f
 | More resources | [Team & credits](Docs-Site/src/content/docs/reference/team.mdx) · [Desktop releases](Desktop/RELEASE_NOTES.md) · [Build optimization](Desktop/BUILD_OPTIMIZATION.md) · [Source papers](DOCS/CompetitionContext/Research_Papers) · [Project notes](DOCS) · [Training files & notebooks](Model_Traning) · [License](LICENSE) |
 
 </details>
+
