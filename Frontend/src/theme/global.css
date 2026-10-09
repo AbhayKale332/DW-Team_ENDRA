@@ -16,6 +16,7 @@
 }
 
 :root[data-mantine-color-scheme='light'] {
+  --dw-tour-scrim: rgb(15 23 42 / 0.55);
   --dw-bg: #eef1f5;
   --dw-surface: #ffffff;
   --dw-panel: #f7f8fa;
@@ -32,6 +33,7 @@
 }
 
 :root[data-mantine-color-scheme='dark'] {
+  --dw-tour-scrim: rgb(0 0 0 / 0.66);
   --dw-bg: #0b0e11;
   --dw-surface: #12161b;
   --dw-panel: #151a20;

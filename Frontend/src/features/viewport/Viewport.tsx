@@ -83,7 +83,7 @@ export function Viewport() {
   const animating = mode === 'dsm3d';
 
   return (
-    <Box className={classes.viewport} id="dw-viewport" data-view={mode} data-camera={camMode} data-measuring={measuring || undefined}>
+    <Box className={classes.viewport} id="dw-viewport" data-tour="viewport" data-view={mode} data-camera={camMode} data-measuring={measuring || undefined}>
       {glError ? (
         <WebGLFallback message={glError} />
       ) : (

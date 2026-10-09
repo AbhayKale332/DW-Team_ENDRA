@@ -20,7 +20,7 @@ export function ViewSwitcher() {
   return (
     <Menu position="bottom-start" offset={6} width={260}>
       <Menu.Target>
-        <button type="button" className={`dw-float ${classes.switcher}`} aria-label={`Primary view: ${VIEW_LABELS[mode]}. Change view`}>
+        <button type="button" className={`dw-float ${classes.switcher}`} data-tour="view-switcher" aria-label={`Primary view: ${VIEW_LABELS[mode]}. Change view`}>
           <Icon size={22} stroke={1.6} aria-hidden />
           <span style={{ flex: 1, textAlign: 'left' }}>{VIEW_LABELS[mode]}</span>
           <IconChevronDown size={18} stroke={1.8} aria-hidden />

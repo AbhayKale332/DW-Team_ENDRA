@@ -43,7 +43,7 @@ export function MeasureMenu() {
         {/* the wrapper keeps the tooltip working while the button is disabled */}
         <span style={{ display: 'inline-flex' }}>
           <Menu.Target>
-            <ActionIcon size="lg" variant={active ? 'light' : 'subtle'} color={active ? 'dwBlue' : 'gray'} disabled={!hasScene} aria-label="Measure" aria-pressed={active}>
+            <ActionIcon size="lg" variant={active ? 'light' : 'subtle'} color={active ? 'dwBlue' : 'gray'} disabled={!hasScene} data-tour="measure" aria-label="Measure" aria-pressed={active}>
               <IconRuler size={18} stroke={1.6} />
             </ActionIcon>
           </Menu.Target>

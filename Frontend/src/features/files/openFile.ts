@@ -191,7 +191,7 @@ export function newProject() {
     useTool.getState().clear();
     useCamera.getState().set({ mode: 'orbit', bookmarks: [] });
     useView.getState().reset();
-    useUi.getState().set({ projectOpen: true, inspectorOpen: false });
+    useUi.getState().set({ projectOpen: true });
   };
   if (scene && dirty) {
     void import('@mantine/modals').then(({ modals }) =>
