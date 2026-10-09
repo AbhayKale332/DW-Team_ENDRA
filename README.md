@@ -2,7 +2,24 @@
 
 Turn one Aerial or Satellite Image into estimated heights and an interactive 3D scene.
 
-**[🌐 Open app](https://depthwizard.teamendra.tech/)** · **[📖 Documentation](https://depthwizard-docs.vercel.app/)** · **[🧠 Kaggle model](https://www.kaggle.com/models/abhaydkale232/depthwizard-v5)** · **[💻 Desktop downloads](https://github.com/AbhayKale332/DW-Team_ENDRA/releases)**
+<p>
+  <a href="https://depthwizard.teamendra.tech/"><img alt="Open app" src="https://img.shields.io/badge/Open_app-live-2ea44f?style=for-the-badge&logo=googlechrome&logoColor=white"></a>
+  <a href="https://depthwizard-docs.vercel.app/"><img alt="Documentation" src="https://img.shields.io/badge/Docs-depthwizard--docs-000000?style=for-the-badge&logo=vercel&logoColor=white"></a>
+  <a href="https://www.kaggle.com/models/abhaydkale232/depthwizard-v5"><img alt="Kaggle model" src="https://img.shields.io/badge/Model-Kaggle-20BEFF?style=for-the-badge&logo=kaggle&logoColor=white"></a>
+  <a href="https://huggingface.co/spaces/akashch1512/SingleViewHeigthEstimation"><img alt="Hugging Face Space" src="https://img.shields.io/badge/Inference-HF_Space-FFD21E?style=for-the-badge&logo=huggingface&logoColor=black"></a>
+  <a href="https://github.com/AbhayKale332/DW-Team_ENDRA/releases"><img alt="Desktop downloads" src="https://img.shields.io/badge/Desktop-releases-181717?style=for-the-badge&logo=github&logoColor=white"></a>
+  <a href="https://youtu.be/EKys48tC0X8"><img alt="Demo video" src="https://img.shields.io/badge/Demo-YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white"></a>
+</p>
+
+<p>
+  <img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch&logoColor=white">
+  <img alt="ONNX" src="https://img.shields.io/badge/ONNX-005CED?logo=onnx&logoColor=white">
+  <img alt="React" src="https://img.shields.io/badge/React-20232A?logo=react&logoColor=61DAFB">
+  <img alt="Vite" src="https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white">
+  <img alt="Three.js" src="https://img.shields.io/badge/Three.js-000000?logo=threedotjs&logoColor=white">
+  <img alt="Astro Starlight" src="https://img.shields.io/badge/Astro_Starlight-BC52EE?logo=astro&logoColor=white">
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/AbhayKale332/DW-Team_ENDRA"></a>
+</p>
 
 ## ▶️ Watch the Demo
 
@@ -41,7 +58,7 @@ flowchart LR
 
 **2.775 → 2.590 m RMSE** on 859 GAMUS validation tiles. D4 averages eight rotations/reflections; this setting takes about **14× longer** and increases error for heights ≥15 m. These are validation results.
 
-[Evaluation details](Docs-Site/src/content/docs/results/gamus-d4.mdx) · [Raw metrics](Docs-Site/public/evidence/v5-gamus-d4/probe_metrics.json) · [Benchmarks](Docs-Site/src/content/docs/results/benchmarks.mdx) · [Image gallery](Docs-Site/src/content/docs/results/gallery.mdx)
+🔬 [Evaluation details](https://depthwizard-docs.vercel.app/results/gamus-d4/) · 📄 [Raw metrics](https://depthwizard-docs.vercel.app/evidence/v5-gamus-d4/probe_metrics.json) · 🏁 [Benchmarks](https://depthwizard-docs.vercel.app/results/benchmarks/) · 🖼️ [Image gallery](https://depthwizard-docs.vercel.app/results/gallery/)
 
 ## 🚀 Try it locally
 
@@ -51,47 +68,46 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173` and choose **Try a sample scene**. For inference, follow the [frontend setup](Frontend/README.md) to configure access to the hosted model.
+Open `http://localhost:5173` and choose **Try a sample scene**. For inference, follow the [quick start](https://depthwizard-docs.vercel.app/overview/quickstart/) to configure access to the hosted model.
 
-## 🧠 Models, data & notebooks
+## 🧠 Models & data
 
 | Resource | Links |
 |---|---|
-| v5 model | [Kaggle weights](https://www.kaggle.com/models/abhaydkale232/depthwizard-v5) · [Model card](Model_Traning/v5/KAGGLE_MODEL_CARD.md) · [Usage](Model_Traning/v5/KAGGLE_USAGE.md) |
-| GAMUS | [Kaggle](https://www.kaggle.com/datasets/abhaydkale232/depthwizard-gamus) · [Hugging Face](https://huggingface.co/datasets/earthflow/GAMUS) |
-| SynRS3D | [Kaggle](https://www.kaggle.com/datasets/abhaydkale232/depthwizard-synrs3d-g05) · [Hugging Face](https://huggingface.co/datasets/JTRNEO/SynRS3D) |
-| US3D | [Kaggle](https://www.kaggle.com/datasets/abhaydkale232/depthwizard-us3d) · [Source](https://ieee-dataport.org/open-access/data-fusion-contest-2019-dfc2019) |
-| DFC2023 | [Kaggle](https://www.kaggle.com/datasets/abhaydkale232/dfc23-track2-height-estimation) · [Data audit](DOCS/CompetitionContext/DFC23_Track2_Data_Audit.md) |
-| MVS3DM | [Kaggle](https://www.kaggle.com/datasets/abhaydkale232/depthwizard-mvs3dm) · [Source](https://spacenet.ai/iarpa-multi-view-stereo-3d-mapping/) |
-| NEON | [Kaggle](https://www.kaggle.com/datasets/abhaydkale232/depthwizard-neon) · [Source](https://data.neonscience.org/data-products/DP3.30015.001) |
-| v5 notebooks | [Train](Model_Traning/v5/kaggle_train.ipynb) · [GAMUS + SynRS3D](Model_Traning/v5/Notebook/kaggle_train_gamus_synrs3d.ipynb) · [Evaluate](Model_Traning/v5/Notebook/kaggle_test.ipynb) · [Export ONNX](Model_Traning/v5/Notebook/kaggle_export_onnx.ipynb) |
-| Hosted inference | [Hugging Face Space](https://huggingface.co/spaces/akashch1512/SingleViewHeigthEstimation) |
-| Earlier resources | [IM2ELEVATION weights](https://drive.google.com/file/d/1KZ50MQY5Fof8SAoJN34bxnk7mfou4frF/view?usp=sharing) · [OSI dataset](https://drive.google.com/drive/folders/14sBkjeYY7R1S9NzWI5fGLX8XTuc8puHy?usp=sharing) |
+| 🧠 v5 model | [Kaggle weights](https://www.kaggle.com/models/abhaydkale232/depthwizard-v5) · [Architecture](https://depthwizard-docs.vercel.app/model/overview/) · [Inference](https://depthwizard-docs.vercel.app/model/inference/) |
+| 🏙️ GAMUS | [Kaggle](https://www.kaggle.com/datasets/abhaydkale232/depthwizard-gamus) · [Hugging Face](https://huggingface.co/datasets/earthflow/GAMUS) |
+| 🧪 SynRS3D | [Kaggle](https://www.kaggle.com/datasets/abhaydkale232/depthwizard-synrs3d-g05) · [Hugging Face](https://huggingface.co/datasets/JTRNEO/SynRS3D) |
+| 🌆 US3D | [Kaggle](https://www.kaggle.com/datasets/abhaydkale232/depthwizard-us3d) · [Source](https://ieee-dataport.org/open-access/data-fusion-contest-2019-dfc2019) |
+| 🏆 DFC2023 | [Kaggle](https://www.kaggle.com/datasets/abhaydkale232/dfc23-track2-height-estimation) · [Dataset notes](https://depthwizard-docs.vercel.app/training/datasets/) |
+| 🛰️ MVS3DM | [Kaggle](https://www.kaggle.com/datasets/abhaydkale232/depthwizard-mvs3dm) · [Source](https://spacenet.ai/iarpa-multi-view-stereo-3d-mapping/) |
+| 🌲 NEON | [Kaggle](https://www.kaggle.com/datasets/abhaydkale232/depthwizard-neon) · [Source](https://data.neonscience.org/data-products/DP3.30015.001) |
+| 📓 Training & export | [Training recipe](https://depthwizard-docs.vercel.app/training/recipe/) · [Version history](https://depthwizard-docs.vercel.app/training/versions/) · [ONNX export](https://depthwizard-docs.vercel.app/system/onnx/) |
+| 🤗 Hosted inference | [Hugging Face Space](https://huggingface.co/spaces/akashch1512/SingleViewHeigthEstimation) |
+| 🗄️ Earlier resources | [IM2ELEVATION weights](https://drive.google.com/file/d/1KZ50MQY5Fof8SAoJN34bxnk7mfou4frF/view?usp=sharing) · [OSI dataset](https://drive.google.com/drive/folders/14sBkjeYY7R1S9NzWI5fGLX8XTuc8puHy?usp=sharing) |
 
 ## 📚 Documentation
 
 | Start here | Links |
 |---|---|
-| Use the app | [Quick start](Docs-Site/src/content/docs/overview/quickstart.mdx) · [First estimate](Docs-Site/src/content/docs/guide/first-estimate.mdx) · [Export](Docs-Site/src/content/docs/guide/export.mdx) |
-| Run & build | [Frontend](Frontend/README.md) · [Desktop](Desktop/README.md) · [Docs site](Docs-Site/README.md) · [Deployment](Docs-Site/src/content/docs/system/deployment.mdx) |
-| Train & evaluate | [V5 guide](Model_Traning/v5/README.md) · [Datasets](Docs-Site/src/content/docs/training/datasets.mdx) · [Training recipe](Docs-Site/src/content/docs/training/recipe.mdx) · [Validation examples](Frontend/validation-examples/README.md) |
-| Understand the model | [Architecture](Docs-Site/src/content/docs/model/overview.mdx) · [API](Docs-Site/src/content/docs/system/api-reference.mdx) · [Limitations](Docs-Site/src/content/docs/reference/limitations.mdx) |
-| Research & history | [Papers](DOCS/CompetitionContext/Research_Papers) · [References](Docs-Site/src/content/docs/references.mdx) · [Development blog](DOCS/blog/README.md) · [Changelog](Docs-Site/src/content/docs/reference/changelog.mdx) |
+| 🖱️ Use the app | [Quick start](https://depthwizard-docs.vercel.app/overview/quickstart/) · [First estimate](https://depthwizard-docs.vercel.app/guide/first-estimate/) · [Export](https://depthwizard-docs.vercel.app/guide/export/) |
+| 🛠️ Run & build | [Local setup](https://depthwizard-docs.vercel.app/overview/quickstart/) · [Desktop app](https://depthwizard-docs.vercel.app/download/) · [Self hosting](https://depthwizard-docs.vercel.app/system/self-hosted/) · [Deployment](https://depthwizard-docs.vercel.app/system/deployment/) |
+| 🏋️ Train & evaluate | [Datasets](https://depthwizard-docs.vercel.app/training/datasets/) · [Training recipe](https://depthwizard-docs.vercel.app/training/recipe/) · [Validation](https://depthwizard-docs.vercel.app/guide/validation/) |
+| 🧩 Understand the model | [Architecture](https://depthwizard-docs.vercel.app/model/overview/) · [API](https://depthwizard-docs.vercel.app/system/api-reference/) · [Limitations](https://depthwizard-docs.vercel.app/reference/limitations/) |
+| 📜 Research & history | [Findings](https://depthwizard-docs.vercel.app/training/findings/) · [References](https://depthwizard-docs.vercel.app/references/) · [Development blog](DOCS/blog/README.md) · [Changelog](https://depthwizard-docs.vercel.app/reference/changelog/) |
 
 <details>
-<summary>Browse the full documentation index</summary>
+<summary>🗂️ Browse the full documentation index</summary>
 
 | Topic | Pages |
 |---|---|
-| Overview | [Introduction](Docs-Site/src/content/docs/index.mdx) · [Motivation](Docs-Site/src/content/docs/overview/motivation.mdx) · [Concepts](Docs-Site/src/content/docs/overview/concepts.mdx) · [Downloads](Docs-Site/src/content/docs/download.mdx) |
-| User guide | [Interface](Docs-Site/src/content/docs/guide/interface.mdx) · [Navigation](Docs-Site/src/content/docs/guide/navigation.mdx) · [Layers](Docs-Site/src/content/docs/guide/layers.mdx) · [Validation](Docs-Site/src/content/docs/guide/validation.mdx) · [Anchoring](Docs-Site/src/content/docs/guide/anchoring.mdx) · [Scenarios](Docs-Site/src/content/docs/guide/scenarios.mdx) · [Shortcuts](Docs-Site/src/content/docs/guide/shortcuts.mdx) · [Troubleshooting](Docs-Site/src/content/docs/guide/troubleshooting.mdx) |
-| Model | [Encoder](Docs-Site/src/content/docs/model/encoder.mdx) · [Decoder & heads](Docs-Site/src/content/docs/model/decoder-heads.mdx) · [Losses](Docs-Site/src/content/docs/model/losses.mdx) · [Inference](Docs-Site/src/content/docs/model/inference.mdx) |
-| Training | [Preprocessing](Docs-Site/src/content/docs/training/preprocessing.mdx) · [Versions](Docs-Site/src/content/docs/training/versions.mdx) · [Findings](Docs-Site/src/content/docs/training/findings.mdx) · [Dataset suggestions](Model_Traning/v5/DATASET_SUGGESTIONS.md) · [Resolution notes](Model_Traning/v5/US3D_AND_GSD_NOTES.md) · [Lightning workflow](Model_Traning/v5/lightning/AFTER_NEON_UPLOAD.md) |
-| Evaluation | [Metrics](Docs-Site/src/content/docs/results/metrics.mdx) · [Encoder comparison](Docs-Site/src/content/docs/results/encoder-comparison.mdx) · [Landscape accuracy](Docs-Site/src/content/docs/results/landscape-accuracy.mdx) · [Error analysis](Docs-Site/src/content/docs/results/error-analysis.mdx) · [LiDAR validation](Docs-Site/src/content/docs/results/lidar-validation.mdx) · [Cartosat validation](Docs-Site/src/content/docs/results/cartosat-validation.mdx) · [Evaluation walkthrough](Docs-Site/src/content/docs/judges.mdx) |
-| Geospatial | [Scale recovery](Docs-Site/src/content/docs/geo/scale-recovery.mdx) · [Absolute DSM](Docs-Site/src/content/docs/geo/absolute-dsm.mdx) · [Elevation sources](Docs-Site/src/content/docs/geo/dem-sources.mdx) |
-| System | [Overview](Docs-Site/src/content/docs/system/overview.mdx) · [Hosted inference](Docs-Site/src/content/docs/system/hosted-path.mdx) · [Self hosting](Docs-Site/src/content/docs/system/self-hosted.mdx) · [Outputs](Docs-Site/src/content/docs/system/outputs.mdx) · [ONNX](Docs-Site/src/content/docs/system/onnx.mdx) · [Frontend architecture](Docs-Site/src/content/docs/system/frontend-architecture.mdx) |
-| Earlier training | [Overview](Model_Traning/README.md) · [v1](Model_Traning/v1/README_PHASE0.md) · [v2](Model_Traning/v2/README_PHASE0_V2.md) · [v3](Model_Traning/v3/README.md) · [v4](Model_Traning/v4/README.md) · [v4 Kaggle](Model_Traning/V4_Kaggle/README.md) · [v4 Modal](Model_Traning/V4_modal/README.md) · [Depth Anything V2](Model_Traning/DAV2_V1/README.md) · [Kaggle file layout](Model_Traning/Kaggle_File_Structure.md) |
-| More resources | [Team & credits](Docs-Site/src/content/docs/reference/team.mdx) · [Desktop releases](Desktop/RELEASE_NOTES.md) · [Build optimization](Desktop/BUILD_OPTIMIZATION.md) · [Source papers](DOCS/CompetitionContext/Research_Papers) · [Project notes](DOCS) · [Training files & notebooks](Model_Traning) · [License](LICENSE) |
+| 🧭 Overview | [Introduction](https://depthwizard-docs.vercel.app/) · [Motivation](https://depthwizard-docs.vercel.app/overview/motivation/) · [Concepts](https://depthwizard-docs.vercel.app/overview/concepts/) · [Downloads](https://depthwizard-docs.vercel.app/download/) |
+| 📘 User guide | [Interface](https://depthwizard-docs.vercel.app/guide/interface/) · [Navigation](https://depthwizard-docs.vercel.app/guide/navigation/) · [Layers](https://depthwizard-docs.vercel.app/guide/layers/) · [Validation](https://depthwizard-docs.vercel.app/guide/validation/) · [Anchoring](https://depthwizard-docs.vercel.app/guide/anchoring/) · [Scenarios](https://depthwizard-docs.vercel.app/guide/scenarios/) · [Shortcuts](https://depthwizard-docs.vercel.app/guide/shortcuts/) · [Troubleshooting](https://depthwizard-docs.vercel.app/guide/troubleshooting/) |
+| 🧠 Model | [Encoder](https://depthwizard-docs.vercel.app/model/encoder/) · [Decoder & heads](https://depthwizard-docs.vercel.app/model/decoder-heads/) · [Losses](https://depthwizard-docs.vercel.app/model/losses/) · [Inference](https://depthwizard-docs.vercel.app/model/inference/) |
+| 🏋️ Training | [Preprocessing](https://depthwizard-docs.vercel.app/training/preprocessing/) · [Versions](https://depthwizard-docs.vercel.app/training/versions/) · [Findings](https://depthwizard-docs.vercel.app/training/findings/) |
+| 📈 Evaluation | [Metrics](https://depthwizard-docs.vercel.app/results/metrics/) · [Encoder comparison](https://depthwizard-docs.vercel.app/results/encoder-comparison/) · [Landscape accuracy](https://depthwizard-docs.vercel.app/results/landscape-accuracy/) · [Error analysis](https://depthwizard-docs.vercel.app/results/error-analysis/) · [LiDAR validation](https://depthwizard-docs.vercel.app/results/lidar-validation/) · [Cartosat validation](https://depthwizard-docs.vercel.app/results/cartosat-validation/) · [Evaluation walkthrough](https://depthwizard-docs.vercel.app/judges/) |
+| 🌍 Geospatial | [Scale recovery](https://depthwizard-docs.vercel.app/geo/scale-recovery/) · [Absolute DSM](https://depthwizard-docs.vercel.app/geo/absolute-dsm/) · [Elevation sources](https://depthwizard-docs.vercel.app/geo/dem-sources/) |
+| ⚙️ System | [Overview](https://depthwizard-docs.vercel.app/system/overview/) · [Hosted inference](https://depthwizard-docs.vercel.app/system/hosted-path/) · [Self hosting](https://depthwizard-docs.vercel.app/system/self-hosted/) · [Outputs](https://depthwizard-docs.vercel.app/system/outputs/) · [ONNX](https://depthwizard-docs.vercel.app/system/onnx/) · [Frontend architecture](https://depthwizard-docs.vercel.app/system/frontend-architecture/) |
+| 📦 More resources | [Team & credits](https://depthwizard-docs.vercel.app/reference/team/) · [Desktop releases](https://github.com/AbhayKale332/DW-Team_ENDRA/releases) · [License](LICENSE) |
 
 </details>
 
