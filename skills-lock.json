@@ -43,6 +43,12 @@
       "skillPath": "lightning-studios/SKILL.md",
       "computedHash": "f05b3c8deceaf97a97269d41915f0f29dcf7c1e598f65e4c05fe37354c210bc4"
     },
+    "linkedin-posts": {
+      "source": "kostja94/marketing-skills",
+      "sourceType": "github",
+      "skillPath": "skills/platforms/linkedin/SKILL.md",
+      "computedHash": "18543b3ad03f6329e45732ba0c94fa09498986f3a226c5c129269abb2781ada0"
+    },
     "shadcn": {
       "source": "shadcn-ui/ui",
       "sourceType": "github",
