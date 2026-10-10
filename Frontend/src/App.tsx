@@ -8,6 +8,7 @@ import { ProjectPanel } from '@/features/input/ProjectPanel';
 import { InspectorPanel } from '@/features/inspector/InspectorPanel';
 import { Viewport } from '@/features/viewport/Viewport';
 import { Dialogs } from '@/features/help/Dialogs';
+import { Tour } from '@/features/help/tour/Tour';
 import { openFiles } from '@/features/files/openFile';
 import classes from '@/features/shell/shell.module.css';
 
@@ -26,6 +27,7 @@ export default function App() {
       </main>
       <StatusBar />
       <Dialogs />
+      <Tour />
       <Dropzone.FullScreen onDrop={(files) => void openFiles(files)} multiple accept={undefined}>
         <div style={{ display: 'grid', placeItems: 'center', height: '100%', gap: 8, pointerEvents: 'none' }}>
           <div style={{ textAlign: 'center' }}>

@@ -21,7 +21,7 @@ export function InspectorPanel() {
   const tab = useUi((s) => s.inspectorTab);
   if (!open) return null;
   return (
-    <aside className={`${classes.panel} ${classes.panelRight} dw-no-print`} aria-label="Inspector">
+    <aside className={`${classes.panel} ${classes.panelRight} dw-no-print`} aria-label="Inspector" data-tour="inspector">
       <Tabs value={tab} onChange={(t) => t && useUi.getState().set({ inspectorTab: t as InspectorTab })} style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
         <div className={classes.panelHeader} style={{ paddingLeft: 4 }}>
           <Tabs.List style={{ flexWrap: 'nowrap', borderBottom: 0 }}>

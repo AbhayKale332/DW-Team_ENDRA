@@ -4,6 +4,7 @@ import {
   IconBox,
   IconBrain,
   IconClock,
+  IconCompass,
   IconCube,
   IconDeviceFloppy,
   IconEye,
@@ -40,6 +41,7 @@ import { setCameraMode } from '@/features/viewport/overlays/NavigationHud';
 import { openAny } from './commands';
 import { toggleMeasure } from '@/features/analysis/MeasureMenu';
 import { useTool } from '@/store/tool';
+import { startTour } from '@/features/help/tour/Tour';
 import classes from './shell.module.css';
 
 const I = { size: 16, stroke: 1.6 };
@@ -86,6 +88,7 @@ export function MenuBar() {
   return (
     <Menubar
       className={classes.menubar}
+      data-tour="menubar"
       aria-label="Application menu"
       onOpenChange={(i) => {
         if (i !== 0) return;
@@ -266,10 +269,14 @@ export function MenuBar() {
       </Menubar.Menu>
 
       <Menubar.Menu width={240}>
-        <Menubar.Target className={classes.menuButton}>
+        <Menubar.Target className={classes.menuButton} data-tour="help">
           <TargetLabel icon={IconHelpCircle} label="Help" />
         </Menubar.Target>
         <Menubar.Dropdown>
+          <Menu.Item leftSection={<IconCompass {...I} />} onClick={startTour}>
+            Take the Tour
+          </Menu.Item>
+          <Menu.Divider />
           <Menu.Item leftSection={<IconKeyboard {...I} />} rightSection={<Shortcut k="?" />} onClick={() => ui.set({ dialog: 'shortcuts' })}>
             Keyboard Shortcuts
           </Menu.Item>

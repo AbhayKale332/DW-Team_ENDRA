@@ -8,15 +8,17 @@ interface UiState {
   inspectorOpen: boolean;
   inspectorTab: InspectorTab;
   dialog: Dialog;
+  tourOpen: boolean;
   set: (p: Partial<Omit<UiState, 'set' | 'openInspector'>>) => void;
   openInspector: (tab: InspectorTab) => void;
 }
 
 export const useUi = create<UiState>()((set) => ({
   projectOpen: true,
-  inspectorOpen: false,
+  inspectorOpen: true,
   inspectorTab: 'layers',
   dialog: null,
+  tourOpen: false,
   set: (p) => set(p),
   openInspector: (tab) => set({ inspectorOpen: true, inspectorTab: tab }),
 }));

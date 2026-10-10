@@ -214,7 +214,7 @@ function RunControls() {
   const input = useScene((s) => s.input);
   const running = useScene((s) => s.run.status === 'running');
   return (
-    <Group gap="xs" grow>
+    <Group gap="xs" grow data-tour="run">
       <Button leftSection={<IconPlayerPlay size={16} />} disabled={!input || running} loading={running} onClick={() => void runPrediction()}>
         Estimate heights
       </Button>
@@ -268,12 +268,16 @@ export function ProjectPanel() {
       </div>
       <ScrollArea style={{ flex: 1 }} type="auto">
         <Stack p="md" gap="lg">
-          <PanelSection title="Input image">
-            <InputCard />
-          </PanelSection>
+          <div data-tour="input">
+            <PanelSection title="Input image">
+              <InputCard />
+            </PanelSection>
+          </div>
           <Divider />
           <PanelSection title="Model parameters">
-            <Parameters />
+            <div data-tour="params">
+              <Parameters />
+            </div>
             <RunControls />
           </PanelSection>
           <CurrentResult />

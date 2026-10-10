@@ -36,7 +36,7 @@ function ScenariosMenu() {
   return (
     <Menu position="bottom-start" withinPortal>
       <Menu.Target>
-        <Button size="compact-md" variant={open ? 'light' : 'subtle'} color={open ? 'dwBlue' : 'gray'} disabled={!hasScene} rightSection={<IconChevronDown size={14} />} aria-label="Scenarios">
+        <Button size="compact-md" variant={open ? 'light' : 'subtle'} color={open ? 'dwBlue' : 'gray'} disabled={!hasScene} rightSection={<IconChevronDown size={14} />} aria-label="Scenarios" data-tour="scenarios">
           Scenarios
         </Button>
       </Menu.Target>
@@ -69,7 +69,7 @@ function GcpButton() {
   return (
     <Tooltip label={eligible ? 'Ground control points' : 'Ground control points (images without georeferencing)'}>
       {/* the wrapper keeps the tooltip working while the button is disabled */}
-      <span style={{ display: 'inline-flex' }}>
+      <span style={{ display: 'inline-flex' }} data-tour="gcp">
         <Button size="compact-md" variant={open ? 'light' : 'subtle'} color={open ? 'dwBlue' : 'gray'} disabled={!eligible} leftSection={<IconMapPin size={16} stroke={1.6} />} onClick={toggle} aria-pressed={open}>
           GCP
         </Button>
@@ -85,7 +85,7 @@ function RawToggle() {
   return (
     <Tooltip label="Raw model output, without 3D objects or post-processing" multiline maw={240}>
       {/* the wrapper keeps the tooltip working while the switch is disabled */}
-      <div style={{ display: 'flex', alignItems: 'center', paddingInline: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', paddingInline: 6 }} data-tour="raw">
         <Switch
           size="sm"
           color="dwOrange"
@@ -124,14 +124,18 @@ export function AppHeader() {
           Docs
         </Button>
         <span className={classes.divider} style={{ marginInline: 8 }} aria-hidden />
-        <BackendStatus />
+        <span data-tour="status" style={{ display: 'inline-flex' }}>
+          <BackendStatus />
+        </span>
         <span className={classes.divider} style={{ marginInline: 8 }} aria-hidden />
-        <HeaderToggle label="Project panel ([)" pressed={projectOpen} onClick={() => useUi.getState().set({ projectOpen: !projectOpen })}>
-          <IconLayoutSidebar size={18} stroke={1.6} />
-        </HeaderToggle>
-        <HeaderToggle label="Inspector (])" pressed={inspectorOpen} onClick={() => useUi.getState().set({ inspectorOpen: !inspectorOpen })}>
-          <IconLayoutSidebarRight size={18} stroke={1.6} />
-        </HeaderToggle>
+        <span data-tour="panels" style={{ display: 'inline-flex', gap: 2 }}>
+          <HeaderToggle label="Project panel ([)" pressed={projectOpen} onClick={() => useUi.getState().set({ projectOpen: !projectOpen })}>
+            <IconLayoutSidebar size={18} stroke={1.6} />
+          </HeaderToggle>
+          <HeaderToggle label="Inspector (])" pressed={inspectorOpen} onClick={() => useUi.getState().set({ inspectorOpen: !inspectorOpen })}>
+            <IconLayoutSidebarRight size={18} stroke={1.6} />
+          </HeaderToggle>
+        </span>
       </div>
     </header>
   );

@@ -33,7 +33,7 @@ export function NavControls() {
 
   const zoomLabel = mode === 'flight' ? 'throttle' : mode === 'tour' ? 'tour speed' : 'zoom';
   return (
-    <div className={`dw-float ${classes.navStack}`} role="toolbar" aria-label="Viewport navigation" aria-orientation="vertical">
+    <div className={`dw-float ${classes.navStack}`} role="toolbar" data-tour="nav-controls" aria-label="Viewport navigation" aria-orientation="vertical">
       <Tooltip label={mode === 'orbit' ? 'Zoom in (+)' : `Increase ${zoomLabel}`} position="left">
         <button type="button" className={classes.navBtn} onClick={() => viewportApi.zoom(1)} disabled={!hasScene} aria-label={`Increase ${zoomLabel}`}>
           <IconPlus size={20} stroke={1.8} />
