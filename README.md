@@ -110,4 +110,3 @@ Open `http://localhost:5173` and choose **Try a sample scene**. For inference, f
 | 📦 More resources | [Team & credits](https://depthwizard-docs.vercel.app/reference/team/) · [Desktop releases](https://github.com/AbhayKale332/DW-Team_ENDRA/releases) · [License](LICENSE) |
 
 </details>
-
